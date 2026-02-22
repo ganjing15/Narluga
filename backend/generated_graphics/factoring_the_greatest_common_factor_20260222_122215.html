@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Factoring the Greatest Common Factor</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 400" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <style>
+                /* SVG Specific Styling */
+                .tile {
+                    transition: transform 0.8s cubic-bezier(0.34, 1.2, 0.64, 1), opacity 0.8s ease;
+                }
+                .shape-trans {
+                    transition: fill 0.6s ease, stroke 0.6s ease;
+                }
+                .text-elem {
+                    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    font-weight: 700;
+                    font-size: 32px;
+                    text-anchor: middle;
+                    dominant-baseline: middle;
+                    transition: fill 0.6s ease, transform 0.8s cubic-bezier(0.34, 1.2, 0.64, 1), opacity 0.8s ease;
+                }
+                .bracket {
+                    font-size: 64px;
+                    font-weight: 300;
+                    fill: #94a3b8;
+                }
+                .math-symbol {
+                    font-size: 40px;
+                    fill: #64748b;
+                }
+                .grid-line {
+                    stroke: #f1f5f9;
+                    stroke-width: 1;
+                }
+            </style>
+            <!-- Background Grid Pattern -->
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" class="grid-line" />
+            </pattern>
+        </defs>
+
+        <!-- Background -->
+        <rect width="800" height="400" fill="#ffffff" />
+        <rect width="800" height="400" fill="url(#grid)" />
+
+        <!-- Floating Math Symbols -->
+        <text id="plus" class="text-elem math-symbol" x="0" y="4">+</text>
+        <text id="parenL" class="text-elem bracket" x="0" y="0">(</text>
+        <text id="parenR" class="text-elem bracket" x="0" y="0">)</text>
+
+        <!-- Initial State Blocks -->
+        <g id="start12x" class="tile">
+            <rect class="shape-trans" width="80" height="64" x="-40" y="-32" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3"/>
+            <text class="text-elem" x="0" y="4" fill="#334155">12x</text>
+        </g>
+        <g id="start24" class="tile">
+            <rect class="shape-trans" width="80" height="64" x="-40" y="-32" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3"/>
+            <text class="text-elem" x="0" y="4" fill="#334155">24</text>
+        </g>
+
+        <!-- Broken Down Sub-Blocks -->
+        <g id="bx" class="tile">
+            <rect class="shape-trans" width="60" height="64" x="-30" y="-32" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3"/>
+            <text class="text-elem" x="0" y="4" fill="#334155">x</text>
+        </g>
+        <g id="b2" class="tile">
+            <rect class="shape-trans" width="60" height="64" x="-30" y="-32" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3"/>
+            <text class="text-elem" x="0" y="4" fill="#334155">2</text>
+        </g>
+
+        <!-- Common Factor Blocks (Drawn Last to render on top) -->
+        <g id="b12a" class="tile">
+            <rect id="b12a-rect" class="shape-trans" width="60" height="64" x="-30" y="-32" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3"/>
+            <text id="b12a-text" class="text-elem" x="0" y="4" fill="#334155">12</text>
+        </g>
+        <g id="b12b" class="tile">
+            <rect id="b12b-rect" class="shape-trans" width="60" height="64" x="-30" y="-32" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3"/>
+            <text id="b12b-text" class="text-elem" x="0" y="4" fill="#334155">12</text>
+        </g>
+    </svg>
+    </div>
+    <div class="controls-container">
+        <h2>Factoring the Greatest Common Factor</h2>
+        <p style="color: #64748b;">Use the controls on the right to extract the common factors step-by-step.</p>
+        <p style="font-size: 13px; margin-top: -8px;"><a href="https://www.youtube.com/shorts/AHzKEVweTkU" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+        .controls-wrapper {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+            padding: 1.5rem;
+            background-color: transparent;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .status-badge {
+            align-self: flex-start;
+            padding: 0.35rem 0.85rem;
+            background-color: #d1fae5;
+            color: #065f46;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.4s ease;
+        }
+        .status-badge.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .step-display {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+        .desc-box {
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            padding: 1.25rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+            font-size: 1rem;
+            color: #334155;
+            line-height: 1.6;
+            margin-bottom: 2.5rem;
+            min-height: 90px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: border-color 0.4s ease;
+        }
+        .slider-container {
+            margin-bottom: 2.5rem;
+            position: relative;
+        }
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 0;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 28px;
+            width: 28px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 3px solid #3b82f6;
+            cursor: pointer;
+            margin-top: -11px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            transform: scale(0.9);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 3px;
+        }
+        input[type=range]::-moz-range-thumb {
+            height: 28px;
+            width: 28px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 3px solid #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        input[type=range]::-moz-range-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 3px;
+        }
+        .slider-ticks {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+            margin-top: -18px;
+            pointer-events: none;
+        }
+        .tick {
+            width: 4px;
+            height: 4px;
+            background: #94a3b8;
+            border-radius: 50%;
+        }
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+        }
+        button {
+            flex: 1;
+            padding: 0.875rem 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            background-color: #3b82f6;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+        }
+        button:hover:not(:disabled) { 
+            background-color: #2563eb; 
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+        }
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        button:disabled { 
+            background-color: #cbd5e1; 
+            color: #94a3b8;
+            cursor: not-allowed; 
+            box-shadow: none;
+        }
+    </style>
+
+    <div class="controls-wrapper">
+        <div class="status-badge" id="status-badge">Factoring Complete!</div>
+        <div class="step-display" id="step-label">Step 0 of 4</div>
+        <div class="desc-box" id="step-desc">Loading...</div>
+        
+        <div class="slider-container">
+            <input type="range" id="progress-slider" min="0" max="4" value="0" step="1" aria-label="Factoring steps progress">
+            <div class="slider-ticks">
+                <div class="tick"></div><div class="tick"></div><div class="tick"></div><div class="tick"></div><div class="tick"></div>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button id="btn-prev">Previous</button>
+            <button id="btn-next">Next Step</button>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // State Configuration
+            const states = [
+                {
+                    text: "Here we have an algebraic expression with two terms: 12x and 24. Our goal is to factor it by finding the Greatest Common Factor.",
+                    telemetry: "Step 0: User reset to start. Visually showing the original expression '12x + 24' as two large gray blocks.",
+                    color: '#3b82f6',
+                    els: {
+                        'start12x': { o: 1, x: 320, y: 200, scale: 1 },
+                        'start24':  { o: 1, x: 480, y: 200, scale: 1 },
+                        'b12a':     { o: 0, x: 320, y: 200, scale: 0.5, bg: '#f8fafc', border: '#cbd5e1', color: '#334155' },
+                        'bx':       { o: 0, x: 320, y: 200, scale: 0.5 },
+                        'plus':     { o: 1, x: 400, y: 200 },
+                        'b12b':     { o: 0, x: 480, y: 200, scale: 0.5, bg: '#f8fafc', border: '#cbd5e1', color: '#334155' },
+                        'b2':       { o: 0, x: 480, y: 200, scale: 0.5 },
+                        'parenL':   { o: 0, x: 400, y: 200 },
+                        'parenR':   { o: 0, x: 400, y: 200 }
+                    }
+                },
+                {
+                    text: "First, let's break down each term into its multiplication factors. We can see that 24 is made of 12 × 2.",
+                    telemetry: "Step 1: User expanded factors. Visually, the '12x' and '24' blocks split apart into four smaller gray blocks: '12', 'x', '12', and '2'.",
+                    color: '#3b82f6',
+                    els: {
+                        'start12x': { o: 0, x: 320, y: 200, scale: 1.2 },
+                        'start24':  { o: 0, x: 480, y: 200, scale: 1.2 },
+                        'b12a':     { o: 1, x: 260, y: 200, scale: 1, bg: '#f8fafc', border: '#cbd5e1', color: '#334155' },
+                        'bx':       { o: 1, x: 330, y: 200, scale: 1 },
+                        'plus':     { o: 1, x: 400, y: 200 },
+                        'b12b':     { o: 1, x: 470, y: 200, scale: 1, bg: '#f8fafc', border: '#cbd5e1', color: '#334155' },
+                        'b2':       { o: 1, x: 540, y: 200, scale: 1 },
+                        'parenL':   { o: 0, x: 400, y: 200 },
+                        'parenR':   { o: 0, x: 400, y: 200 }
+                    }
+                },
+                {
+                    text: "Identify the Greatest Common Factor (GCF) that both terms share. Here, both terms have a '12'. This is our GCF!",
+                    telemetry: "Step 2: User identified GCF. Visually, the two '12' blocks glow bright blue, highlighting them as the common factor.",
+                    color: '#3b82f6',
+                    els: {
+                        'start12x': { o: 0, x: 320, y: 200, scale: 1.2 },
+                        'start24':  { o: 0, x: 480, y: 200, scale: 1.2 },
+                        'b12a':     { o: 1, x: 260, y: 200, scale: 1.1, bg: '#3b82f6', border: '#2563eb', color: '#ffffff' },
+                        'bx':       { o: 1, x: 330, y: 200, scale: 1 },
+                        'plus':     { o: 1, x: 400, y: 200 },
+                        'b12b':     { o: 1, x: 470, y: 200, scale: 1.1, bg: '#3b82f6', border: '#2563eb', color: '#ffffff' },
+                        'b2':       { o: 1, x: 540, y: 200, scale: 1 },
+                        'parenL':   { o: 0, x: 400, y: 200 },
+                        'parenR':   { o: 0, x: 400, y: 200 }
+                    }
+                },
+                {
+                    text: "Pull the shared GCF (12) to the front, and place a set of parentheses around everything that is left over.",
+                    telemetry: "Step 3: User extracted the GCF. Visually, the two blue '12' blocks slide to the left and merge into one, while parentheses appear around the remaining 'x + 2'.",
+                    color: '#3b82f6',
+                    els: {
+                        'start12x': { o: 0, x: 320, y: 200, scale: 1.2 },
+                        'start24':  { o: 0, x: 480, y: 200, scale: 1.2 },
+                        'b12a':     { o: 1, x: 240, y: 200, scale: 1.1, bg: '#3b82f6', border: '#2563eb', color: '#ffffff' },
+                        'bx':       { o: 1, x: 380, y: 200, scale: 1 },
+                        'plus':     { o: 1, x: 440, y: 200 },
+                        'b12b':     { o: 1, x: 240, y: 200, scale: 1.1, bg: '#3b82f6', border: '#2563eb', color: '#ffffff' },
+                        'b2':       { o: 1, x: 500, y: 200, scale: 1 },
+                        'parenL':   { o: 1, x: 320, y: 200 },
+                        'parenR':   { o: 1, x: 560, y: 200 }
+                    }
+                },
+                {
+                    text: "And we're done! The expression 12x + 24 has been perfectly factored into 12(x + 2). Notice how the two 12s merged into one on the outside.",
+                    telemetry: "Step 4: User reached final step. Visually, the merged '12' block turns emerald green to signify completion, showing the final factored form '12(x + 2)'.",
+                    color: '#059669',
+                    els: {
+                        'start12x': { o: 0, x: 320, y: 200, scale: 1.2 },
+                        'start24':  { o: 0, x: 480, y: 200, scale: 1.2 },
+                        'b12a':     { o: 1, x: 240, y: 200, scale: 1.15, bg: '#059669', border: '#047857', color: '#ffffff' },
+                        'bx':       { o: 1, x: 380, y: 200, scale: 1 },
+                        'plus':     { o: 1, x: 440, y: 200 },
+                        'b12b':     { o: 1, x: 240, y: 200, scale: 1.15, bg: '#059669', border: '#047857', color: '#ffffff' },
+                        'b2':       { o: 1, x: 500, y: 200, scale: 1 },
+                        'parenL':   { o: 1, x: 320, y: 200 },
+                        'parenR':   { o: 1, x: 560, y: 200 }
+                    }
+                }
+            ];
+
+            let currentStep = 0;
+            const slider = document.getElementById('progress-slider');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const stepLabel = document.getElementById('step-label');
+            const stepDesc = document.getElementById('step-desc');
+            const statusBadge = document.getElementById('status-badge');
+
+            function updateSVG(step) {
+                const s = states[step];
+                
+                // Update SVG elements
+                for (const [id, props] of Object.entries(s.els)) {
+                    const el = document.getElementById(id);
+                    if (!el) continue;
+                    
+                    const scale = props.scale !== undefined ? props.scale : 1;
+                    el.style.transform = `translate(${props.x}px, ${props.y}px) scale(${scale})`;
+                    el.style.opacity = props.o;
+
+                    if (props.bg) {
+                        const rect = document.getElementById(`${id}-rect`);
+                        if (rect) {
+                            rect.style.fill = props.bg;
+                            rect.style.stroke = props.border;
+                        }
+                    }
+                    if (props.color) {
+                        const textEl = document.getElementById(`${id}-text`);
+                        if (textEl) {
+                            textEl.style.fill = props.color;
+                        }
+                    }
+                }
+            }
+
+            function setStep(step, isUserInteraction = true) {
+                currentStep = parseInt(step);
+                slider.value = currentStep;
+                
+                // Update UI text
+                stepLabel.textContent = `Step ${currentStep} of 4`;
+                stepDesc.textContent = states[currentStep].text;
+                stepDesc.style.borderColor = states[currentStep].color;
+                
+                // Update buttons
+                btnPrev.disabled = currentStep === 0;
+                btnNext.disabled = currentStep === states.length - 1;
+
+                // Update badge
+                if (currentStep === states.length - 1) {
+                    statusBadge.classList.add('visible');
+                } else {
+                    statusBadge.classList.remove('visible');
+                }
+
+                updateSVG(currentStep);
+
+                if (isUserInteraction && window.sendEventToAI) {
+                    window.sendEventToAI(states[currentStep].telemetry);
+                }
+            }
+
+            // Event Listeners
+            slider.addEventListener('input', (e) => setStep(e.target.value));
+            
+            btnNext.addEventListener('click', () => {
+                if (currentStep < states.length - 1) setStep(currentStep + 1);
+            });
+            
+            btnPrev.addEventListener('click', () => {
+                if (currentStep > 0) setStep(currentStep - 1);
+            });
+
+            // Initialize immediately
+            setStep(0, false);
+        })();
+    </script>
+    </div>
+</body>
+</html>

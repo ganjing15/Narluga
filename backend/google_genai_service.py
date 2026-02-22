@@ -229,7 +229,7 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
     2. A raw HTML snippet containing JUST the UI controls/dashboard wrapped in `<controls-panel>...</controls-panel>` tags.
     3. A concise 1-paragraph summary wrapped in `<narration>...</narration>` tags that explains exactly what is drawn in the diagram and how the user should be guided through it. This will be given to a blind Voice Assistant.
     4. A short, highly engaging title for the topic wrapped in `<nblm-title>...</nblm-title>` tags.
-    5. A short subtitle instructing the user how to interact with the graphic wrapped in `<nblm-subtitle>...</nblm-subtitle>` tags.
+    5. A short subtitle instructing the user how to interact with the graphic. It MUST mention that the interactive controls are on the right panel. Wrap in `<nblm-subtitle>...</nblm-subtitle>` tags. Example: "Use the controls on the right to explore the concept."
     
     CRITICAL RULES FOR THE INTERACTIVE GRAPHIC:
     1. VISUAL STYLE: You MUST use a **world-class, premium, modern UI aesthetic**! It must look professionally designed.
@@ -238,12 +238,18 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
        - Use **generous whitespace/padding** everywhere.
        - The SVG vectors themselves should be elegantly simple, thick, perfectly symmetric, and use soft refined gradients or solid clean colors. Limit the number of visual elements to 5-10 maximum.
     2. FORMAT & SEPARATION: DO NOT output an outer flexbox wrapper. We are injecting your `<svg-panel>` and `<controls-panel>` blocks directly into our own layout. The `<svg-panel>` should contain your visual SVG. The `<controls-panel>` should contain your HTML controls. Each should use width/height `100%`. DO NOT ADD white backgrounds, borders, or box-shadows to these core containers, as our parent React cards handle the styling.
-    3. UI CONTROLS: The `<controls-panel>` MUST be interactive AND informative! Include text/values that dynamically update based on the user's interaction (e.g., moving a slider changes values). Style the sliders and buttons with modern CSS. Put your `<style>` tags in the `<controls-panel>`.
+    3. UI CONTROLS: The `<controls-panel>` should contain ONLY interactive elements (sliders, buttons, toggles) and dynamic values that update based on user interaction. Style them with modern CSS — put your `<style>` tags in the `<controls-panel>`. DO NOT include a title, subtitle, heading, or introductory description in the controls panel — the app already displays those above the graphic. Jump straight into the controls.
     4. ANIMATION & LOGIC: It MUST be animated! The SVG components should respond to the HTML UI controls via JavaScript. Include `<style>` tags with CSS `@keyframes` and smooth transitions.
     5. JAVASCRIPT: Include embedded `<script>` tags in `<controls-panel>` to wire up the interactivity. DO NOT use `document.addEventListener` for load events because the HTML is dynamically injected; run code directly in the `<script>`.
        CRITICAL TELEMETRY: The frontend exposes a global function `window.sendEventToAI(textString)`. You MUST call this function whenever the user meaningfully interacts with a UI control (e.g., inside slider `onchange` or button `onclick` handlers). Pass it a detailed string describing the logical action AND the exact *visual* consequences on the screen.
     6. TEXT WRAPPING & OVERFLOW FIX: SVG `<text>` elements do *not* auto-wrap and easily bleed out of cards! To prevent text from overflowing or exceeding the margins/borders of cards (like long emails or permissions text), you MUST use `<foreignObject>` with explicitly defined `width` and `height` slightly smaller than its parent container/card. The inner `<div xmlns="http://www.w3.org/1999/xhtml">` must use CSS `width: 100%; height: 100%; overflow: hidden; text-overflow: ellipsis; word-wrap: break-word; box-sizing: border-box; padding: 4px;` and properly sized fonts so text absolutely never spills out.
     7. NARRATION: Write a concise 1-paragraph summary wrapped in `<narration>...</narration>` tags explaining the UI controls and visually describing the diagram.
+    8. NO TEXT OVERLAY ON SVG: The `<svg-panel>` must contain ONLY the visual diagram/animation — NO explanatory text, titles, descriptions, or long labels that overlay or cover the graphic. All textual explanations, descriptions, step-by-step instructions, and informational text MUST go in the `<controls-panel>` on the right. The SVG should be a clean, unobstructed visual. Short labels (1-3 words) on diagram elements are OK, but paragraphs of text are NOT. This is critical — the user needs to see the animation clearly.
+    9. LABEL READABILITY: All short text labels in the SVG MUST be clearly legible and never obscured by other elements. To achieve this:
+       - Place ALL `<text>` label elements LAST in the SVG markup so they render on top of everything else (SVG uses painter's model — later elements are drawn on top).
+       - Add a semi-transparent white or dark background behind each label using a `<rect>` with `rx="4"` and `fill="rgba(255,255,255,0.85)"` (or dark equivalent) placed immediately before the `<text>` element, sized to fit the text.
+       - Use `font-weight="bold"` and a legible font size (14px+) for all labels.
+       - Position labels in clear space away from overlapping shapes. Never place a label where a shape, path, or animation will cover it.
 
     Source Content:
     {combined_content[:40000]}
@@ -396,13 +402,32 @@ async def handle_live_session(websocket: WebSocket, sources: list):
         "svg_html": svg_html,
         "controls_html": controls_html,
         "title": title,
-        "subtitle": subtitle
+        "subtitle": subtitle,
+        "narration_context": narration_context,
+        "source_labels": source_labels
     })
     
     # Signal graphic is complete
     await websocket.send_json({"type": "phase", "phase": "complete"})
     
-    # 2. Phase 2: Live Presenter
+    # 2. Phase 2: Live Presenter — delegate to shared helper
+    await _run_live_session(websocket, narration_context, source_labels, svg_html)
+
+
+async def handle_live_restart(websocket: WebSocket, narration_context: str, source_labels: list[str]):
+    """
+    Restart a live conversation on an existing graphic.
+    Skips graphic generation and goes straight to the Live API.
+    """
+    print(f"[Live Restart] Starting with {len(source_labels)} source label(s)")
+    await _run_live_session(websocket, narration_context, source_labels, "")
+
+
+async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str):
+    """
+    Shared Live API session logic. Handles system instruction, tool declarations,
+    Gemini connection, and bidirectional audio/tool streaming.
+    """
     # Build source description for system instruction
     source_desc = ", ".join(source_labels) if source_labels else "the provided content"
     
@@ -424,12 +449,16 @@ async def handle_live_session(websocket: WebSocket, sources: list):
     4. Use `navigate_to_section` only when moving between distinctly different areas of the diagram.
     5. Use `zoom_view` sparingly — only if the user asks to see details up close.
     6. If the user asks about something not in the diagram, use `fetch_more_detail` to search for it.
-    7. Keep responses concise and conversational. You're a tutor, not a lecturer.
+    7. If the user asks you to CHANGE the graphic (e.g., "make it red", "hide the clouds", "make the sun bigger"), use `modify_element` to update the CSS in real-time.
+    8. If the user asks you to interact with UI controls (e.g., "stop the autoplay", "click Evaporation", "press Play"), use `click_element` to click that button.
+    9. Keep responses concise and conversational. You're a tutor, not a lecturer.
     
     TOOL TIPS:
     - Call ONE tool at a time, not multiple simultaneously.
     - Always speak while or after using a tool — never go silent after a tool call.
-    - The element_id for highlight_element should match labels or keywords visible in the diagram.
+    - The element_id for tools should match labels or keywords visible in the diagram.
+    - For modify_element, use SVG attributes like 'fill', 'opacity', 'transform', or CSS properties like 'display', 'font-size'.
+    - For click_element, match the exact button text shown on screen (e.g., 'Play Auto-Cycle', 'Evaporation', 'Reset').
     """
     
     # Define agentic tools for the Live API session
@@ -495,6 +524,42 @@ async def handle_live_session(websocket: WebSocket, sources: list):
                     required=["query"]
                 )
             ),
+            types.FunctionDeclaration(
+                name="modify_element",
+                description="Modify the visual appearance of an element in the SVG diagram in real-time. Use this when the user asks you to change something about the graphic (e.g., 'make the sun bigger', 'change the ocean to green', 'hide the clouds'). You can change any CSS property.",
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties=dict(
+                        element_id=types.Schema(
+                            type="STRING",
+                            description="A keyword or identifier for the element to modify. Should match visible labels, text, or section names in the diagram."
+                        ),
+                        css_property=types.Schema(
+                            type="STRING",
+                            description="The CSS property to change. Common ones: 'fill' (color), 'opacity' (0-1), 'transform' (e.g. 'scale(1.5)'), 'display' ('none' to hide, 'block' to show), 'stroke', 'stroke-width', 'font-size', 'visibility' ('hidden'/'visible')."
+                        ),
+                        value=types.Schema(
+                            type="STRING",
+                            description="The new value for the CSS property. E.g., '#ef4444' for red fill, '0.5' for semi-transparent, 'scale(2)' to double size, 'none' to hide."
+                        )
+                    ),
+                    required=["element_id", "css_property", "value"]
+                )
+            ),
+            types.FunctionDeclaration(
+                name="click_element",
+                description="Programmatically click a button or interactive element in the diagram or its controls panel. Use this when the user asks you to interact with the UI controls (e.g., 'stop the autoplay', 'click the Evaporation button', 'press Play', 'toggle the switch'). This simulates a real mouse click.",
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties=dict(
+                        element_id=types.Schema(
+                            type="STRING",
+                            description="A keyword matching the button text, label, or ID to click. E.g., 'Play', 'Stop', 'Evaporation', 'Reset', 'Auto-Cycle'. Match the exact text shown on the button."
+                        )
+                    ),
+                    required=["element_id"]
+                )
+            ),
         ])
     ]
     
@@ -554,8 +619,16 @@ async def handle_live_session(websocket: WebSocket, sources: list):
                  
         async with ws_lock:
             await websocket.send_json({"type": "ready"})
-            
-        # The AI will now wait silently until the frontend sends a text prompt to start the presentation.
+        
+        # Kick off the conversation — send a prompt so the AI starts talking immediately
+        try:
+            await session.send_client_content(
+                turns=[types.Content(parts=[types.Part.from_text(
+                    text="The user just joined the session. Begin your welcome and overview now."
+                )])]
+            )
+        except Exception as e:
+            print(f"[Gemini] Error sending initial prompt: {e}")
         
         async def receive_from_client_and_send_to_gemini():
             try:
@@ -574,6 +647,10 @@ async def handle_live_session(websocket: WebSocket, sources: list):
                                 media=types.Blob(mime_type=mime_type, data=raw_bytes)
                             )
                         except Exception as inner_e:
+                            err_str = str(inner_e)
+                            if "1011" in err_str:
+                                print(f"[Receive Task] Gemini session died (1011). Stopping audio send.")
+                                return
                             print(f"[Receive Task] Error sending audio to Gemini: {inner_e}")
                     elif "clientContent" in payload:
                         try:
@@ -591,6 +668,7 @@ async def handle_live_session(websocket: WebSocket, sources: list):
 
         async def receive_from_gemini_and_send_to_client():
             interrupted = False
+            error_1011_count = 0
             while True:
                 try:
                     async for response in session.receive():
@@ -606,6 +684,7 @@ async def handle_live_session(websocket: WebSocket, sources: list):
                                     
                         if server_content and server_content.model_turn:
                             interrupted = False  # Model is actively responding, clear interrupt flag
+                            error_1011_count = 0  # Reset error counter on successful response
                             for part in server_content.model_turn.parts:
                                 if part.inline_data:
                                     # Gemini Native Audio response - stream to frontend
@@ -631,7 +710,7 @@ async def handle_live_session(websocket: WebSocket, sources: list):
                                 tool_args = dict(func_call.args) if func_call.args else {}
                                 print(f"[Tool Call] {tool_name}({tool_args})")
                                 
-                                if tool_name in ("highlight_element", "navigate_to_section", "zoom_view"):
+                                if tool_name in ("highlight_element", "navigate_to_section", "zoom_view", "modify_element", "click_element"):
                                     # Forward visual action to frontend
                                     async with ws_lock:
                                         await websocket.send_json({
@@ -718,18 +797,13 @@ async def handle_live_session(websocket: WebSocket, sources: list):
                                     
                 except APIError as e:
                     if "1011" in str(e):
-                        print("[Gemini Task] Trapped 1011 APIError during interruption. Resuming...")
+                        error_1011_count += 1
+                        print(f"[Gemini Task] Trapped 1011 APIError ({error_1011_count}/3). Resuming...")
                         interrupted = False
-                        await asyncio.sleep(0.3)
-                        # Nudge Gemini to re-engage after interruption
-                        try:
-                            await session.send_client_content(
-                                turns=[types.Content(parts=[types.Part.from_text(
-                                    text="[The user just interrupted. Acknowledge briefly and wait for their next question.]"
-                                )])]
-                            )
-                        except Exception:
-                            pass
+                        if error_1011_count >= 3:
+                            print("[Gemini Task] Too many 1011 errors, ending session.")
+                            break
+                        await asyncio.sleep(0.5)
                         continue
                     else:
                         print(f"[Gemini Task] Fatal APIError: {e}")

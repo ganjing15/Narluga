@@ -861,7 +861,6 @@ body {
   color: var(--text-tertiary);
   font-size: 0.9rem;
   line-height: 1.5;
-  flex: 1;
 }
 
 @media (max-width: 1024px) {

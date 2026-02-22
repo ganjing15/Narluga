@@ -44,6 +44,8 @@ function App() {
   const [currentControls, setCurrentControls] = useState<string | null>(null)
   const [currentTitle, setCurrentTitle] = useState<string | null>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null)
+  const narrationContextRef = useRef<string>('')
+  const sourceLabelsRef = useRef<string[]>([])
 
   // Refs
   const wsRef = useRef<WebSocket | null>(null)
@@ -245,6 +247,7 @@ function App() {
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // WS is already open — just send start_live_session
       wsRef.current.send(JSON.stringify({
         type: "start_live_session",
         pre_events: eventQueueRef.current
@@ -257,17 +260,110 @@ function App() {
         try { audioCtxRef.current.resume(); } catch (err) { }
       }
 
-      if (streamRef.current && !micAudioCtxRef.current) {
-        const startMic = async () => {
-          try {
-            const micAudioCtx = new AudioContext({ sampleRate: 16000 })
-            if (micAudioCtx.state === 'suspended') {
-              await micAudioCtx.resume();
-            }
+      setupMic()
+    } else if (narrationContextRef.current) {
+      // WS is closed but we have context — reconnect via /ws/live-restart
+      setIsConnecting(true)
+      setError('')
+      setStatusMessage('Reconnecting...')
 
-            const source = micAudioCtx.createMediaStreamSource(streamRef.current!)
+      const wsUrl = `ws://localhost:8000/ws/live-restart`
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
 
-            const workletCode = `
+      ws.onopen = () => {
+        setIsConnecting(false)
+        // Send restart context
+        ws.send(JSON.stringify({
+          type: "restart_live",
+          narration_context: narrationContextRef.current,
+          source_labels: sourceLabelsRef.current
+        }))
+        // Immediately send start_live_session
+        ws.send(JSON.stringify({
+          type: "start_live_session",
+          pre_events: eventQueueRef.current
+        }))
+        setHasStarted(true)
+        hasStartedRef.current = true
+        eventQueueRef.current = []
+
+        if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+          try { audioCtxRef.current.resume(); } catch (err) { }
+        }
+      }
+
+      // Reuse the same message/close/error handlers
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        if (data.type === 'phase') {
+          setSessionPhase(data.phase as SessionPhase)
+        } else if (data.type === 'ready') {
+          micReadyRef.current = true
+          setupMic()
+        } else if (data.type === 'clear') {
+          if (audioCtxRef.current) {
+            audioCtxRef.current.close().catch(console.error)
+            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+            audioCtxRef.current = new AudioContext({ sampleRate: 24000 })
+            nextPlayTimeRef.current = audioCtxRef.current.currentTime
+          }
+        } else if (data.type === 'audio') {
+          const base64Data = data.data
+          const binaryStr = window.atob(base64Data)
+          const len = binaryStr.length
+          const bytes = new Uint8Array(len)
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryStr.charCodeAt(i)
+          }
+          const int16Array = new Int16Array(bytes.buffer)
+          const float32Array = new Float32Array(int16Array.length)
+          for (let i = 0; i < int16Array.length; i++) {
+            float32Array[i] = int16Array[i] / 32768.0
+          }
+          if (audioCtxRef.current) {
+            const audioBuffer = audioCtxRef.current.createBuffer(1, float32Array.length, 24000)
+            audioBuffer.getChannelData(0).set(float32Array)
+            const source = audioCtxRef.current.createBufferSource()
+            source.buffer = audioBuffer
+            source.connect(audioCtxRef.current.destination)
+            const startTime = Math.max(audioCtxRef.current.currentTime, nextPlayTimeRef.current)
+            source.start(startTime)
+            nextPlayTimeRef.current = startTime + audioBuffer.duration
+          }
+        } else if (data.type === 'error') {
+          setError(data.message)
+          disconnect()
+        }
+      }
+
+      ws.onclose = (event) => {
+        if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
+          setError(`Connection lost (${event.code}).`)
+        }
+        disconnect()
+      }
+
+      ws.onerror = () => {
+        setError('WebSocket connection error.')
+        disconnect()
+      }
+    }
+  }
+
+  // Helper: setup mic AudioWorklet
+  const setupMic = () => {
+    if (streamRef.current && !micAudioCtxRef.current) {
+      const startMic = async () => {
+        try {
+          const micAudioCtx = new AudioContext({ sampleRate: 16000 })
+          if (micAudioCtx.state === 'suspended') {
+            await micAudioCtx.resume();
+          }
+
+          const source = micAudioCtx.createMediaStreamSource(streamRef.current!)
+
+          const workletCode = `
               class PCMProcessor extends AudioWorkletProcessor {
                 constructor() {
                   super();
@@ -297,39 +393,38 @@ function App() {
               registerProcessor('pcm-processor', PCMProcessor);
             `;
 
-            const blob = new Blob([workletCode], { type: 'application/javascript' });
-            const workletUrl = URL.createObjectURL(blob);
-            await micAudioCtx.audioWorklet.addModule(workletUrl);
+          const blob = new Blob([workletCode], { type: 'application/javascript' });
+          const workletUrl = URL.createObjectURL(blob);
+          await micAudioCtx.audioWorklet.addModule(workletUrl);
 
-            const processorNode = new AudioWorkletNode(micAudioCtx, 'pcm-processor')
+          const processorNode = new AudioWorkletNode(micAudioCtx, 'pcm-processor')
 
-            processorNode.port.onmessage = (e) => {
-              const buffer = e.data;
-              const uint8Array = new Uint8Array(buffer);
-              let binary = '';
-              for (let i = 0; i < uint8Array.byteLength; i++) {
-                binary += String.fromCharCode(uint8Array[i]);
-              }
-              const base64Data = btoa(binary);
+          processorNode.port.onmessage = (e) => {
+            const buffer = e.data;
+            const uint8Array = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < uint8Array.byteLength; i++) {
+              binary += String.fromCharCode(uint8Array[i]);
+            }
+            const base64Data = btoa(binary);
 
-              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && micReadyRef.current) {
-                wsRef.current.send(JSON.stringify({
-                  realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Data }] }
-                }));
-              }
-            };
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && micReadyRef.current) {
+              wsRef.current.send(JSON.stringify({
+                realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Data }] }
+              }));
+            }
+          };
 
-            source.connect(processorNode)
-            processorNode.connect(micAudioCtx.destination)
+          source.connect(processorNode)
+          processorNode.connect(micAudioCtx.destination)
 
-            audioWorkletNodeRef.current = processorNode
-            micAudioCtxRef.current = micAudioCtx
-          } catch (err) {
-            console.error("Failed to start mic audio context", err);
-          }
-        };
-        startMic();
-      }
+          audioWorkletNodeRef.current = processorNode
+          micAudioCtxRef.current = micAudioCtx
+        } catch (err) {
+          console.error("Failed to start mic audio context", err);
+        }
+      };
+      startMic();
     }
   }
 
@@ -380,6 +475,9 @@ function App() {
           setCurrentControls(data.controls_html || null)
           setCurrentTitle(data.title || null)
           setCurrentSubtitle(data.subtitle || null)
+          // Store narration context for conversation restart
+          if (data.narration_context) narrationContextRef.current = data.narration_context
+          if (data.source_labels) sourceLabelsRef.current = data.source_labels
         } else if (data.type === 'clear') {
           if (audioCtxRef.current) {
             audioCtxRef.current.close().catch(console.error)
@@ -416,34 +514,56 @@ function App() {
           }
         } else if (data.type === 'tool_action') {
           const { action, params } = data
-          const svgContainer = document.querySelector('.w-full.flex-1.relative') as HTMLElement
+          const svgContainer = document.querySelector('[data-svg-container]') as HTMLElement
           if (!svgContainer) return
 
           // Helper: find SVG elements by fuzzy text/ID match
           const findElements = (keyword: string): Element[] => {
-            const kw = keyword.toLowerCase().replace(/[-_]/g, ' ')
+            const kw = keyword.toLowerCase().replace(/[-_]/g, ' ').trim()
+            if (!kw) return []
             const results: Element[] = []
-            // Match by id or data attributes
+            const containerRect = svgContainer.getBoundingClientRect()
+
+            // Skip elements that are too large (>60% of container = probably a wrapper)
+            const isTooLarge = (el: Element): boolean => {
+              const rect = el.getBoundingClientRect()
+              return rect.width > containerRect.width * 0.6 && rect.height > containerRect.height * 0.6
+            }
+
+            // 1. Match by id or data attributes (exact-ish match)
             svgContainer.querySelectorAll('[id], [data-label], [data-section]').forEach(el => {
               const id = (el.id || '').toLowerCase().replace(/[-_]/g, ' ')
               const label = (el.getAttribute('data-label') || '').toLowerCase()
               const section = (el.getAttribute('data-section') || '').toLowerCase()
-              if (id.includes(kw) || kw.includes(id) || label.includes(kw) || section.includes(kw)) {
-                results.push(el)
+              // Only match if id is meaningful (3+ chars) and keyword is contained in it
+              if ((id.length >= 3 && id.includes(kw)) || label.includes(kw) || section.includes(kw)) {
+                if (!isTooLarge(el)) results.push(el)
               }
             })
-            // Match by visible text content in text/tspan/foreignObject elements
+
+            // 2. Match by visible text content — target the text element itself, not a parent
             if (results.length === 0) {
-              svgContainer.querySelectorAll('text, tspan, foreignObject, h1, h2, h3, h4, p, span, div').forEach(el => {
-                const text = (el.textContent || '').toLowerCase()
-                if (text.includes(kw) || kw.split(' ').every(w => text.includes(w))) {
-                  // Prefer the closest group parent (g, rect, circle) for visual highlighting
-                  const parent = el.closest('g, [id]') || el
-                  if (!results.includes(parent)) results.push(parent)
+              svgContainer.querySelectorAll('text, tspan, foreignObject, h1, h2, h3, h4, p, span, label, button').forEach(el => {
+                const text = (el.textContent || '').toLowerCase().trim()
+                if (text.length > 0 && text.length < 200 && (text.includes(kw) || kw.split(' ').every(w => text.includes(w)))) {
+                  // For SVG text elements, go up ONE level to the immediate parent <g> only
+                  let target: Element = el
+                  if (el instanceof SVGElement && el.parentElement && el.parentElement.tagName.toLowerCase() === 'g') {
+                    target = el.parentElement
+                  }
+                  if (!isTooLarge(target) && !results.includes(target)) results.push(target)
                 }
               })
             }
-            return results.slice(0, 5) // Cap at 5 matches
+
+            // Sort by size (smaller = more specific = better)
+            results.sort((a, b) => {
+              const aRect = a.getBoundingClientRect()
+              const bRect = b.getBoundingClientRect()
+              return (aRect.width * aRect.height) - (bRect.width * bRect.height)
+            })
+
+            return results.slice(0, 3) // Cap at 3 best matches
           }
 
           if (action === 'highlight_element') {
@@ -483,6 +603,57 @@ function App() {
             svgContainer.style.transform = `scale(${newScale})`
             svgContainer.style.transformOrigin = 'center center'
             svgContainer.dataset.zoomScale = newScale.toString()
+          } else if (action === 'modify_element') {
+            const elements = findElements(params.element_id || '')
+            const prop = params.css_property || ''
+            const val = params.value || ''
+            elements.forEach(el => {
+              const htmlEl = el as HTMLElement | SVGElement
+              htmlEl.style.transition = 'all 0.5s ease'
+              // Handle SVG-specific attributes that work better as attributes than CSS
+              if (htmlEl instanceof SVGElement && ['fill', 'stroke', 'opacity', 'stroke-width'].includes(prop)) {
+                htmlEl.setAttribute(prop, val)
+              } else {
+                // Convert kebab-case to camelCase for style property
+                const camelProp = prop.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase())
+                  ; (htmlEl.style as any)[camelProp] = val
+              }
+            })
+            if (elements.length > 0) {
+              // Brief highlight to show what changed
+              const el = elements[0] as HTMLElement | SVGElement
+              const prevFilter = el.style.filter
+              el.style.filter = 'drop-shadow(0 0 8px #3b82f6)'
+              setTimeout(() => { el.style.filter = prevFilter }, 1500)
+            }
+          } else if (action === 'click_element') {
+            // Search both SVG container and controls panel for clickable elements
+            const kw = (params.element_id || '').toLowerCase().trim()
+            if (!kw) return
+            const containers = document.querySelectorAll('[data-svg-container], [data-controls-container]')
+            let clicked = false
+            containers.forEach(container => {
+              if (clicked) return
+              // Search buttons, inputs, and anything with onclick
+              container.querySelectorAll('button, input[type="button"], input[type="submit"], input[type="checkbox"], input[type="range"], a, [onclick], [role="button"]').forEach(el => {
+                if (clicked) return
+                const text = (el.textContent || '').toLowerCase().trim()
+                const id = (el.id || '').toLowerCase()
+                const title = (el.getAttribute('title') || '').toLowerCase()
+                const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase()
+                if (text.includes(kw) || kw.includes(text) || id.includes(kw) || title.includes(kw) || ariaLabel.includes(kw)) {
+                  // Visual flash before clicking
+                  const htmlEl = el as HTMLElement
+                  htmlEl.style.transition = 'all 0.2s ease'
+                  htmlEl.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.5)'
+                  setTimeout(() => {
+                    htmlEl.style.boxShadow = ''
+                    htmlEl.click()
+                  }, 300)
+                  clicked = true
+                }
+              })
+            })
           } else if (action === 'fetch_more_detail') {
             // Show a brief search indicator
             if (params.status === 'searching') {
@@ -526,6 +697,93 @@ function App() {
     setStatusMessage('')
     setError('')
   }, [disconnect])
+
+  // Cursor hover tracking — tell the AI what the user is pointing at
+  useEffect(() => {
+    if (sessionPhase !== 'conversation') return
+    const container = document.querySelector('[data-svg-container]')
+    if (!container) return
+
+    let lastReport = ''
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+    const handleMouseMove = (e: Event) => {
+      const mouseEvent = e as MouseEvent
+      const target = mouseEvent.target as Element
+      if (!target || target === container) return
+
+      const cx = mouseEvent.clientX
+      const cy = mouseEvent.clientY
+
+      // 1. Find what the cursor is directly on
+      let directLabel = ''
+      // Check for id or data attributes on the target or nearest parent
+      const attrEl = target.closest('[id], [data-label], [data-section]')
+      if (attrEl) {
+        directLabel = attrEl.getAttribute('data-label') || ''
+        if (!directLabel && attrEl.id && attrEl.id.length >= 3) {
+          directLabel = attrEl.id.replace(/[-_]/g, ' ')
+        }
+      }
+      // If directly over text
+      const directText = target.closest('text, tspan')
+      if (directText) {
+        directLabel = (directText.textContent || '').trim()
+      }
+
+      // 2. Find the nearest <text> label by proximity (within 150px)
+      let nearestLabel = ''
+      let nearestDist = 150
+      container.querySelectorAll('text').forEach(textEl => {
+        const content = (textEl.textContent || '').trim()
+        if (content.length < 2 || content.length > 60) return
+        const rect = textEl.getBoundingClientRect()
+        const textCx = rect.left + rect.width / 2
+        const textCy = rect.top + rect.height / 2
+        const dist = Math.sqrt((cx - textCx) ** 2 + (cy - textCy) ** 2)
+        if (dist < nearestDist) {
+          nearestDist = dist
+          nearestLabel = content
+        }
+      })
+
+      // 3. Describe the element under cursor
+      const tagName = target.tagName.toLowerCase()
+      const fill = target.getAttribute('fill') || ''
+      let elementDesc = ''
+      if (['rect', 'circle', 'ellipse', 'polygon', 'path', 'line'].includes(tagName)) {
+        elementDesc = `a ${fill ? fill + ' ' : ''}${tagName} shape`
+      }
+
+      // Build the report
+      let report = ''
+      if (directLabel && directLabel.length >= 2) {
+        report = `"${directLabel}"`
+      } else if (nearestLabel) {
+        report = `near the "${nearestLabel}" label`
+        if (elementDesc) report += ` (on ${elementDesc})`
+      } else if (elementDesc) {
+        report = elementDesc
+      }
+
+      if (!report || report === lastReport) return
+      lastReport = report
+
+      // Debounce: only send every 3 seconds
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        if ((window as any).sendEventToAI) {
+          ; (window as any).sendEventToAI(`User is pointing at: ${report}`)
+        }
+      }, 3000)
+    }
+
+    container.addEventListener('mousemove', handleMouseMove)
+    return () => {
+      container.removeEventListener('mousemove', handleMouseMove)
+      if (debounceTimer) clearTimeout(debounceTimer)
+    }
+  }, [sessionPhase, currentSvg])
 
   const executeScripts = (node: HTMLDivElement | null) => {
     if (node) {
@@ -599,7 +857,7 @@ function App() {
             <div className="nblm-header">
               <span>Sources</span>
             </div>
-            <button onClick={() => setIsSidebarOpen(false)} className="absolute top-[12px] right-[12px] w-8 h-8 bg-slate-100 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-600 z-10" title="Collapse sidebar">
+            <button onClick={() => setIsSidebarOpen(false)} className="absolute top-[12px] right-[12px] w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors z-10" style={{ background: '#f1f5f9', color: '#475569' }} title="Collapse sidebar">
               <ChevronLeftIcon className="w-5 h-5" />
             </button>
             <div className="flex-1 overflow-auto flex flex-col p-4 relative">
@@ -761,6 +1019,13 @@ function App() {
                       </div>
                     ))}
                   </div>
+
+                  <button
+                    onClick={() => { disconnect(); setSessionPhase('idle'); }}
+                    className="w-full mt-4 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all duration-200 text-sm font-medium"
+                  >
+                    Cancel Generation
+                  </button>
                 </div>
               )}
 
@@ -867,15 +1132,17 @@ function App() {
                   )}
                   <div
                     className="w-full flex-1 p-0 box-border flex items-center justify-center min-h-0 relative"
+                    data-svg-container
                     dangerouslySetInnerHTML={{ __html: currentSvg }}
                     ref={executeScripts}
                   />
                 </div>
                 {/* Embedded Studio Controls */}
                 {currentControls && (
-                  <div className={`shrink-0 h-full p-6 overflow-y-auto bg-white border-l border-slate-100 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'basis-[380px]' : 'flex-[0.4] min-w-[420px] max-w-[500px]'}`}>
+                  <div className={`shrink-0 h-full p-6 overflow-y-auto transition-all duration-300 ease-in-out ${isSidebarOpen ? 'basis-[380px]' : 'flex-[0.4] min-w-[420px] max-w-[500px]'}`}>
                     <div
                       className="w-full min-h-full p-0 box-border"
+                      data-controls-container
                       dangerouslySetInnerHTML={{ __html: currentControls }}
                       ref={executeScripts}
                     />
