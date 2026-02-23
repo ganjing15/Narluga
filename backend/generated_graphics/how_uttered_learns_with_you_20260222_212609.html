@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>How Uttered Learns With You</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 500" style="width:100%; height:100%; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;">
+  <defs>
+    <style>
+      @keyframes dashFlow {
+        from { stroke-dashoffset: 24; }
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes dashFlowRev {
+        from { stroke-dashoffset: 0; }
+        to { stroke-dashoffset: 24; }
+      }
+      @keyframes pulseRing {
+        0% { transform: scale(0.9); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.1; }
+        100% { transform: scale(0.9); opacity: 0.5; }
+      }
+      .flow-line {
+        animation: dashFlow 1.2s linear infinite;
+      }
+      .flow-line-rev {
+        animation: dashFlowRev 1.2s linear infinite;
+      }
+      .pulse {
+        animation: pulseRing 3s ease-in-out infinite;
+        transform-origin: 400px 250px;
+      }
+    </style>
+  </defs>
+
+  <!-- Background Pulsing Ring behind Server -->
+  <circle cx="400" cy="250" r="70" fill="#eff6ff" class="pulse" />
+
+  <!-- FLOW LINES (Connections) -->
+  <!-- User to Server -->
+  <path d="M 210 250 L 320 250" fill="none" stroke="#e2e8f0" stroke-width="4" stroke-linecap="round" />
+  <path d="M 210 250 L 320 250" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 8" class="flow-line" />
+
+  <!-- Server to AI Brain -->
+  <path d="M 480 250 C 530 250 540 150 590 150" fill="none" stroke="#e2e8f0" stroke-width="4" stroke-linecap="round" />
+  <path d="M 480 250 C 530 250 540 150 590 150" fill="none" stroke="#d97706" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 8" class="flow-line" />
+  
+  <!-- Server to Database -->
+  <path d="M 480 250 C 530 250 540 350 590 350" fill="none" stroke="#e2e8f0" stroke-width="4" stroke-linecap="round" />
+  <path d="M 480 250 C 530 250 540 350 590 350" fill="none" stroke="#059669" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 8" class="flow-line" />
+
+  <!-- NODE 1: USER -->
+  <g id="node-user" style="transition: all 0.3s ease; transform-origin: 130px 250px; cursor: pointer;" onclick="selectNode('user')">
+    <rect x="50" y="214" width="160" height="72" rx="12" fill="rgba(15,23,42,0.04)" />
+    <rect x="50" y="210" width="160" height="72" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+    <rect x="62" y="222" width="48" height="48" rx="10" fill="#eff6ff" />
+    <circle cx="86" cy="240" r="7" fill="none" stroke="#2563eb" stroke-width="2.5" />
+    <path d="M 74 258 C 74 252 80 249 86 249 C 92 249 98 252 98 258" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" />
+    <foreignObject x="116" y="210" width="88" height="72">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%; height:100%; overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px 0; font-size:14px; font-weight:600; color:#0f172a; display:flex; align-items:center; line-height:1.2;">
+        You (The Learner)
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- NODE 2: APP SERVER -->
+  <g id="node-server" style="transition: all 0.3s ease; transform-origin: 400px 250px; cursor: pointer;" onclick="selectNode('server')">
+    <rect x="320" y="214" width="160" height="72" rx="12" fill="rgba(15,23,42,0.04)" />
+    <rect x="320" y="210" width="160" height="72" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+    <rect x="332" y="222" width="48" height="48" rx="10" fill="#f3e8ff" />
+    <rect x="342" y="234" width="28" height="6" rx="2" fill="none" stroke="#7c3aed" stroke-width="2" />
+    <rect x="342" y="244" width="28" height="6" rx="2" fill="none" stroke="#7c3aed" stroke-width="2" />
+    <rect x="342" y="254" width="28" height="6" rx="2" fill="none" stroke="#7c3aed" stroke-width="2" />
+    <circle cx="347" cy="237" r="1" fill="#7c3aed" />
+    <circle cx="347" cy="247" r="1" fill="#7c3aed" />
+    <circle cx="347" cy="257" r="1" fill="#7c3aed" />
+    <foreignObject x="386" y="210" width="88" height="72">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%; height:100%; overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px 0; font-size:14px; font-weight:600; color:#0f172a; display:flex; align-items:center; line-height:1.2;">
+        The App Server
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- NODE 3: AI BRAIN -->
+  <g id="node-ai" style="transition: all 0.3s ease; transform-origin: 670px 150px; cursor: pointer;" onclick="selectNode('ai')">
+    <rect x="590" y="114" width="160" height="72" rx="12" fill="rgba(15,23,42,0.04)" />
+    <rect x="590" y="110" width="160" height="72" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+    <rect x="602" y="122" width="48" height="48" rx="10" fill="#fef3c7" />
+    <path d="M 626 132 L 629 141 L 638 144 L 629 147 L 626 156 L 623 147 L 614 144 L 623 141 Z" fill="#d97706" />
+    <circle cx="616" cy="134" r="2" fill="#d97706" />
+    <circle cx="636" cy="154" r="1.5" fill="#d97706" />
+    <foreignObject x="656" y="110" width="88" height="72">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%; height:100%; overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px 0; font-size:14px; font-weight:600; color:#0f172a; display:flex; align-items:center; line-height:1.2;">
+        AI Brain (Gemini)
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- NODE 4: DATABASE -->
+  <g id="node-database" style="transition: all 0.3s ease; transform-origin: 670px 350px; cursor: pointer;" onclick="selectNode('database')">
+    <rect x="590" y="314" width="160" height="72" rx="12" fill="rgba(15,23,42,0.04)" />
+    <rect x="590" y="310" width="160" height="72" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+    <rect x="602" y="322" width="48" height="48" rx="10" fill="#d1fae5" />
+    <ellipse cx="626" cy="336" rx="12" ry="5" fill="none" stroke="#059669" stroke-width="2.5" />
+    <path d="M 614 336 L 614 352 A 12 5 0 0 0 638 352 L 638 336" fill="none" stroke="#059669" stroke-width="2.5" />
+    <path d="M 614 344 A 12 5 0 0 0 638 344" fill="none" stroke="#059669" stroke-width="2.5" />
+    <foreignObject x="656" y="310" width="88" height="72">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%; height:100%; overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px 0; font-size:14px; font-weight:600; color:#0f172a; display:flex; align-items:center; line-height:1.2;">
+        Memory Bank
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- TEXT LABELS ON LINES (Painter's Model - Rendered Last) -->
+  <g transform="translate(225, 240)">
+    <rect width="80" height="20" rx="10" fill="rgba(255,255,255,0.9)" />
+    <text x="40" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.5">WATCH</text>
+  </g>
+  <g transform="translate(495, 190)">
+    <rect width="80" height="20" rx="10" fill="rgba(255,255,255,0.9)" />
+    <text x="40" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.5">ANALYZE</text>
+  </g>
+  <g transform="translate(495, 290)">
+    <rect width="80" height="20" rx="10" fill="rgba(255,255,255,0.9)" />
+    <text x="40" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.5">SAVE</text>
+  </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>How Uttered Learns With You</h2>
+        <p style="color: #64748b;">Use the controls on the right to explore how the app connects you, the AI, and your memory.</p>
+        <p style="font-size: 13px; margin-top: -8px;"><a href="https://github.com/utteredlive/uttered" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+  .ctrl-btn {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; margin-bottom: 8px;
+    background: white; border: 2px solid #e2e8f0; border-radius: 12px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; 
+    font-size: 15px; font-weight: 600; color: #0f172a;
+    cursor: pointer; transition: all 0.2s ease; outline: none;
+  }
+  .ctrl-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
+</style>
+
+<div style="display: flex; flex-direction: column; height: 100%;">
+  <button id="btn-user" class="ctrl-btn" onclick="selectNode('user')">
+    <svg width="20" height="20" viewBox="0 0 20 20">
+      <rect width="20" height="20" rx="5" fill="#2563eb"/>
+      <circle cx="10" cy="8" r="3" fill="white"/>
+      <path d="M 5 15 C 5 12 15 12 15 15" fill="none" stroke="white" stroke-width="2"/>
+    </svg>
+    You (The Learner)
+  </button>
+  
+  <button id="btn-server" class="ctrl-btn" onclick="selectNode('server')">
+    <svg width="20" height="20" viewBox="0 0 20 20">
+      <rect width="20" height="20" rx="5" fill="#7c3aed"/>
+      <rect x="4" y="5" width="12" height="3" rx="1.5" fill="white"/>
+      <rect x="4" y="11" width="12" height="3" rx="1.5" fill="white"/>
+    </svg>
+    App Server
+  </button>
+  
+  <button id="btn-ai" class="ctrl-btn" onclick="selectNode('ai')">
+    <svg width="20" height="20" viewBox="0 0 20 20">
+      <rect width="20" height="20" rx="5" fill="#d97706"/>
+      <path d="M 10 4 L 11.5 8.5 L 16 10 L 11.5 11.5 L 10 16 L 8.5 11.5 L 4 10 L 8.5 8.5 Z" fill="white"/>
+    </svg>
+    AI Brain
+  </button>
+  
+  <button id="btn-database" class="ctrl-btn" onclick="selectNode('database')">
+    <svg width="20" height="20" viewBox="0 0 20 20">
+      <rect width="20" height="20" rx="5" fill="#059669"/>
+      <ellipse cx="10" cy="7" rx="6" ry="2.5" fill="none" stroke="white" stroke-width="1.5"/>
+      <path d="M 4 7 L 4 13 A 6 2.5 0 0 0 16 13 L 16 7" fill="none" stroke="white" stroke-width="1.5"/>
+      <path d="M 4 10 A 6 2.5 0 0 0 16 10" fill="none" stroke="white" stroke-width="1.5"/>
+    </svg>
+    Memory Bank
+  </button>
+
+  <div id="info-panel" style="margin-top:auto; padding:16px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; min-height:80px; font-family: system-ui, -apple-system, sans-serif;">
+    <div id="info-title" style="font-weight:700; font-size:15px; color:#0f172a; margin-bottom:6px;">Select a component</div>
+    <div id="info-desc" style="font-size:13px; color:#475569; line-height:1.5;">Click any button above or part of the diagram to explore how Uttered works.</div>
+  </div>
+</div>
+
+<script>
+var nodeData = {
+  'user': { 
+    title: 'You (The Learner)', 
+    desc: 'You watch a YouTube video, use the text chat, speak out loud, or take notes. Your actions start the entire learning process!',
+    color: '#2563eb'
+  },
+  'server': { 
+    title: 'The App Server', 
+    desc: 'Built with Next.js, this is the traffic cop. It takes your inputs and securely routes them up to the AI Brain or down to the Memory Bank.',
+    color: '#7c3aed'
+  },
+  'ai': { 
+    title: 'AI Brain (Gemini)', 
+    desc: 'Google Gemini acts as your live tutor. It instantly understands the video text, talks to you in real-time, and even generates visual picture notes.',
+    color: '#d97706'
+  },
+  'database': { 
+    title: 'Memory Bank', 
+    desc: 'Databases like Supabase and Cloudflare R2 act as the long-term memory, safely storing your progress, vocabulary lists, and visual notes so you never lose them.',
+    color: '#059669'
+  }
+};
+
+function selectNode(id) {
+  // Reset all SVG nodes
+  document.querySelectorAll('[id^="node-"]').forEach(function(el) {
+    el.style.filter = ''; 
+    el.style.transform = '';
+  });
+  
+  // Reset all Buttons
+  document.querySelectorAll('.ctrl-btn').forEach(function(b) { 
+    b.style.borderColor = '#e2e8f0'; 
+    b.style.background = 'white'; 
+  });
+
+  var data = nodeData[id];
+  if (!data) return;
+
+  // Highlight SVG Node
+  var el = document.getElementById('node-' + id);
+  if (el) { 
+    el.style.filter = 'drop-shadow(0 0 15px ' + data.color + '88)'; 
+    el.style.transform = 'scale(1.06)'; 
+  }
+  
+  // Highlight Button
+  var btn = document.getElementById('btn-' + id);
+  if (btn) {
+    btn.style.borderColor = data.color; 
+    btn.style.background = data.color + '11'; 
+  }
+
+  // Update Info Panel
+  document.getElementById('info-title').textContent = data.title;
+  document.getElementById('info-desc').textContent = data.desc;
+
+  if (window.sendEventToAI) { 
+    window.sendEventToAI('User clicked ' + id + '. SVG node highlighted with ' + data.color + ' glow. Info panel shows: ' + data.desc); 
+  }
+}
+</script>
+    </div>
+</body>
+</html>

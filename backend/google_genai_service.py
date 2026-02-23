@@ -238,18 +238,66 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
        - Use **generous whitespace/padding** everywhere.
        - The SVG vectors themselves should be elegantly simple, thick, perfectly symmetric, and use soft refined gradients or solid clean colors. Limit the number of visual elements to 5-10 maximum.
     2. FORMAT & SEPARATION: DO NOT output an outer flexbox wrapper. We are injecting your `<svg-panel>` and `<controls-panel>` blocks directly into our own layout. The `<svg-panel>` should contain your visual SVG. The `<controls-panel>` should contain your HTML controls. Each should use width/height `100%`. DO NOT ADD white backgrounds, borders, or box-shadows to these core containers, as our parent React cards handle the styling.
-    3. UI CONTROLS: The `<controls-panel>` should contain ONLY interactive elements (sliders, buttons, toggles) and dynamic values that update based on user interaction. Style them with modern CSS — put your `<style>` tags in the `<controls-panel>`. DO NOT include a title, subtitle, heading, or introductory description in the controls panel — the app already displays those above the graphic. Jump straight into the controls.
-    4. ANIMATION & LOGIC: It MUST be animated! The SVG components should respond to the HTML UI controls via JavaScript. Include `<style>` tags with CSS `@keyframes` and smooth transitions.
-    5. JAVASCRIPT: Include embedded `<script>` tags in `<controls-panel>` to wire up the interactivity. DO NOT use `document.addEventListener` for load events because the HTML is dynamically injected; run code directly in the `<script>`.
-       CRITICAL TELEMETRY: The frontend exposes a global function `window.sendEventToAI(textString)`. You MUST call this function whenever the user meaningfully interacts with a UI control (e.g., inside slider `onchange` or button `onclick` handlers). Pass it a detailed string describing the logical action AND the exact *visual* consequences on the screen.
-    6. TEXT WRAPPING & OVERFLOW FIX: SVG `<text>` elements do *not* auto-wrap and easily bleed out of cards! To prevent text from overflowing or exceeding the margins/borders of cards (like long emails or permissions text), you MUST use `<foreignObject>` with explicitly defined `width` and `height` slightly smaller than its parent container/card. The inner `<div xmlns="http://www.w3.org/1999/xhtml">` must use CSS `width: 100%; height: 100%; overflow: hidden; text-overflow: ellipsis; word-wrap: break-word; box-sizing: border-box; padding: 4px;` and properly sized fonts so text absolutely never spills out.
-    7. NARRATION: Write a concise 1-paragraph summary wrapped in `<narration>...</narration>` tags explaining the UI controls and visually describing the diagram.
-    8. NO TEXT OVERLAY ON SVG: The `<svg-panel>` must contain ONLY the visual diagram/animation — NO explanatory text, titles, descriptions, or long labels that overlay or cover the graphic. All textual explanations, descriptions, step-by-step instructions, and informational text MUST go in the `<controls-panel>` on the right. The SVG should be a clean, unobstructed visual. Short labels (1-3 words) on diagram elements are OK, but paragraphs of text are NOT. This is critical — the user needs to see the animation clearly.
-    9. LABEL READABILITY: All short text labels in the SVG MUST be clearly legible and never obscured by other elements. To achieve this:
-       - Place ALL `<text>` label elements LAST in the SVG markup so they render on top of everything else (SVG uses painter's model — later elements are drawn on top).
-       - Add a semi-transparent white or dark background behind each label using a `<rect>` with `rx="4"` and `fill="rgba(255,255,255,0.85)"` (or dark equivalent) placed immediately before the `<text>` element, sized to fit the text.
-       - Use `font-weight="bold"` and a legible font size (14px+) for all labels.
-       - Position labels in clear space away from overlapping shapes. Never place a label where a shape, path, or animation will cover it.
+    3. INTERACTIVITY — COMPLETE TEMPLATE: You MUST follow this exact pattern. Every button in the controls panel MUST visibly highlight the corresponding SVG node when clicked. Here is the EXACT code structure you must adapt:
+
+       In your svg-panel, every major visual group MUST have an id starting with "node-" and these EXACT CSS properties for transforms to work in SVG:
+       ```
+       <g id="node-server" style="transition: all 0.3s ease; transform-box: fill-box; transform-origin: center; cursor: pointer;">
+         <!-- your shapes here -->
+       </g>
+       ```
+       CRITICAL: `transform-box: fill-box` is REQUIRED for CSS scale/translate transforms to work on SVG `<g>` elements. Without it, `transform-origin: center` defaults to the SVG viewport origin, making scale transforms invisible. Do NOT use pixel-coordinate transform-origin like `transform-origin: 130px 250px`.
+
+       In your controls-panel, buttons MUST use inline colorful SVG icons (NOT emojis, NOT grey strokes) and call selectNode():
+       ```
+       <button class="ctrl-btn" onclick="selectNode('server')">
+         <svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="3" width="16" height="14" rx="3" fill="#2563eb"/><line x1="2" y1="10" x2="18" y2="10" stroke="white" stroke-width="1.5"/><circle cx="14" cy="7" r="1.5" fill="white"/><circle cx="14" cy="13" r="1.5" fill="white"/></svg>
+         App Server
+       </button>
+       ```
+
+       ICON STYLE RULES: Every button icon must be a small 20x20 SVG with:
+       - A single bold fill color from this palette: #2563eb (blue), #059669 (green), #d97706 (amber), #7c3aed (purple), #dc2626 (red), #0891b2 (teal)
+       - White inner details (strokes, circles, lines on top of the fill)
+       - Rounded shapes (rx="3" on rects, circles for dots)
+       - ALL icons must use the SAME size and visual weight for consistency
+
+       Your controls-panel MUST include this script (adapt node IDs and descriptions to your content):
+       ```
+       <div id="info-panel" style="margin-top:16px; padding:16px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; min-height:60px;">
+         <div id="info-title" style="font-weight:600; font-size:15px; color:#0f172a; margin-bottom:6px;">Select a component</div>
+         <div id="info-desc" style="font-size:13px; color:#475569; line-height:1.5;">Click any button above to explore that part of the diagram.</div>
+       </div>
+       <script>
+       var nodeData = {{
+         'server': {{ title: 'App Server', desc: 'Handles all API requests...' }},
+         'database': {{ title: 'Database', desc: 'Stores user data...' }}
+       }};
+       function selectNode(id) {{
+         document.querySelectorAll('[id^="node-"]').forEach(function(el) {{
+           el.style.filter = ''; el.style.transform = '';
+         }});
+         var el = document.getElementById('node-' + id);
+         if (el) {{ el.style.filter = 'drop-shadow(0 0 15px #2563eb)'; el.style.transform = 'scale(1.06)'; }}
+         document.querySelectorAll('.ctrl-btn').forEach(function(b) {{ b.style.borderColor = '#e2e8f0'; b.style.background = 'white'; }});
+         event.currentTarget.style.borderColor = '#2563eb'; event.currentTarget.style.background = '#eff6ff';
+         var data = nodeData[id];
+         if (data) {{
+           document.getElementById('info-title').textContent = data.title;
+           document.getElementById('info-desc').textContent = data.desc;
+         }}
+         if (window.sendEventToAI) {{ window.sendEventToAI('User clicked ' + id + '. SVG node highlighted with blue glow. Info panel shows: ' + (data ? data.desc : id)); }}
+       }}
+       </script>
+       ```
+
+       CRITICAL: You MUST adapt this template to your actual content. Do NOT create buttons without onclick handlers. Do NOT create buttons that do nothing. Every button MUST highlight an SVG node and show info.
+
+    4. ANIMATION: The SVG must have animated elements. Use CSS @keyframes for idle animations (pulsing, rotating, dashed line flow). All node groups need `transition: all 0.3s ease` for smooth highlight effects.
+    5. TEXT WRAPPING: SVG text elements do not auto-wrap. Use foreignObject with explicit width/height for any text longer than 3 words. Inner div must use `overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px;`.
+    6. NARRATION: Write a concise 1-paragraph summary in `<narration>...</narration>` tags describing the diagram for a voice assistant.
+    7. SVG CLEANLINESS: The svg-panel must contain ONLY the visual diagram — NO paragraphs of text. Short labels (1-3 words) are OK. All explanations go in controls-panel.
+    8. LABEL READABILITY: Place text labels LAST in SVG markup (painter's model). Add a semi-transparent white rect behind each label. Use font-weight bold and 14px+ size.
 
     Source Content:
     {combined_content[:40000]}
@@ -423,6 +471,48 @@ async def handle_live_restart(websocket: WebSocket, narration_context: str, sour
     await _run_live_session(websocket, narration_context, source_labels, "")
 
 
+def _extract_controls_inventory(svg_html: str) -> str:
+    """Extract a text inventory of interactive controls from the generated HTML."""
+    if not svg_html:
+        return "No controls information available."
+    try:
+        soup = BeautifulSoup(svg_html, "html.parser")
+        controls_panel = soup.find("controls-panel")
+        if not controls_panel:
+            return "No controls panel found."
+        
+        items = []
+        # Find buttons
+        for btn in controls_panel.find_all("button"):
+            text = btn.get_text(strip=True)
+            if text:
+                items.append(f"- Button: \"{text}\"")
+        # Find sliders/range inputs
+        for inp in controls_panel.find_all("input"):
+            inp_type = inp.get("type", "text")
+            label = inp.get("aria-label") or inp.get("title") or inp.get("id") or inp_type
+            items.append(f"- Input ({inp_type}): \"{label}\"")
+        # Find select dropdowns
+        for sel in controls_panel.find_all("select"):
+            label = sel.get("aria-label") or sel.get("id") or "dropdown"
+            options = [opt.get_text(strip=True) for opt in sel.find_all("option")]
+            items.append(f"- Dropdown: \"{label}\" with options: {', '.join(options)}")
+        # Find clickable divs/spans with onclick
+        for el in controls_panel.find_all(attrs={"onclick": True}):
+            text = el.get_text(strip=True)[:60]
+            if text and not el.name == "button":
+                items.append(f"- Clickable: \"{text}\"")
+        
+        if not items:
+            # Fallback: just get visible text blocks
+            text_content = controls_panel.get_text(separator="\n", strip=True)
+            return f"Controls panel text content:\n{text_content[:500]}"
+        
+        return "\n".join(items)
+    except Exception as e:
+        return f"Could not parse controls: {e}"
+
+
 async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str):
     """
     Shared Live API session logic. Handles system instruction, tool declarations,
@@ -442,6 +532,12 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     {narration_context}
     </diagram_context>
     
+    Here are the ACTUAL interactive controls available in the diagram's control panel:
+    
+    <available_controls>
+    {_extract_controls_inventory(svg_html)}
+    </available_controls>
+    
     YOUR BEHAVIOR:
     1. Welcome the user warmly. Give a 2-3 sentence summary of what the graphic shows.
     2. Then invite the user to explore: "What part would you like to dive into?"
@@ -450,15 +546,17 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     5. Use `zoom_view` sparingly — only if the user asks to see details up close.
     6. If the user asks about something not in the diagram, use `fetch_more_detail` to search for it.
     7. If the user asks you to CHANGE the graphic (e.g., "make it red", "hide the clouds", "make the sun bigger"), use `modify_element` to update the CSS in real-time.
-    8. If the user asks you to interact with UI controls (e.g., "stop the autoplay", "click Evaporation", "press Play"), use `click_element` to click that button.
+    8. If the user asks you to interact with UI controls, use `click_element` to click that button — but ONLY if the button actually exists in <available_controls> above.
     9. Keep responses concise and conversational. You're a tutor, not a lecturer.
+    10. NEVER mention or reference buttons, controls, or UI elements that don't appear in <available_controls>. If a control doesn't exist, tell the user what IS available instead.
+    11. CURSOR AWARENESS: You will receive "[Cursor position: ...]" messages telling you where the user's cursor is on the diagram. When you see these, briefly acknowledge what they're pointing at (e.g., "I see you're looking at the Database node — that's where...") and offer a short explanation. Don't repeat the same explanation if they stay on the same element. Don't interrupt yourself mid-sentence to acknowledge cursor moves.
     
     TOOL TIPS:
     - Call ONE tool at a time, not multiple simultaneously.
     - Always speak while or after using a tool — never go silent after a tool call.
     - The element_id for tools should match labels or keywords visible in the diagram.
     - For modify_element, use SVG attributes like 'fill', 'opacity', 'transform', or CSS properties like 'display', 'font-size'.
-    - For click_element, match the exact button text shown on screen (e.g., 'Play Auto-Cycle', 'Evaporation', 'Reset').
+    - For click_element, match the exact button text from <available_controls>.
     """
     
     # Define agentic tools for the Live API session
@@ -607,15 +705,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     async with client.aio.live.connect(model=model, config=config) as session:
         print("[Gemini] Connected to Live API")
         
-        # Immediately flush any pre-presentation interaction events to the AI
-        for event_text in initial_events:
-            print(f"[Gemini] Sending queued pre-presentation event: {event_text}")
-            try:
-                await session.send_client_content(
-                    turns=[types.Content(parts=[types.Part.from_text(text=event_text)])]
-                )
-            except Exception as e:
-                 print(f"[Gemini] Error sending queued event: {e}")
+        # Note: We intentionally do NOT flush pre-session initial_events here.
+        # Sending queued events before the welcome causes Gemini to re-introduce itself
+        # a second time after the overview. Those events are stale anyway.
+        if initial_events:
+            print(f"[Gemini] Dropping {len(initial_events)} stale pre-session event(s) to prevent double overview.")
                  
         async with ws_lock:
             await websocket.send_json({"type": "ready"})

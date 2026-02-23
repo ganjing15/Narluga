@@ -688,7 +688,7 @@ function App() {
   // Reset everything for a new graphic
   const resetSession = useCallback(() => {
     disconnect()
-    setSources([])
+    // Keep sources — only reset graphic state
     setCurrentSvg(null)
     setCurrentControls(null)
     setCurrentTitle(null)
@@ -711,6 +711,9 @@ function App() {
       const mouseEvent = e as MouseEvent
       const target = mouseEvent.target as Element
       if (!target || target === container) return
+
+      // Skip if hovering over the controls panel (right sidebar of the graphic)
+      if (target.closest('[data-controls-container]')) return
 
       const cx = mouseEvent.clientX
       const cy = mouseEvent.clientY
@@ -769,13 +772,20 @@ function App() {
       if (!report || report === lastReport) return
       lastReport = report
 
-      // Debounce: only send every 3 seconds
+      // Debounce: only send every 1.5 seconds
       if (debounceTimer) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {
-        if ((window as any).sendEventToAI) {
-          ; (window as any).sendEventToAI(`User is pointing at: ${report}`)
+        console.log('[Hover]', report)
+        // Send as turnComplete:false so Gemini gets context without triggering a full response
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
+          wsRef.current.send(JSON.stringify({
+            clientContent: {
+              turns: [{ role: "user", parts: [{ text: `[Cursor position: The user is currently pointing at ${report} in the diagram.]` }] }],
+              turnComplete: false
+            }
+          }))
         }
-      }, 3000)
+      }, 1500)
     }
 
     container.addEventListener('mousemove', handleMouseMove)
@@ -794,8 +804,7 @@ function App() {
           const newScript = document.createElement('script');
           Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
           const scriptContent = oldScript.textContent || '';
-          const scopedContent = `(function() {\n${scriptContent}\n})();`;
-          newScript.appendChild(document.createTextNode(scopedContent));
+          newScript.appendChild(document.createTextNode(scriptContent));
           oldScript.setAttribute('data-executed', 'true');
           oldScript.parentNode?.replaceChild(newScript, oldScript);
         } catch (err) {
@@ -870,7 +879,7 @@ function App() {
                     <div className="url-input-wrapper shadow-none">
                       <input
                         type="text"
-                        placeholder="Paste a URL, YouTube link, or topic..."
+                        placeholder="Paste a URL or YouTube video link"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         className="url-input"
@@ -961,6 +970,16 @@ function App() {
                     </div>
                   )}
 
+                  {/* Clear all sources */}
+                  {sources.length > 0 && (
+                    <button
+                      onClick={() => { setSources([]); resetSession() }}
+                      className="w-full mt-2 py-1.5 text-xs text-slate-400 hover:text-red-400 border border-dashed border-slate-200 hover:border-red-200 rounded-lg transition-colors"
+                    >
+                      Clear All Sources
+                    </button>
+                  )}
+
                   {/* Generate button */}
                   {sources.length > 0 && sessionPhase === 'idle' && (
                     <div className="button-group w-full mt-4">
@@ -997,9 +1016,13 @@ function App() {
                     <div className={getPhaseDotClass()}></div>
                     <div className="status-text">
                       <span className="status-phase-label">
-                        {sessionPhase === 'analyzing' ? 'Analyzing Sources' : 'Designing Graphic'}
+                        {sessionPhase === 'analyzing' ? 'Analyzing Sources' : 'Designing Interactive Graphic'}
                       </span>
-                      <span className="status-detail">{statusMessage}</span>
+                      <span className="status-detail">
+                        {sessionPhase === 'analyzing'
+                          ? `Processing ${sources.length} source${sources.length !== 1 ? 's' : ''}…`
+                          : 'Takes ~30–60 seconds'}
+                      </span>
                     </div>
                   </div>
 
@@ -1056,19 +1079,6 @@ function App() {
                     <RefreshIcon className="w-4 h-4" /> New Graphic
                   </button>
 
-                  {/* Source summary */}
-                  <div className="source-roster mt-6">
-                    <div className="source-roster-header">
-                      <span className="source-roster-title">Sources Used</span>
-                    </div>
-                    {sources.map(source => (
-                      <div key={source.id} className="source-item">
-                        <div className="source-item-icon">{getSourceIcon(source.type)}</div>
-                        <span className="source-item-label">{source.label}</span>
-                        <CheckCircleIcon className="w-4 h-4 text-emerald-500 ml-auto shrink-0" />
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
 
@@ -1096,12 +1106,6 @@ function App() {
                     <StopIcon className="w-4 h-4" /> End Conversation
                   </button>
 
-                  <button
-                    onClick={resetSession}
-                    className="w-full py-2.5 px-6 mt-3 bg-white border border-slate-200 text-slate-600 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300"
-                  >
-                    <RefreshIcon className="w-4 h-4" /> New Graphic
-                  </button>
                 </div>
               )}
             </div>
@@ -1156,10 +1160,12 @@ function App() {
                     <>
                       <div className="processing-spinner mb-6"></div>
                       <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">
-                        {sessionPhase === 'analyzing' ? 'Analyzing Sources...' : 'Designing Graphic...'}
+                        {sessionPhase === 'analyzing' ? 'Analyzing Sources...' : 'Designing Interactive Graphic...'}
                       </h3>
                       <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                        {statusMessage}
+                        {sessionPhase === 'analyzing'
+                          ? 'Reading and understanding your sources...'
+                          : 'This usually takes 30–60 seconds'}
                       </p>
                     </>
                   ) : (
