@@ -1,4 +1,4 @@
-import { useState, useRef, type FormEvent, useEffect, useCallback } from 'react'
+import { useState, useRef, type FormEvent, useEffect, useCallback, useMemo } from 'react'
 import './App.css'
 import {
   MicIcon, StopIcon, DisplayIcon, SparklesIcon,
@@ -28,7 +28,7 @@ function App() {
 
   // Session state
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>('idle')
-  const [statusMessage, setStatusMessage] = useState('')
+  const [, setStatusMessage] = useState('')
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
@@ -795,24 +795,371 @@ function App() {
     }
   }, [sessionPhase, currentSvg])
 
-  const executeScripts = (node: HTMLDivElement | null) => {
-    if (node) {
-      const scripts = node.querySelectorAll('script');
-      scripts.forEach(oldScript => {
-        if (oldScript.getAttribute('data-executed')) return;
-        try {
-          const newScript = document.createElement('script');
-          Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
-          const scriptContent = oldScript.textContent || '';
-          newScript.appendChild(document.createTextNode(scriptContent));
-          oldScript.setAttribute('data-executed', 'true');
-          oldScript.parentNode?.replaceChild(newScript, oldScript);
-        } catch (err) {
-          console.error("Failed to execute SVG script:", err);
+  // Listen for telemetry // Setup iframe listener for AI events & Hovers & Interactions
+  useEffect(() => {
+    const handleIframeMessage = (event: MessageEvent) => {
+      // Allow AI_EVENT (explicitly sent by generated code via sendEventToAI)
+      if (event.data?.type === 'AI_EVENT' && event.data?.payload) {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
+          wsRef.current.send(JSON.stringify({
+            clientContent: {
+              turns: [{ role: "user", parts: [{ text: `[Graphic Event: ${event.data.payload}]` }] }],
+              turnComplete: false
+            }
+          }))
+        }
+      }
+      // Allow HOVER_EVENT (automatically sent continuously by the iframe script)
+      else if (event.data?.type === 'HOVER_EVENT' && event.data?.payload) {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
+          wsRef.current.send(JSON.stringify({
+            clientContent: {
+              turns: [{ role: "user", parts: [{ text: `[Cursor position: The user is currently pointing at ${event.data.payload} in the diagram.]` }] }],
+              turnComplete: false
+            }
+          }))
+        }
+      }
+      // Allow INTERACTION_EVENT (automatically sent when user clicks buttons/inputs in the iframe)
+      else if (event.data?.type === 'INTERACTION_EVENT' && event.data?.payload) {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
+          wsRef.current.send(JSON.stringify({
+            clientContent: {
+              turns: [{ role: "user", parts: [{ text: `[Interaction: The user just ${event.data.payload} in the interactive controls panel.]` }] }],
+              turnComplete: true
+            }
+          }))
+        }
+      }
+    };
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
+  }, []);
+
+  // Construct a secure, isolated HTML document for the graphic and controls
+  const iframeSrcDoc = useMemo(() => {
+    if (!currentSvg) return '';
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    .layout-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+    .svg-area {
+      flex: 1;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      position: relative;
+      min-height: 0;
+      min-width: 0;
+    }
+    .controls-area {
+      flex: 0.4;
+      min-width: 420px;
+      max-width: 500px;
+      height: 100%;
+      padding: 24px;
+      box-sizing: border-box;
+      overflow-y: auto;
+      transition: all 0.3s ease-in-out;
+      border-left: 1px solid rgba(0,0,0,0.05);
+    }
+    body.sidebar-open .controls-area {
+      flex: none;
+      width: 380px;
+      min-width: 380px;
+      max-width: 380px;
+    }
+  </style>
+  
+  <script>
+    // Communication bridge to host React app
+    window.sendEventToAI = function(message) {
+      window.parent.postMessage({ type: 'AI_EVENT', payload: message }, '*');
+    };
+
+    // Listen for layout changes and tool actions from host
+    window.addEventListener('message', (event) => {
+      if (event.data?.type === 'SIDEBAR_TOGGLE') {
+        if (event.data.isOpen) {
+          document.body.classList.add('sidebar-open');
+        } else {
+          document.body.classList.remove('sidebar-open');
+        }
+      } else if (event.data?.type === 'TOOL_ACTION') {
+        handleToolAction(event.data.action, event.data.params);
+      }
+    });
+
+    // --- TOOL ACTIONS (Highlighting, Zooming) ---
+    function handleToolAction(action, params) {
+      const svgContainer = document.querySelector('.svg-area');
+      if (!svgContainer) return;
+
+      const findElements = (keyword) => {
+        const kw = keyword.toLowerCase().replace(/[-_]/g, ' ').trim();
+        if (!kw) return [];
+        const results = [];
+        const containerRect = svgContainer.getBoundingClientRect();
+
+        const isTooLarge = (el) => {
+          const rect = el.getBoundingClientRect();
+          return rect.width > containerRect.width * 0.6 && rect.height > containerRect.height * 0.6;
+        };
+
+        svgContainer.querySelectorAll('[id], [data-label], [data-section]').forEach(el => {
+          const id = (el.id || '').toLowerCase().replace(/[-_]/g, ' ');
+          const label = (el.getAttribute('data-label') || '').toLowerCase();
+          const section = (el.getAttribute('data-section') || '').toLowerCase();
+          if ((id.length >= 3 && id.includes(kw)) || label.includes(kw) || section.includes(kw)) {
+            if (!isTooLarge(el)) results.push(el);
+          }
+        });
+
+        if (results.length === 0) {
+          svgContainer.querySelectorAll('text, tspan, foreignObject, h1, h2, h3, h4, p, span, label, button').forEach(el => {
+            const text = (el.textContent || '').toLowerCase().trim();
+            if (text.length > 0 && text.length < 200 && (text.includes(kw) || kw.split(' ').every(w => text.includes(w)))) {
+              let target = el;
+              if (el instanceof SVGElement && el.parentElement && el.parentElement.tagName.toLowerCase() === 'g') {
+                target = el.parentElement;
+              }
+              if (!isTooLarge(target) && !results.includes(target)) results.push(target);
+            }
+          });
+        }
+
+        results.sort((a, b) => {
+          const aRect = a.getBoundingClientRect();
+          const bRect = b.getBoundingClientRect();
+          return (aRect.width * aRect.height) - (bRect.width * bRect.height);
+        });
+
+        return results.slice(0, 3);
+      };
+
+      if (action === 'highlight_element') {
+        const elements = findElements(params.element_id || '');
+        const color = params.color || '#3b82f6';
+        elements.forEach(el => {
+          const prev = el.style.cssText;
+          el.style.transition = 'all 0.4s ease';
+          el.style.filter = "drop-shadow(0 0 16px " + color + ") drop-shadow(0 0 8px " + color + ")";
+          if (el instanceof SVGElement) {
+            el.style.transform = 'scale(1.03)';
+            el.style.transformOrigin = 'center';
+          }
+          setTimeout(() => {
+            el.style.filter = '';
+            el.style.transform = '';
+            setTimeout(() => { el.style.cssText = prev; }, 400);
+          }, 4000);
+        });
+        if (elements.length > 0) elements[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      } else if (action === 'navigate_to_section') {
+        const elements = findElements(params.section || '');
+        if (elements.length > 0) elements[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      } else if (action === 'zoom_view') {
+        const dir = params.direction || 'in';
+        const currentScale = parseFloat(svgContainer.dataset.zoomScale || '1');
+        let newScale = dir === 'in' ? Math.min(currentScale * 1.4, 3) : Math.max(currentScale / 1.4, 0.5);
+        svgContainer.style.transition = 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+        svgContainer.style.transform = 'scale(' + newScale + ')';
+        svgContainer.dataset.zoomScale = newScale.toString();
+      } else if (action === 'fetch_more_detail') {
+        const elements = findElements(params.topic || '');
+        elements.forEach(el => {
+          const prev = el.style.cssText;
+          el.style.transition = 'all 0.3s ease';
+          el.style.filter = 'drop-shadow(0 0 12px #fbbf24)';
+          setTimeout(() => { el.style.cssText = prev; }, 2000);
+        });
+      } else if (action === 'modify_element') {
+        const elements = findElements(params.element_id || '');
+        const prop = params.css_property || '';
+        const val = params.value || '';
+        elements.forEach(el => {
+          el.style.transition = 'all 0.5s ease';
+          if (el instanceof SVGElement && ['fill', 'stroke', 'opacity', 'stroke-width', 'r', 'cx', 'cy', 'x', 'y', 'width', 'height', 'transform', 'display'].includes(prop)) {
+            el.setAttribute(prop, val);
+          } else {
+            const camelProp = prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+            el.style[camelProp] = val;
+          }
+        });
+        if (elements.length > 0) {
+          const el = elements[0];
+          const prevFilter = el.style.filter;
+          el.style.filter = 'drop-shadow(0 0 8px #3b82f6)';
+          setTimeout(() => { el.style.filter = prevFilter; }, 1500);
+        }
+      } else if (action === 'click_element') {
+        const kw = (params.element_id || '').toLowerCase().trim();
+        if (!kw) return;
+        const containers = document.querySelectorAll('.svg-area, .controls-area');
+        let clicked = false;
+        containers.forEach(container => {
+          if (clicked) return;
+          container.querySelectorAll('button, input[type="button"], input[type="submit"], input[type="checkbox"], input[type="range"], a, [onclick], [role="button"]').forEach(el => {
+            if (clicked) return;
+            const text = (el.textContent || '').toLowerCase().trim();
+            const id = (el.id || '').toLowerCase();
+            const title = (el.getAttribute('title') || '').toLowerCase();
+            const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+            if (text.includes(kw) || kw.includes(text) || id.includes(kw) || title.includes(kw) || ariaLabel.includes(kw)) {
+              el.style.transition = 'all 0.2s ease';
+              el.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.5)';
+              setTimeout(() => {
+                el.style.boxShadow = '';
+                el.click();
+              }, 300);
+              clicked = true;
+            }
+          });
+        });
+      }
+    }
+
+    // --- HOVER TRACKING ---
+    let debounceTimer = null;
+    let lastReport = '';
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    document.addEventListener('mousemove', (e) => {
+      // Only trigger if the mouse actually moved significantly (prevents DOM-update-triggered false movements)
+      if (Math.abs(e.clientX - lastMouseX) < 5 && Math.abs(e.clientY - lastMouseY) < 5) return;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+
+      // Skip hover tracking if the visualization is actively animating/playing (e.g. Auto-Orbit)
+      // We can detect this if there's a button that says 'Pause' or if there's an active requestAnimationFrame loop
+      // but the safest heuristic is to check if any text button says 'Pause' or 'Stop'
+      const isAutoPlaying = Array.from(document.querySelectorAll('button')).some(b => 
+        (b.innerText || '').toLowerCase().includes('pause') || 
+        (b.innerText || '').toLowerCase().includes('stop')
+      );
+      if (isAutoPlaying) return;
+
+      const svgContainer = document.querySelector('.svg-area');
+      if (!svgContainer) return;
+      
+      const target = e.target;
+      if (!svgContainer.contains(target)) return;
+
+      const directLabel = target.getAttribute('data-label') || target.getAttribute('id') || '';
+      let nearestLabel = '';
+      let nearestDist = 60; 
+      
+      svgContainer.querySelectorAll('text').forEach(textEl => {
+        const content = (textEl.textContent || '').trim();
+        if (content.length < 2 || content.length > 60) return;
+        const rect = textEl.getBoundingClientRect();
+        const textCx = rect.left + rect.width / 2;
+        const textCy = rect.top + rect.height / 2;
+        const dist = Math.sqrt((e.clientX - textCx) ** 2 + (e.clientY - textCy) ** 2);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestLabel = content;
         }
       });
+
+      const tagName = target.tagName.toLowerCase();
+      const fill = target.getAttribute('fill') || '';
+      let elementDesc = '';
+      if (['rect', 'circle', 'ellipse', 'polygon', 'path', 'line'].includes(tagName)) {
+        elementDesc = "a " + (fill ? fill + ' ' : '') + tagName + " shape";
+      }
+
+      let report = '';
+      if (directLabel && directLabel.length >= 2) {
+        report = '"' + directLabel + '"';
+      } else if (nearestLabel) {
+        report = 'near the "' + nearestLabel + '" label';
+        if (elementDesc) report += ' (on ' + elementDesc + ')';
+      } else if (elementDesc) {
+        report = elementDesc;
+      }
+
+      if (!report || report === report) return;
+      lastReport = report;
+
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        window.parent.postMessage({ type: 'HOVER_EVENT', payload: report }, '*');
+      }, 1500);
+    });
+
+    // --- INTERACTION TRACKING ---
+    // Automatically tell the parent when the user clicks a button or changes an input
+    ['click', 'change'].forEach(eventType => {
+      document.addEventListener(eventType, (e) => {
+        let target = e.target;
+        // Find the closest interactive element (button, a, input, select)
+        const interactiveEl = target.closest('button, a, input, select, [role="button"]');
+        if (!interactiveEl) return;
+        
+        let label = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
+        // If it's a structural click that happened to hit a giant container without a specific label, ignore it
+        if (!label || label.length > 50) return;
+        
+        let actionDesc = eventType === 'click' ? '"' + label + '" clicked' : '"' + label + '" changed to "' + interactiveEl.value + '"';
+        window.parent.postMessage({ type: 'INTERACTION_EVENT', payload: actionDesc }, '*');
+      });
+    });
+  </script>
+
+</head>
+<body class="${isSidebarOpen ? 'sidebar-open' : ''}">
+  <div class="layout-container">
+    <div class="svg-area">
+      ${(currentTitle || currentSubtitle) ? `
+        <div style="margin-bottom: 24px; width: 100%; flex-shrink: 0;">
+          ${currentTitle ? `<h2 style="font-size: 30px; font-weight: 700; color: #1e293b; margin: 0 0 8px 0; letter-spacing: -0.025em;">${currentTitle}</h2>` : ''}
+          ${currentSubtitle ? `<p style="font-size: 18px; color: #64748b; margin: 0;">${currentSubtitle}</p>` : ''}
+        </div>
+      ` : ''}
+      <div style="flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; min-height: 0;">
+        ${currentSvg}
+      </div>
+    </div>
+    ${currentControls ? `
+    <div class="controls-area">
+      ${currentControls}
+    </div>
+    ` : ''}
+  </div>
+</body>
+</html>
+    `;
+  }, [currentSvg, currentControls, currentTitle, currentSubtitle]);
+
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ type: 'SIDEBAR_TOGGLE', isOpen: isSidebarOpen }, '*');
     }
-  };
+  }, [isSidebarOpen]);
+
 
   // Get source type icon
   const getSourceIcon = (type: SourceType) => {
@@ -1125,33 +1472,14 @@ function App() {
             </div>
 
             {currentSvg ? (
-              <div className="flex-1 overflow-hidden bg-transparent relative flex flex-row w-full h-full">
-                {/* SVG Visual Area */}
-                <div className="flex-1 h-full p-8 box-border flex flex-col">
-                  {(currentTitle || currentSubtitle) && (
-                    <div className="mb-6 flex-shrink-0">
-                      {currentTitle && <h2 className="text-3xl font-bold text-slate-800 tracking-tight mb-2">{currentTitle}</h2>}
-                      {currentSubtitle && <p className="text-lg text-slate-500">{currentSubtitle}</p>}
-                    </div>
-                  )}
-                  <div
-                    className="w-full flex-1 p-0 box-border flex items-center justify-center min-h-0 relative"
-                    data-svg-container
-                    dangerouslySetInnerHTML={{ __html: currentSvg }}
-                    ref={executeScripts}
-                  />
-                </div>
-                {/* Embedded Studio Controls */}
-                {currentControls && (
-                  <div className={`shrink-0 h-full p-6 overflow-y-auto transition-all duration-300 ease-in-out ${isSidebarOpen ? 'basis-[380px]' : 'flex-[0.4] min-w-[420px] max-w-[500px]'}`}>
-                    <div
-                      className="w-full min-h-full p-0 box-border"
-                      data-controls-container
-                      dangerouslySetInnerHTML={{ __html: currentControls }}
-                      ref={executeScripts}
-                    />
-                  </div>
-                )}
+              <div className="flex-1 overflow-hidden bg-transparent relative w-full h-full">
+                <iframe
+                  ref={iframeRef}
+                  srcDoc={iframeSrcDoc}
+                  title="Interactive Graphic"
+                  className="w-full h-full border-none"
+                  sandbox="allow-scripts allow-same-origin"
+                />
               </div>
             ) : (
               <div className="flex-1 bg-transparent flex items-center justify-center">

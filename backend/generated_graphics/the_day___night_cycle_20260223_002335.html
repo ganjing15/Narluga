@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Day & Night Cycle</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <style>
+    @keyframes twinkle {
+        0%, 100% { opacity: 0.2; }
+        50% { opacity: 0.8; }
+    }
+    .star {
+        animation: twinkle 4s infinite ease-in-out;
+    }
+    .star:nth-child(odd) {
+        animation-delay: 2s;
+    }
+    @keyframes pulseGlow {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 0.9; }
+    }
+    .sun-glow {
+        animation: pulseGlow 5s infinite ease-in-out;
+    }
+    .label-bg {
+        fill: #ffffff;
+        opacity: 0.85;
+        rx: 4;
+    }
+    .svg-text {
+        font-family: system-ui, -apple-system, sans-serif;
+        font-weight: 600;
+        fill: #0f172a;
+        pointer-events: none;
+    }
+</style>
+<svg viewBox="0 0 800 500" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <radialGradient id="sunGradient" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#f59e0b" stop-opacity="1"/>
+            <stop offset="70%" stop-color="#fbbf24" stop-opacity="0.8"/>
+            <stop offset="100%" stop-color="#fef08a" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="sunRays" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#fef08a" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#fef08a" stop-opacity="0"/>
+        </linearGradient>
+        <clipPath id="earthClip">
+            <circle cx="450" cy="250" r="150" />
+        </clipPath>
+        <filter id="shadowBlur" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" />
+        </filter>
+    </defs>
+
+    <!-- Space Background -->
+    <rect x="0" y="0" width="800" height="500" fill="#020617" />
+    
+    <!-- Stars -->
+    <g fill="#f8fafc">
+        <circle cx="150" cy="80" r="1.5" class="star" />
+        <circle cx="320" cy="120" r="2" class="star" />
+        <circle cx="650" cy="90" r="1.5" class="star" />
+        <circle cx="720" cy="200" r="2" class="star" />
+        <circle cx="580" cy="420" r="1.5" class="star" />
+        <circle cx="200" cy="380" r="2" class="star" />
+        <circle cx="480" cy="50" r="1" class="star" />
+        <circle cx="750" cy="400" r="1.5" class="star" />
+        <circle cx="100" cy="450" r="1" class="star" />
+        <circle cx="300" cy="460" r="2" class="star" />
+    </g>
+
+    <!-- Sun and Sunlight -->
+    <circle cx="-50" cy="250" r="250" fill="url(#sunGradient)" class="sun-glow" />
+    <path d="M 50 100 L 300 100 L 300 400 L 50 400 Z" fill="url(#sunRays)" />
+    
+    <g transform="translate(60, 250)">
+        <line x1="0" y1="-80" x2="180" y2="-80" stroke="#fef08a" stroke-width="2" stroke-dasharray="6 4" opacity="0.6" />
+        <polygon points="180,-85 190,-80 180,-75" fill="#fef08a" opacity="0.6"/>
+        
+        <line x1="0" y1="80" x2="180" y2="80" stroke="#fef08a" stroke-width="2" stroke-dasharray="6 4" opacity="0.6" />
+        <polygon points="180,75 190,80 180,85" fill="#fef08a" opacity="0.6"/>
+    </g>
+    
+    <rect x="20" y="235" width="85" height="30" class="label-bg" />
+    <text x="62" y="255" class="svg-text" font-size="14" text-anchor="middle" fill="#d97706">SUNLIGHT</text>
+
+    <!-- Earth System -->
+    <g id="earth-system">
+        <!-- Orbit/Context Ring -->
+        <circle cx="450" cy="250" r="180" fill="none" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" />
+        
+        <!-- Earth Base (Oceans) -->
+        <circle cx="450" cy="250" r="150" fill="#2563eb" />
+        
+        <!-- Rotating Globe Content -->
+        <!-- Center of rotation: 450, 250 -->
+        <g id="earth-globe" clip-path="url(#earthClip)">
+            
+            <!-- Longitude Lines (rotate with Earth) -->
+            <g stroke="#60a5fa" stroke-width="1.5" opacity="0.4">
+                <line x1="450" y1="100" x2="450" y2="400" />
+                <line x1="300" y1="250" x2="600" y2="250" />
+                <line x1="344" y1="144" x2="556" y2="356" />
+                <line x1="344" y1="356" x2="556" y2="144" />
+                <circle cx="450" cy="250" r="50" fill="none" />
+                <circle cx="450" cy="250" r="100" fill="none" />
+            </g>
+
+            <!-- Continents / Landmasses (Abstract Northern Hemisphere) -->
+            <g fill="#10b981">
+                <path d="M 320 180 Q 350 150 400 160 T 430 110 L 350 100 Z" />
+                <path d="M 480 140 Q 550 120 580 180 T 540 250 Q 500 240 480 200 Z" />
+                <path d="M 350 280 Q 380 340 450 380 T 520 320 Q 480 290 420 270 Z" />
+                <!-- Polar ice -->
+                <circle cx="450" cy="250" r="15" fill="#f8fafc" />
+            </g>
+
+            <!-- Observer Pin -->
+            <g id="observer-pin" transform="translate(320, 250)">
+                <circle cx="0" cy="0" r="24" fill="#ef4444" opacity="0.2" />
+                <circle cx="0" cy="0" r="8" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>
+                <circle cx="0" cy="0" r="3" fill="#ffffff" />
+            </g>
+        </g>
+
+        <!-- Fixed Elements Over Earth -->
+        
+        <!-- The Shadow (Terminator Line) -->
+        <path d="M 450 100 A 150 150 0 0 1 450 400 L 450 100" fill="#000000" opacity="0.6" />
+        
+        <!-- Soft Terminator Edge -->
+        <line x1="450" y1="100" x2="450" y2="400" stroke="#000000" stroke-width="6" opacity="0.4" filter="url(#shadowBlur)" />
+        <line x1="450" y1="100" x2="450" y2="400" stroke="#475569" stroke-width="1.5" opacity="0.8"/>
+
+        <!-- Atmospheric Glow -->
+        <circle cx="450" cy="250" r="150" fill="none" stroke="#60a5fa" stroke-width="4" opacity="0.3" />
+
+        <!-- Labels -->
+        <rect x="520" y="240" width="80" height="24" class="label-bg" />
+        <text x="560" y="257" class="svg-text" font-size="12" text-anchor="middle">Nighttime</text>
+
+        <rect x="305" y="110" width="70" height="24" class="label-bg" />
+        <text x="340" y="127" class="svg-text" font-size="12" text-anchor="middle">Daytime</text>
+        
+        <!-- North Pole Indicator -->
+        <rect x="415" y="220" width="70" height="20" class="label-bg" />
+        <text x="450" y="234" class="svg-text" font-size="11" text-anchor="middle">North Pole</text>
+        
+        <circle cx="450" cy="250" r="4" fill="#0f172a" />
+        <circle cx="450" cy="250" r="1.5" fill="#ffffff" />
+    </g>
+
+    <!-- UI Legend / Static Info -->
+    <g transform="translate(620, 20)">
+        <rect x="0" y="0" width="160" height="70" fill="#ffffff" opacity="0.9" rx="8" stroke="#cbd5e1" />
+        <text x="12" y="24" class="svg-text" font-size="12" fill="#475569">Perspective:</text>
+        <text x="12" y="44" class="svg-text" font-size="14" fill="#0f172a">Top-Down View</text>
+        <circle cx="16" cy="56" r="4" fill="#ef4444" />
+        <text x="28" y="60" class="svg-text" font-size="11" fill="#475569">= Observer Location</text>
+    </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Day & Night Cycle</h2>
+        <p style="color: #64748b;">Use the controls on the right to rotate the Earth and see how the Sun creates day and night.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 24px; box-sizing: border-box; background: #ffffff; color: #0f172a; font-family: system-ui, -apple-system, sans-serif;">
+    
+    <div style="margin-bottom: 24px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700; color: #0f172a;">Time Control</h2>
+        <p style="margin: 0; font-size: 14px; color: #64748b; line-height: 1.5;">Drag the slider or press play to rotate the Earth and progress through a 24-hour day.</p>
+    </div>
+
+    <!-- Digital Clock Display -->
+    <div style="display: flex; justify-content: center; align-items: center; background: #f1f5f9; border-radius: 12px; padding: 16px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
+        <div id="time-display" style="font-family: 'Courier New', Courier, monospace; font-size: 36px; font-weight: 800; color: #0f172a; letter-spacing: 1px;">
+            12:00 PM
+        </div>
+    </div>
+
+    <!-- Interactive Slider -->
+    <div style="margin-bottom: 24px;">
+        <input type="range" id="timeSlider" min="0" max="24" step="0.1" value="12" 
+            oninput="updateState(this.value)" 
+            style="width: 100%; cursor: pointer; accent-color: #2563eb; height: 8px; border-radius: 4px; background: #cbd5e1; outline: none;">
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: #64748b; font-weight: 600;">
+            <span>Midnight</span>
+            <span>Noon</span>
+            <span>Midnight</span>
+        </div>
+    </div>
+
+    <!-- Auto Play Button -->
+    <button id="play-btn" onclick="togglePlay()" 
+        style="width: 100%; padding: 14px; background-color: #2563eb; color: #ffffff; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.2s ease; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">
+        ▶ Auto-Rotate
+    </button>
+
+    <!-- Dynamic Status Panel -->
+    <div id="info-panel" style="padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; border-left: 5px solid #059669; transition: all 0.3s ease;">
+        <div id="status-title" style="font-weight: 700; font-size: 18px; color: #059669; margin-bottom: 8px;">Daytime</div>
+        <div id="info-desc" style="font-size: 14px; color: #475569; line-height: 1.5;">The observer is on the sunlit side of Earth, experiencing daylight.</div>
+    </div>
+
+</div>
+
+<script>
+    let isPlaying = false;
+    let playInterval;
+
+    function formatTime(val) {
+        let h = Math.floor(val);
+        let m = Math.floor((val - h) * 60);
+        let ampm = (h >= 12 && h < 24) ? `PM` : `AM`;
+        let displayH = h % 12;
+        if (displayH === 0) displayH = 12;
+        
+        let displayM = m < 10 ? `0${m}` : m;
+        return `${displayH}:${displayM} ${ampm}`;
+    }
+
+    function updateState(val) {
+        let time = parseFloat(val);
+        
+        // Calculate Rotation
+        // Earth rotates counter-clockwise when viewed from the North Pole.
+        // At 12:00 PM (time=12), the observer pin faces the Sun (left, 0 degree rotation from base).
+        // 1 hour = 15 degrees. Since SVG positive rotation is clockwise, we use negative for counter-clockwise.
+        let rotation = -((time - 12) * 15);
+        
+        let globe = document.getElementById('earth-globe');
+        if (globe) {
+            globe.setAttribute('transform', `rotate(${rotation} 450 250)`);
+        }
+        
+        // Update Time Display
+        let timeDisplay = document.getElementById('time-display');
+        if (timeDisplay) timeDisplay.textContent = formatTime(time);
+        
+        // Determine Day/Night Status
+        let status = `Nighttime`;
+        let statusColor = `#334155`; // Slate
+        let borderColor = `#64748b`;
+        let desc = `The observer is in Earth's shadow, facing away from the Sun. It is dark.`;
+        
+        // Time logic (Assuming 6:00 AM Sunrise and 6:00 PM / 18:00 Sunset for simplicity at equator/equinox)
+        if (time > 6.2 && time < 17.8) {
+            status = `Daytime`;
+            statusColor = `#059669`; // Emerald
+            borderColor = `#059669`;
+            desc = `The observer is on the sunlit side of Earth, experiencing daylight.`;
+        } else if (time >= 5.8 && time <= 6.2) {
+            status = `Sunrise`;
+            statusColor = `#d97706`; // Amber
+            borderColor = `#fbbf24`;
+            desc = `Earth's rotation carries the observer into the sunlight. A new day begins.`;
+        } else if (time >= 17.8 && time <= 18.2) {
+            status = `Sunset`;
+            statusColor = `#d97706`; // Amber
+            borderColor = `#fbbf24`;
+            desc = `Earth's rotation carries the observer out of the sunlight and into the shadow.`;
+        }
+
+        let titleEl = document.getElementById('status-title');
+        let descEl = document.getElementById('info-desc');
+        let panelEl = document.getElementById('info-panel');
+        
+        if (titleEl) {
+            titleEl.textContent = status;
+            titleEl.style.color = statusColor;
+        }
+        if (descEl) {
+            descEl.textContent = desc;
+        }
+        if (panelEl) {
+            panelEl.style.borderLeftColor = borderColor;
+        }
+
+        // Send telemetry if available (e.g., every 6 hours)
+        if (window.sendEventToAI && (Math.abs((time % 6) - 0) < 0.05)) { 
+            window.sendEventToAI(`User changed time to approximately ${Math.round(time)}:00`); 
+        }
+    }
+
+    function togglePlay() {
+        isPlaying = !isPlaying;
+        let btn = document.getElementById('play-btn');
+        let slider = document.getElementById('timeSlider');
+        
+        if (isPlaying) {
+            btn.innerHTML = `⏸ Pause Rotation`;
+            btn.style.backgroundColor = `#334155`;
+            
+            playInterval = setInterval(() => {
+                let nextVal = parseFloat(slider.value) + 0.1;
+                if (nextVal >= 24) nextVal = 0;
+                slider.value = nextVal;
+                updateState(nextVal);
+            }, 50); // 50ms per 0.1 hour = 12 seconds per day
+        } else {
+            btn.innerHTML = `▶ Auto-Rotate`;
+            btn.style.backgroundColor = `#2563eb`;
+            clearInterval(playInterval);
+        }
+    }
+
+    // Initialize graphic state on load
+    document.addEventListener("DOMContentLoaded", () => {
+        updateState(12);
+    });
+    // Fallback immediate execution
+    updateState(12);
+</script>
+    </div>
+</body>
+</html>

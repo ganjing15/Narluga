@@ -104,10 +104,13 @@ Gemini Live Agent Challenge/
 - **File Upload** — `.txt`, `.md` parsed as UTF-8; `.pdf` via PyPDF2 (optional)
 
 ### Interactive Graphic Generation
-- Gemini Pro generates a complete SVG animation with embedded CSS `@keyframes`
-- Companion HTML controls panel wired via JavaScript
-- UI interactions call `window.sendEventToAI()` to notify the voice AI
-- Each graphic is auto-saved to `backend/generated_graphics/` as a standalone HTML file
+- Gemini Pro generates a complete SVG animation and HTML controls panel.
+- To prevent CSS/JS conflicts with the main React app, the generated graphic is securely isolated inside a **sandboxed iframe**.
+- An intermediate tracking script is dynamically injected into the iframe to restore telemetry:
+  - **Hover Tracking**: Debounced cursor position tracking that pauses during CSS animations.
+  - **Interaction Tracking**: Global listeners that capture slider drags and button clicks in the controls pane.
+  - Telemetry is sent via `postMessage` to the parent window and forwarded to the AI.
+- Each graphic is auto-saved to `backend/generated_graphics/` as a standalone HTML file.
 
 ### Live Voice Conversation
 - Uses Gemini Live API (`gemini-2.5-flash-native-audio-preview`)
@@ -116,13 +119,15 @@ Gemini Live Agent Challenge/
 - Supports interruptions and event-driven context updates
 
 ### Agentic Tool Use (Live Session)
-The AI ("Narluga") proactively uses tools to manipulate the diagram while speaking:
+The AI ("Narluga") proactively uses tools to manipulate the diagram inside the iframe sandbox while speaking:
 - **`highlight_element`** — Pulse/glow a diagram element with colored drop-shadow animation
+- **`modify_element`** — Dynamically updates SVG attributes (`r`, `cx`, `width`, `fill`, etc.) or CSS properties in real-time, allowing for structural resizing or color changes.
+- **`click_element`** — Programmatically triggers a click on buttons or inputs in the controls panel.
 - **`navigate_to_section`** — Smooth scroll the viewport to focus on a section
 - **`zoom_view`** — Zoom in for details, zoom out for overview, or reset
 - **`fetch_more_detail`** — Query Google Search for supplementary info when the user asks beyond the diagram's scope
 
-Tools are called autonomously by Gemini during conversation — the AI decides when to highlight, navigate, and zoom as it explains concepts.
+Tools are called autonomously by Gemini during conversation — the AI decides when to highlight, navigate, change attributes, or click controls as it explains concepts.
 
 ### Sidebar UI
 - Phase-based status indicators: `Analyzing` → `Designing` → `Complete` → `Conversation`

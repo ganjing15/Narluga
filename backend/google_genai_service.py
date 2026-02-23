@@ -232,72 +232,77 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
     5. A short subtitle instructing the user how to interact with the graphic. It MUST mention that the interactive controls are on the right panel. Wrap in `<nblm-subtitle>...</nblm-subtitle>` tags. Example: "Use the controls on the right to explore the concept."
     
     CRITICAL RULES FOR THE INTERACTIVE GRAPHIC:
-    1. VISUAL STYLE: You MUST use a **world-class, premium, modern UI aesthetic**! It must look professionally designed.
+    1. SCIENTIFIC & PHYSICAL ACCURACY: Your diagrams must be strictly logically, geometrically, and physically correct!
+       - If drawing astronomical/physical shadows (like the Earth's terminator), remember that the shadow is cast from an external light source. Only rotate the physical object, NOT the shadow.
+       - If drawing mechanical gears or chemical bonds, the sizes, ratios, and angles must be mathematically plausible. Do not place elements haphazardly.
+    2. VISUAL STYLE: You MUST use a **world-class, premium, modern UI aesthetic**! It must look professionally designed.
        - Use a sophisticated, modern color palette: Slate grays for text (#0f172a, #334155), crisp white or very soft slate (#f8fafc) backgrounds, and a single elegant primary accent color (e.g., Royal Blue #2563eb or Emerald #059669).
        - Typography is critical: Use standard sans-serif system fonts (e.g. system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto) with proper hierarchy.
        - Use **generous whitespace/padding** everywhere.
        - The SVG vectors themselves should be elegantly simple, thick, perfectly symmetric, and use soft refined gradients or solid clean colors. Limit the number of visual elements to 5-10 maximum.
-    2. FORMAT & SEPARATION: DO NOT output an outer flexbox wrapper. We are injecting your `<svg-panel>` and `<controls-panel>` blocks directly into our own layout. The `<svg-panel>` should contain your visual SVG. The `<controls-panel>` should contain your HTML controls. Each should use width/height `100%`. DO NOT ADD white backgrounds, borders, or box-shadows to these core containers, as our parent React cards handle the styling.
-    3. INTERACTIVITY — COMPLETE TEMPLATE: You MUST follow this exact pattern. Every button in the controls panel MUST visibly highlight the corresponding SVG node when clicked. Here is the EXACT code structure you must adapt:
-
-       In your svg-panel, every major visual group MUST have an id starting with "node-" and these EXACT CSS properties for transforms to work in SVG:
+    3. FORMAT & SEPARATION: DO NOT output an outer flexbox wrapper. We are injecting your `<svg-panel>` and `<controls-panel>` blocks directly into our own layout. The `<svg-panel>` should contain your visual SVG. The `<controls-panel>` should contain your HTML controls. Each should use width/height `100%`. DO NOT ADD white backgrounds, borders, or box-shadows to these core containers, as our parent React cards handle the styling.
+    3. ADVANCED INTERACTIVITY & STATE: You must generate deeply interactive graphics, not just static diagrams with click-to-highlight buttons.
+       - Use vanilla Javascript to maintain dynamic state (e.g., current step, slider values, play/pause timers).
+       - Create controls like `<input type="range">` (sliders), standard buttons, or Play/Pause toggles in the `<controls-panel>`.
+       - Write bespoke Javascript functions that directly mutate the SVG DOM elements (e.g., changing `transform="rotate(...)"`, `x`, `y`, `fill`, `opacity`, `stroke-dashoffset`, or text content) based on the user's input.
+       - Always include an info-panel that updates its title and description dynamically based on the current state.
+       - CRITICAL SYNTAX WARNING: You MUST use backticks (\` \`) for ALL strings in your Javascript (e.g., \`The Earth's axis\`). NEVER use single quotes (') or double quotes ("). Single quotes will cause a fatal syntax error when your text contains apostrophes (like "Earth's").
+       - Send telemetry using `if (window.sendEventToAI) {{ window.sendEventToAI(\`User changed state to ${{value}}\`); }}`.
+       
+       EXAMPLE ADVANCED PATTERN (Adapt this to your specific concept):
        ```
-       <g id="node-server" style="transition: all 0.3s ease; transform-box: fill-box; transform-origin: center; cursor: pointer;">
-         <!-- your shapes here -->
-       </g>
-       ```
-       CRITICAL: `transform-box: fill-box` is REQUIRED for CSS scale/translate transforms to work on SVG `<g>` elements. Without it, `transform-origin: center` defaults to the SVG viewport origin, making scale transforms invisible. Do NOT use pixel-coordinate transform-origin like `transform-origin: 130px 250px`.
-
-       In your controls-panel, buttons MUST use inline colorful SVG icons (NOT emojis, NOT grey strokes) and call selectNode():
-       ```
-       <button class="ctrl-btn" onclick="selectNode('server')">
-         <svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="3" width="16" height="14" rx="3" fill="#2563eb"/><line x1="2" y1="10" x2="18" y2="10" stroke="white" stroke-width="1.5"/><circle cx="14" cy="7" r="1.5" fill="white"/><circle cx="14" cy="13" r="1.5" fill="white"/></svg>
-         App Server
-       </button>
-       ```
-
-       ICON STYLE RULES: Every button icon must be a small 20x20 SVG with:
-       - A single bold fill color from this palette: #2563eb (blue), #059669 (green), #d97706 (amber), #7c3aed (purple), #dc2626 (red), #0891b2 (teal)
-       - White inner details (strokes, circles, lines on top of the fill)
-       - Rounded shapes (rx="3" on rects, circles for dots)
-       - ALL icons must use the SAME size and visual weight for consistency
-
-       Your controls-panel MUST include this script (adapt node IDs and descriptions to your content):
-       ```
-       <div id="info-panel" style="margin-top:16px; padding:16px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; min-height:60px;">
-         <div id="info-title" style="font-weight:600; font-size:15px; color:#0f172a; margin-bottom:6px;">Select a component</div>
-         <div id="info-desc" style="font-size:13px; color:#475569; line-height:1.5;">Click any button above to explore that part of the diagram.</div>
+       <div id="controls-panel">
+         <h2>System Control</h2>
+         <input type="range" id="timeSlider" min="0" max="100" value="0" oninput="updateState(this.value)">
+         <button class="ctrl-btn" onclick="togglePlay()">▶ Auto-Play</button>
+         <div id="info-panel" style="margin-top:16px; padding:16px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0;">
+           <div id="info-title" style="font-weight:600; font-size:15px; color:#0f172a; margin-bottom:6px;">Phase 0</div>
+           <div id="info-desc" style="font-size:13px; color:#475569; line-height:1.5;">Drag the slider to begin.</div>
+         </div>
        </div>
+
        <script>
-       var nodeData = {{
-         'server': {{ title: 'App Server', desc: 'Handles all API requests...' }},
-         'database': {{ title: 'Database', desc: 'Stores user data...' }}
-       }};
-       function selectNode(id) {{
-         document.querySelectorAll('[id^="node-"]').forEach(function(el) {{
-           el.style.filter = ''; el.style.transform = '';
-         }});
-         var el = document.getElementById('node-' + id);
-         if (el) {{ el.style.filter = 'drop-shadow(0 0 15px #2563eb)'; el.style.transform = 'scale(1.06)'; }}
-         document.querySelectorAll('.ctrl-btn').forEach(function(b) {{ b.style.borderColor = '#e2e8f0'; b.style.background = 'white'; }});
-         event.currentTarget.style.borderColor = '#2563eb'; event.currentTarget.style.background = '#eff6ff';
-         var data = nodeData[id];
-         if (data) {{
-           document.getElementById('info-title').textContent = data.title;
-           document.getElementById('info-desc').textContent = data.desc;
+       let isPlaying = false;
+       let playInterval;
+       
+       function updateState(val) {{
+         // 1. Mutate SVG visually (bespoke math/logic based on the concept)
+         document.getElementById('planet-orbit').setAttribute('transform', \`rotate(${{val * 3.6}} 400 250)\`);
+         
+         // 2. Update Info Panel
+         document.getElementById('info-title').textContent = \`Phase ${{Math.floor(val/25)}}\`;
+         document.getElementById('info-desc').textContent = \`At ${{val}}%, the system is transitioning...\`;
+         
+         if (window.sendEventToAI && val % 25 === 0) {{ 
+           window.sendEventToAI(\`User moved graphic to phase ${{val}}\`); 
          }}
-         if (window.sendEventToAI) {{ window.sendEventToAI('User clicked ' + id + '. SVG node highlighted with blue glow. Info panel shows: ' + (data ? data.desc : id)); }}
+       }}
+       
+       function togglePlay() {{
+         isPlaying = !isPlaying;
+         if (isPlaying) {{
+           playInterval = setInterval(() => {{
+             let slider = document.getElementById('timeSlider');
+             let nextVal = (Number(slider.value) + 1) % 100;
+             slider.value = nextVal;
+             updateState(nextVal);
+           }}, 50);
+         }} else {{
+           clearInterval(playInterval);
+         }}
        }}
        </script>
        ```
 
-       CRITICAL: You MUST adapt this template to your actual content. Do NOT create buttons without onclick handlers. Do NOT create buttons that do nothing. Every button MUST highlight an SVG node and show info.
+       CRITICAL: You are NOT limited to highlight colors. Build physical interactivity tailored to the concept—sliders that orbit, buttons that pump data flows, switches that change day/night, etc. You must still include `<g id="node-XXX">` and use `transform-box: fill-box;` for any nodes you animate via CSS.
 
     4. ANIMATION: The SVG must have animated elements. Use CSS @keyframes for idle animations (pulsing, rotating, dashed line flow). All node groups need `transition: all 0.3s ease` for smooth highlight effects.
-    5. TEXT WRAPPING: SVG text elements do not auto-wrap. Use foreignObject with explicit width/height for any text longer than 3 words. Inner div must use `overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px;`.
-    6. NARRATION: Write a concise 1-paragraph summary in `<narration>...</narration>` tags describing the diagram for a voice assistant.
-    7. SVG CLEANLINESS: The svg-panel must contain ONLY the visual diagram — NO paragraphs of text. Short labels (1-3 words) are OK. All explanations go in controls-panel.
-    8. LABEL READABILITY: Place text labels LAST in SVG markup (painter's model). Add a semi-transparent white rect behind each label. Use font-weight bold and 14px+ size.
+    5. NO BORDER RADIUS ON SVG: Keep `<svg>` elements square/rectangular. Do not use `border-radius` on `<svg>`.
+    6. ANIMATION STATE TEXT: If you add play/pause buttons or auto-run features, the active/playing state button MUST contain the text "Pause" or "Stop" (e.g., "⏸ Pause Orbit") so the system knows the graphic is actively animating.
+    7. TEXT WRAPPING: SVG text elements do not auto-wrap. Use foreignObject with explicit width/height for any text longer than 3 words. Inner div must use `overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px;`.
+    8. NARRATION: Write a concise 1-paragraph summary in `<narration>...</narration>` tags describing the diagram for a voice assistant.
+    9. SVG CLEANLINESS: The svg-panel must contain ONLY the visual diagram — NO paragraphs of text. Short labels (1-3 words) are OK. All explanations go in controls-panel.
+    10. LABEL READABILITY: Place text labels LAST in SVG markup (painter's model). Add a semi-transparent white rect behind each label. Use font-weight bold and 14px+ size.
 
     Source Content:
     {combined_content[:40000]}

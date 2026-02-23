@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Reason for the Seasons</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 500" width="100%" height="100%" style="border-radius: 16px; overflow: hidden; background-color: #0f172a;">
+  <defs>
+    <radialGradient id="sunGlowGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+    
+    <clipPath id="earth-clip">
+      <circle cx="0" cy="0" r="28" />
+    </clipPath>
+  </defs>
+
+  <style>
+    @keyframes seasons-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.6; }
+      50% { transform: scale(1.1); opacity: 0.3; }
+    }
+    @keyframes seasons-twinkle {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 0.9; }
+    }
+    @keyframes seasons-orbit {
+      to { stroke-dashoffset: -16; }
+    }
+    .sun-glow { 
+      transform-origin: 400px 250px; 
+      animation: seasons-pulse 4s ease-in-out infinite; 
+    }
+    .orbit-path { 
+      animation: seasons-orbit 2s linear infinite; 
+    }
+    .star { fill: #ffffff; }
+    .label-text { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 600; fill: #e2e8f0; pointer-events: none; }
+  </style>
+
+  <!-- Starfield Background -->
+  <g id="starfield">
+    <circle cx="120" cy="80" r="1.5" class="star" style="animation: seasons-twinkle 3s infinite 0.2s;" />
+    <circle cx="650" cy="110" r="1" class="star" style="animation: seasons-twinkle 4s infinite 1.5s;" />
+    <circle cx="200" cy="380" r="2" class="star" style="animation: seasons-twinkle 2.5s infinite 0.7s;" />
+    <circle cx="710" cy="420" r="1.5" class="star" style="animation: seasons-twinkle 3.5s infinite 2.1s;" />
+    <circle cx="350" cy="60" r="1" class="star" style="animation: seasons-twinkle 5s infinite 1.1s;" />
+    <circle cx="80" cy="280" r="2" class="star" style="animation: seasons-twinkle 3s infinite 0.8s;" />
+    <circle cx="550" cy="350" r="1" class="star" style="animation: seasons-twinkle 4.5s infinite 0.3s;" />
+    <circle cx="280" cy="200" r="1.5" class="star" style="animation: seasons-twinkle 2s infinite 1.9s;" />
+    <circle cx="480" cy="150" r="2" class="star" style="animation: seasons-twinkle 3.2s infinite 0.4s;" />
+    <circle cx="620" cy="260" r="1" class="star" style="animation: seasons-twinkle 2.8s infinite 1.6s;" />
+  </g>
+
+  <!-- Orbit Path & Arrows -->
+  <ellipse cx="400" cy="250" rx="280" ry="120" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="8 8" class="orbit-path" />
+  
+  <polygon points="390,126 400,122 400,130" fill="#64748b" />
+  <polygon points="410,374 400,370 400,378" fill="#64748b" />
+  <polygon points="120,260 116,250 124,250" fill="#64748b" />
+  <polygon points="680,240 676,250 684,250" fill="#64748b" />
+
+  <!-- Month Milestone Labels -->
+  <g transform="translate(680, 250)">
+    <rect x="25" y="15" width="90" height="26" rx="13" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="70" y="32" text-anchor="middle" class="label-text">Dec Solstice</text>
+  </g>
+  <g transform="translate(120, 250)">
+    <rect x="-115" y="15" width="90" height="26" rx="13" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="-70" y="32" text-anchor="middle" class="label-text">Jun Solstice</text>
+  </g>
+  <g transform="translate(400, 130)">
+    <rect x="-45" y="-35" width="90" height="26" rx="13" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="0" y="-18" text-anchor="middle" class="label-text">Sep Equinox</text>
+  </g>
+  <g transform="translate(400, 370)">
+    <rect x="-45" y="10" width="90" height="26" rx="13" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="0" y="27" text-anchor="middle" class="label-text">Mar Equinox</text>
+  </g>
+
+  <!-- Sun -->
+  <circle cx="400" cy="250" r="100" fill="url(#sunGlowGrad)" class="sun-glow" />
+  <circle cx="400" cy="250" r="36" fill="#f59e0b" opacity="0.6" />
+  <circle cx="400" cy="250" r="32" fill="#fbbf24" />
+  <circle cx="390" cy="240" r="8" fill="#fef08a" opacity="0.8" />
+
+  <!-- Dynamic Sunlight Beam -->
+  <line id="sun-beam" x1="400" y1="250" x2="680" y2="250" stroke="#fef08a" stroke-width="56" stroke-linecap="round" opacity="0.08" />
+
+  <!-- Earth Group -->
+  <g id="earth-container" transform="translate(680, 250)">
+    <!-- Constant Axial Tilt of 23.5 degrees -->
+    <g transform="rotate(23.5)">
+      <!-- Earth Body -->
+      <circle cx="0" cy="0" r="28" fill="#0ea5e9" />
+      
+      <!-- Continents (Stylized) -->
+      <g clip-path="url(#earth-clip)">
+        <path d="M-15,-20 Q0,-5 20,-15 Q25,-30 5,-35 Z" fill="#22c55e" />
+        <path d="M-25,10 Q-10,25 5,15 Q-5,0 -20,-5 Z" fill="#22c55e" />
+        <path d="M10,20 Q20,30 25,20 Q20,10 15,15 Z" fill="#22c55e" />
+      </g>
+      
+      <!-- Equator Line -->
+      <line x1="-28" y1="0" x2="28" y2="0" stroke="#ffffff" stroke-width="2" stroke-dasharray="4 3" opacity="0.9" />
+      
+      <!-- Axis Line -->
+      <line x1="0" y1="-42" x2="0" y2="42" stroke="#e2e8f0" stroke-width="2" />
+      
+      <!-- Pole Markers -->
+      <circle cx="0" cy="-42" r="4.5" fill="#ef4444" stroke="#0f172a" stroke-width="1.5" /> <!-- North Pole (Red) -->
+      <circle cx="0" cy="42" r="4.5" fill="#3b82f6" stroke="#0f172a" stroke-width="1.5" /> <!-- South Pole (Blue) -->
+    </g>
+
+    <!-- Day/Night Shadow (Rotates to always face away from Sun) -->
+    <path id="night-shadow" d="M 0,-28 A 28,28 0 0,1 0,28 Z" fill="rgba(15, 23, 42, 0.75)" transform="rotate(0)" />
+  </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Reason for the Seasons</h2>
+        <p style="color: #64748b;">Use the timeline controls on the right to orbit the Earth and observe the changing seasons.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="display: flex; flex-direction: column; gap: 20px; height: 100%; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; padding: 4px;">
+  
+  <!-- Header -->
+  <div>
+    <h2 style="margin: 0 0 8px 0; color: #0f172a; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Seasons Simulator</h2>
+    <p style="margin: 0; color: #475569; font-size: 14px; line-height: 1.5;">Notice how the Earth's 23.5° tilt never changes direction, but its position around the Sun creates the seasons.</p>
+  </div>
+
+  <!-- Timeline Controls -->
+  <div style="background: #ffffff; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+    <div style="display: flex; justify-content: space-between; font-size: 14px; color: #334155; font-weight: 700; margin-bottom: 12px;">
+      <span id="month-display" style="color: #059669; font-size: 15px;">December</span>
+      <span id="day-display" style="background: #f1f5f9; padding: 2px 8px; border-radius: 12px; font-size: 12px;">Day 0</span>
+    </div>
+    
+    <input type="range" id="timeSlider" min="0" max="365" value="0" style="width: 100%; cursor: pointer; accent-color: #059669; height: 6px; border-radius: 4px; outline: none; margin-bottom: 16px;" oninput="updateState(this.value)">
+    
+    <button onclick="togglePlay()" id="playBtn" style="padding: 12px; background: #059669; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s ease; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+      ▶ Auto-Play Orbit
+    </button>
+  </div>
+
+  <!-- Real-Time Dashboard -->
+  <div style="background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; padding: 16px; flex-grow: 1; display: flex; flex-direction: column; gap: 16px;">
+    <h3 style="margin: 0; color: #0f172a; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Hemisphere Status</h3>
+
+    <div style="display: flex; gap: 12px;">
+      <div style="flex: 1; background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></div>
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700;">North Pole</div>
+        </div>
+        <div id="nh-season" style="font-size: 18px; color: #0f172a; font-weight: 800;">Winter</div>
+      </div>
+      
+      <div style="flex: 1; background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #3b82f6;"></div>
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700;">South Pole</div>
+        </div>
+        <div id="sh-season" style="font-size: 18px; color: #0f172a; font-weight: 800;">Summer</div>
+      </div>
+    </div>
+
+    <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 14px; border-radius: 0 8px 8px 0; margin-top: auto;">
+      <p id="info-desc" style="margin: 0; font-size: 13.5px; line-height: 1.6; color: #065f46;">
+        The Northern Hemisphere (red dot) tilts <strong>away</strong> from the Sun, receiving indirect light (Winter). The Southern Hemisphere tilts <strong>towards</strong> the Sun, enjoying Summer.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  let isPlaying = false;
+  let playInterval;
+  const months = ["December", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  
+  window.lastQuad = 0; // Telemetry tracker
+
+  function updateState(val) {
+    const day = Number(val);
+    const theta = (day / 365) * 2 * Math.PI;
+    
+    // Calculate Earth's position on the ellipse
+    const x = 400 + 280 * Math.cos(theta);
+    const y = 250 + 120 * Math.sin(theta);
+    
+    // Update SVG elements
+    document.getElementById('earth-container').setAttribute('transform', `translate(${x}, ${y})`);
+    
+    // Rotate shadow so it always faces away from the sun
+    const shadowRotation = (day / 365) * 360;
+    document.getElementById('night-shadow').setAttribute('transform', `rotate(${shadowRotation})`);
+    
+    // Point sun beam at Earth
+    document.getElementById('sun-beam').setAttribute('x2', x);
+    document.getElementById('sun-beam').setAttribute('y2', y);
+
+    // Update Dashboard UI
+    const monthIdx = Math.floor((day / 365) * 12);
+    document.getElementById('month-display').textContent = months[monthIdx];
+    document.getElementById('day-display').textContent = `Day ${day}`;
+
+    // Determine Seasons logic based on visual quadrant
+    let nh, sh, desc;
+    if (day >= 315 || day < 45) {
+      nh = "Winter"; sh = "Summer";
+      desc = "<strong>Solstice:</strong> The Northern Hemisphere (red dot) tilts <strong>away</strong> from the Sun, receiving indirect sunlight and experiencing Winter. The Southern Hemisphere enjoys Summer.";
+    } else if (day >= 45 && day < 135) {
+      nh = "Spring"; sh = "Autumn";
+      desc = "<strong>Equinox:</strong> Earth is transitioning. The axis tilts sideways relative to the Sun. Both hemispheres receive roughly equal sunlight, resulting in mild temperatures.";
+    } else if (day >= 135 && day < 225) {
+      nh = "Summer"; sh = "Winter";
+      desc = "<strong>Solstice:</strong> The Northern Hemisphere (red dot) tilts <strong>directly towards</strong> the Sun, receiving concentrated light and heat (Summer). The Southern Hemisphere experiences Winter.";
+    } else {
+      nh = "Autumn"; sh = "Spring";
+      desc = "<strong>Equinox:</strong> Earth is at another equinox. The tilt is sideways relative to the Sun again, leading to roughly equal day and night worldwide.";
+    }
+
+    document.getElementById('nh-season').textContent = nh;
+    document.getElementById('sh-season').textContent = sh;
+    document.getElementById('info-desc').innerHTML = desc;
+
+    // Telemetry Event
+    let currentQuad = Math.floor((day + 45) / 90) % 4;
+    if (window.lastQuad !== currentQuad) {
+      window.lastQuad = currentQuad;
+      if (window.sendEventToAI) {
+        window.sendEventToAI(`User entered new season phase: NH ${nh}`);
+      }
+    }
+  }
+
+  function togglePlay() {
+    const btn = document.getElementById('playBtn');
+    isPlaying = !isPlaying;
+    
+    if (isPlaying) {
+      btn.innerHTML = '⏸ Pause Orbit';
+      btn.style.background = '#0284c7'; // Shift to blue while active
+      
+      playInterval = setInterval(() => {
+        let slider = document.getElementById('timeSlider');
+        let nextVal = (Number(slider.value) + 1) % 365;
+        slider.value = nextVal;
+        updateState(nextVal);
+      }, 40); // Completes a year in ~14.6 seconds
+    } else {
+      btn.innerHTML = '▶ Auto-Play Orbit';
+      btn.style.background = '#059669'; // Back to emerald
+      clearInterval(playInterval);
+    }
+  }
+
+  // Initialize state
+  updateState(0);
+</script>
+    </div>
+</body>
+</html>

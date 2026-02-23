@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Mechanics of Seasons: Axial Tilt & The Terminator Line</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 500" style="width: 100%; height: 100%; background: #0f172a; font-family: system-ui, sans-serif; overflow: hidden;">
+    <defs>
+        <!-- Sun Gradient -->
+        <radialGradient id="sun-grad" cx="0%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#fef08a"/>
+            <stop offset="60%" stop-color="#f59e0b"/>
+            <stop offset="100%" stop-color="#ea580c" stop-opacity="0"/>
+        </radialGradient>
+        
+        <!-- Earth Ocean Gradient -->
+        <radialGradient id="ocean-grad" cx="30%" cy="30%" r="70%">
+            <stop offset="0%" stop-color="#38bdf8"/>
+            <stop offset="100%" stop-color="#0284c7"/>
+        </radialGradient>
+
+        <!-- Arrow Marker for Direct Sunlight -->
+        <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+        </marker>
+
+        <!-- Earth Clipping Path -->
+        <clipPath id="earth-clip">
+            <circle cx="0" cy="0" r="120" />
+        </clipPath>
+
+        <!-- Continents Shape -->
+        <g id="continents-layer">
+            <!-- Americas -->
+            <path d="M -90 -60 C -70 -90, -40 -70, -40 -30 C -40 10, -20 30, -30 60 C -40 90, -70 50, -50 -10 C -30 -50, -110 -30, -90 -60 Z" fill="#10b981" opacity="0.85"/>
+            <!-- Eurasia/Africa -->
+            <path d="M 10 -70 C 50 -100, 110 -60, 90 -20 C 70 20, 80 50, 40 60 C 0 70, -10 20, 10 -10 C 30 -40, -30 -40, 10 -70 Z" fill="#10b981" opacity="0.85"/>
+            <!-- Oceania/Islands -->
+            <path d="M 70 50 C 110 40, 100 90, 60 70 Z" fill="#10b981" opacity="0.85"/>
+        </g>
+    </defs>
+
+    <style>
+        @keyframes flow {
+            from { stroke-dashoffset: 24; }
+            to { stroke-dashoffset: 0; }
+        }
+        @keyframes spin {
+            from { transform: translateX(0); }
+            to { transform: translateX(-240px); }
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.6); opacity: 0.6; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .ray-anim {
+            animation: flow 1.5s linear infinite;
+        }
+        .spinning-map {
+            animation: spin 12s linear infinite;
+        }
+        .pulse-dot {
+            animation: pulse 2s ease-in-out infinite;
+            transform-origin: center;
+            transform-box: fill-box;
+        }
+        .label-bg {
+            fill: #ffffff;
+            opacity: 0.85;
+            rx: 4px;
+        }
+    </style>
+
+    <!-- Background Space Elements -->
+    <circle cx="150" cy="100" r="1" fill="#fff" opacity="0.3" />
+    <circle cx="650" cy="80" r="1.5" fill="#fff" opacity="0.5" />
+    <circle cx="450" cy="400" r="1" fill="#fff" opacity="0.2" />
+    <circle cx="750" cy="350" r="2" fill="#fff" opacity="0.4" />
+
+    <!-- Mini-Map Orbit Tracker -->
+    <g id="minimap" transform="translate(700, 80)">
+        <text x="0" y="-55" fill="#94a3b8" font-size="10" font-weight="600" text-anchor="middle" letter-spacing="1">ORBIT VIEW</text>
+        <circle cx="0" cy="0" r="40" stroke="#334155" stroke-width="2" stroke-dasharray="4" fill="none"/>
+        <circle cx="0" cy="0" r="8" fill="#f59e0b" filter="drop-shadow(0 0 4px #f59e0b)"/>
+        <!-- Earth blip updated via JS -->
+        <circle id="mini-earth" cx="0" cy="-40" r="5" fill="#38bdf8"/>
+    </g>
+
+    <!-- Sun & Sunlight Rays -->
+    <circle cx="0" cy="250" r="180" fill="url(#sun-grad)" />
+    
+    <g stroke="#fde047" stroke-width="2" stroke-dasharray="8 8" opacity="0.4" class="ray-anim">
+        <line x1="160" y1="130" x2="420" y2="130" />
+        <line x1="180" y1="190" x2="420" y2="190" />
+        <line x1="180" y1="310" x2="420" y2="310" />
+        <line x1="160" y1="370" x2="420" y2="370" />
+    </g>
+
+    <!-- Central Direct Sunlight Ray -->
+    <line x1="180" y1="250" x2="415" y2="250" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow)" />
+    <text x="210" y="240" fill="#fde047" font-size="12" font-weight="600" letter-spacing="0.5">DIRECT SUNLIGHT</text>
+
+    <!-- Earth System Translation Group -->
+    <g id="earth-system" transform="translate(550, 250)">
+        
+        <!-- Rotating Axis Group -->
+        <g id="earth-tilt">
+            <!-- The Globe -->
+            <circle cx="0" cy="0" r="120" fill="url(#ocean-grad)" />
+
+            <!-- Spinning Continents -->
+            <g clip-path="url(#earth-clip)">
+                <g class="spinning-map">
+                    <use href="#continents-layer" x="0" y="0" />
+                    <use href="#continents-layer" x="240" y="0" />
+                </g>
+            </g>
+
+            <!-- Latitude Lines -->
+            <!-- Equator -->
+            <line x1="-120" y1="0" x2="120" y2="0" stroke="#ef4444" stroke-width="2" stroke-dasharray="6 4" />
+            <!-- Tropic of Cancer (23.5 N) -->
+            <line x1="-110" y1="-47.8" x2="110" y2="-47.8" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4 4" />
+            <!-- Tropic of Capricorn (23.5 S) -->
+            <line x1="-110" y1="47.8" x2="110" y2="47.8" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4 4" />
+            <!-- Arctic Circle (66.5 N) -->
+            <line x1="-48" y1="-110" x2="48" y2="-110" stroke="#f8fafc" stroke-width="1.5" stroke-dasharray="3 3" />
+            <!-- Antarctic Circle (66.5 S) -->
+            <line x1="-48" y1="110" x2="48" y2="110" stroke="#f8fafc" stroke-width="1.5" stroke-dasharray="3 3" />
+
+            <!-- Axis Rod -->
+            <line x1="0" y1="-160" x2="0" y2="160" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
+            <circle cx="0" cy="-160" r="4" fill="#ffffff" />
+            <circle cx="0" cy="160" r="4" fill="#ffffff" />
+
+            <!-- Latitude Labels (Painter's model: placed last, with backgrounds) -->
+            <g transform="translate(20, -56)">
+                <rect x="0" y="0" width="100" height="14" class="label-bg"/>
+                <text x="4" y="10" font-size="10" font-weight="700" fill="#0f172a">Tropic of Cancer</text>
+            </g>
+            <g transform="translate(20, -8)">
+                <rect x="0" y="0" width="55" height="14" class="label-bg"/>
+                <text x="4" y="10" font-size="10" font-weight="700" fill="#dc2626">Equator</text>
+            </g>
+            <g transform="translate(20, 40)">
+                <rect x="0" y="0" width="115" height="14" class="label-bg"/>
+                <text x="4" y="10" font-size="10" font-weight="700" fill="#0f172a">Tropic of Capricorn</text>
+            </g>
+            <g transform="translate(-14, -178)">
+                <rect x="0" y="0" width="30" height="14" class="label-bg"/>
+                <text x="4" y="10" font-size="10" font-weight="700" fill="#0f172a">Axis</text>
+            </g>
+        </g>
+
+        <!-- Fixed Night Shadow (Terminator Line) -->
+        <g clip-path="url(#earth-clip)">
+            <!-- Night Box -->
+            <rect x="0" y="-120" width="120" height="240" fill="#020617" opacity="0.75" />
+        </g>
+
+        <!-- Vertical Terminator Highlight -->
+        <line x1="0" y1="-120" x2="0" y2="120" stroke="#ffffff" stroke-width="2" stroke-dasharray="5 5" opacity="0.8"/>
+
+        <!-- Fixed Labels for Day/Night -->
+        <text x="-60" y="145" font-size="14" font-weight="800" fill="#fde047" text-anchor="middle" letter-spacing="1">DAY</text>
+        <text x="60" y="145" font-size="14" font-weight="800" fill="#64748b" text-anchor="middle" letter-spacing="1">NIGHT</text>
+
+        <!-- Subsolar Point Indicator (Where central ray hits) -->
+        <circle cx="-120" cy="0" r="5" fill="#ef4444" class="pulse-dot" />
+        <circle cx="-120" cy="0" r="2" fill="#ffffff" />
+        <text x="-125" y="-10" font-size="11" font-weight="700" fill="#ef4444" text-anchor="end" filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.8))">Subsolar Point</text>
+    </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Mechanics of Seasons: Axial Tilt & The Terminator Line</h2>
+        <p style="color: #64748b;">Use the controls on the right panel to orbit the Earth and observe how the Sun's rays shift across latitudes.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+    .ctrl-wrapper {
+        font-family: system-ui, -apple-system, sans-serif;
+        padding: 24px;
+        background: #f8fafc;
+        height: 100%;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        color: #0f172a;
+        overflow-y: auto;
+    }
+    .ctrl-header h2 {
+        margin: 0 0 4px 0;
+        font-size: 20px;
+        font-weight: 700;
+        color: #1e293b;
+    }
+    .ctrl-header p {
+        margin: 0;
+        font-size: 13px;
+        color: #64748b;
+    }
+    .slider-container {
+        background: #ffffff;
+        padding: 16px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .slider-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    input[type=range] {
+        -webkit-appearance: none;
+        width: 100%;
+        background: transparent;
+    }
+    input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 20px;
+        width: 20px;
+        border-radius: 50%;
+        background: #2563eb;
+        cursor: pointer;
+        margin-top: -8px;
+        box-shadow: 0 2px 4px rgba(37,99,235,0.3);
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 6px;
+        cursor: pointer;
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+    .action-btn {
+        background: #2563eb;
+        color: #ffffff;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2);
+    }
+    .action-btn:hover {
+        background: #1d4ed8;
+        transform: translateY(-1px);
+    }
+    .dashboard {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .data-card {
+        background: #ffffff;
+        padding: 16px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .data-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #64748b;
+        margin-bottom: 4px;
+        font-weight: 700;
+    }
+    .data-value {
+        font-size: 20px;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .data-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #dbeafe;
+        color: #1e40af;
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 6px;
+    }
+    .info-box {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        padding: 16px;
+        border-radius: 12px;
+    }
+    .info-box h3 {
+        margin: 0 0 6px 0;
+        font-size: 14px;
+        color: #166534;
+    }
+    .info-box p {
+        margin: 0;
+        font-size: 13px;
+        color: #15803d;
+        line-height: 1.5;
+    }
+</style>
+
+<div class="ctrl-wrapper">
+    <div class="ctrl-header">
+        <h2>Earth's Orbit & Seasons</h2>
+        <p>Observe how axial tilt changes sunlight distribution.</p>
+    </div>
+
+    <div class="slider-container">
+        <div class="slider-label">
+            <span>Time of Year</span>
+            <span id="month-display" style="color: #2563eb;">June</span>
+        </div>
+        <input type="range" id="timeSlider" min="0" max="100" value="47" step="0.5" oninput="updateState(this.value)">
+    </div>
+
+    <button id="play-btn" class="action-btn" onclick="togglePlay()">▶ Auto-Orbit</button>
+
+    <div class="dashboard">
+        <div class="data-card">
+            <div class="data-title">Orbital Phase</div>
+            <div id="season-title" class="data-value">Solstice</div>
+            <div id="season-badge" class="data-badge">Northern Summer</div>
+        </div>
+        <div class="data-card">
+            <div class="data-title">Subsolar Latitude</div>
+            <div id="subsolar-value" class="data-value" style="color: #ea580c;">23.5° N</div>
+            <div class="data-title" style="margin-top: 6px; font-size: 10px;">Direct Sunlight Hits Here</div>
+        </div>
+    </div>
+
+    <div class="info-box">
+        <h3>System Status</h3>
+        <p id="info-desc">North Pole is tilted maximum towards the Sun. Direct sunlight hits the Tropic of Cancer.</p>
+    </div>
+</div>
+
+<script>
+    let isPlaying = false;
+    let playInterval;
+    let currentVal = 47; 
+
+    function updateState(val) {
+        currentVal = Number(val);
+        
+        // Math: val 0-100 represents roughly Jan 1 to Dec 31
+        // Angle formula: -23.5 * cos( ((val - 47) / 100) * 2 * PI )
+        // Summer Solstice is approx val=47 (June 21)
+        let angle = -23.5 * Math.cos(((val - 47) / 100) * 2 * Math.PI);
+
+        // Rotate Earth physically relative to the fixed light/shadow
+        document.getElementById(`earth-tilt`).setAttribute(`transform`, `rotate(${angle})`);
+
+        // Update Minimap (Start top ~Jan, rotate clockwise)
+        let miniAngle = (val / 100) * 2 * Math.PI - (Math.PI / 2); 
+        let mx = 40 * Math.cos(miniAngle);
+        let my = 40 * Math.sin(miniAngle);
+        document.getElementById(`mini-earth`).setAttribute(`cx`, mx);
+        document.getElementById(`mini-earth`).setAttribute(`cy`, my);
+
+        // Calculate Subsolar Point
+        let subsolar = -angle;
+        let subsolarText = Math.abs(subsolar).toFixed(1) + `° ` + (subsolar > 0 ? `N` : (subsolar < 0 ? `S` : ``));
+        if (Math.abs(subsolar) < 0.2) subsolarText = `Equator (0°)`;
+
+        // Determine Month
+        let months = [`January`, `February`, `March`, `April`, `May`, `June`, `July`, `August`, `September`, `October`, `November`, `December`];
+        let monthIndex = Math.floor((val / 100) * 12);
+        if (monthIndex >= 12) monthIndex = 11;
+
+        // Determine Events & Text
+        let seasonType = ``;
+        let seasonBadge = ``;
+        let descText = ``;
+
+        if (val >= 44 && val <= 50) {
+            seasonType = `Solstice`;
+            seasonBadge = `Northern Summer`;
+            descText = `The North Pole is tilted maximally towards the Sun. Direct sunlight strikes the Tropic of Cancer (23.5° N). Notice the extended daylight in the Northern Hemisphere.`;
+        } else if (val >= 94 || val <= 3) {
+            seasonType = `Solstice`;
+            seasonBadge = `Northern Winter`;
+            descText = `The North Pole is tilted maximally away from the Sun. Direct sunlight strikes the Tropic of Capricorn (23.5° S). Notice the extended night in the Northern Hemisphere.`;
+        } else if (val >= 19 && val <= 25) {
+            seasonType = `Equinox`;
+            seasonBadge = `March / Spring`;
+            descText = `Earth's axis tilts neither towards nor away from the Sun. The terminator line perfectly aligns with the poles. Direct sunlight hits the Equator.`;
+        } else if (val >= 69 && val <= 75) {
+            seasonType = `Equinox`;
+            seasonBadge = `September / Autumn`;
+            descText = `Earth's axis tilts neither towards nor away from the Sun. The terminator line perfectly aligns with the poles. Direct sunlight hits the Equator.`;
+        } else {
+            seasonType = `Transition`;
+            let direction = (val > 47 && val < 97) ? `South` : `North`;
+            seasonBadge = `Moving ${direction}`;
+            descText = `As Earth orbits, the fixed axial tilt changes its orientation relative to the Sun. The subsolar point is actively migrating ${direction} across the latitudes.`;
+        }
+
+        // Apply UI Updates
+        document.getElementById(`month-display`).textContent = months[monthIndex];
+        document.getElementById(`season-title`).textContent = seasonType;
+        document.getElementById(`season-badge`).textContent = seasonBadge;
+        document.getElementById(`subsolar-value`).textContent = subsolarText;
+        document.getElementById(`info-desc`).textContent = descText;
+
+        // Send telemetry occasionally
+        if (window.sendEventToAI && (Math.abs(val % 25) < 0.5)) {
+            window.sendEventToAI(`User progressed orbit to ${months[monthIndex]} (${seasonBadge})`);
+        }
+    }
+
+    function togglePlay() {
+        isPlaying = !isPlaying;
+        let btn = document.getElementById(`play-btn`);
+        if (isPlaying) {
+            btn.innerHTML = `⏸ Pause Orbit`;
+            btn.style.background = `#0ea5e9`;
+            playInterval = setInterval(() => {
+                let nextVal = (currentVal + 0.3) % 100;
+                document.getElementById(`timeSlider`).value = nextVal;
+                updateState(nextVal);
+            }, 50);
+        } else {
+            btn.innerHTML = `▶ Auto-Orbit`;
+            btn.style.background = `#2563eb`;
+            clearInterval(playInterval);
+        }
+    }
+
+    // Initialize state immediately
+    updateState(47);
+</script>
+    </div>
+</body>
+</html>

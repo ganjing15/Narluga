@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Uniform Circular Motion</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 600 600" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background Grid Pattern -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f1f5f9" stroke-width="2"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Grid Background -->
+  <rect width="600" height="600" fill="url(#grid)" rx="16"/>
+  
+  <!-- Axis Lines -->
+  <line x1="300" y1="40" x2="300" y2="560" stroke="#e2e8f0" stroke-width="2" stroke-linecap="round"/>
+  <line x1="40" y1="300" x2="560" y2="300" stroke="#e2e8f0" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Outer Orbit Track -->
+  <circle cx="300" cy="300" r="180" fill="none" stroke="#cbd5e1" stroke-width="3" stroke-dasharray="8 8"/>
+  
+  <!-- Animated Orbiting Group -->
+  <g id="rotating-group">
+    <!-- Tether Line -->
+    <line x1="300" y1="300" x2="480" y2="300" stroke="#64748b" stroke-width="4" stroke-linecap="round"/>
+    <!-- The Small Red Circle -->
+    <circle cx="480" cy="300" r="24" fill="#ef4444" stroke="#991b1b" stroke-width="4" filter="url(#shadow)"/>
+    <circle cx="480" cy="300" r="8" fill="#fca5a5" opacity="0.8"/>
+  </g>
+  
+  <!-- Center Anchor Node -->
+  <circle cx="300" cy="300" r="10" fill="#0f172a"/>
+  <circle cx="300" cy="300" r="4" fill="#ffffff"/>
+  
+  <!-- Live Angle Display Label -->
+  <rect x="260" y="250" width="80" height="32" fill="#ffffff" fill-opacity="0.9" rx="8" stroke="#e2e8f0" stroke-width="1"/>
+  <text id="angle-display" x="300" y="272" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="18" fill="#0f172a">0°</text>
+
+  <!-- Title/Scale Label -->
+  <text x="30" y="40" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="16" fill="#64748b">Orbital Path</text>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>Uniform Circular Motion</h2>
+        <p style="color: #64748b;">Use the controls on the right panel to start the animation and adjust the orbital speed.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+  .ctrl-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 16px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    height: 100%;
+    box-sizing: border-box;
+  }
+  
+  .ctrl-btn {
+    width: 100%;
+    padding: 16px;
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .ctrl-btn:hover { background-color: #1d4ed8; transform: translateY(-1px); }
+  .ctrl-btn:active { transform: translateY(1px); }
+  
+  .ctrl-btn.playing { 
+    background-color: #ef4444; 
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2);
+  }
+  .ctrl-btn.playing:hover { background-color: #dc2626; }
+  
+  .slider-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .slider-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+  }
+  
+  .slider-badge {
+    background: #e2e8f0;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-variant-numeric: tabular-nums;
+  }
+  
+  .slider {
+    width: 100%;
+    accent-color: #2563eb;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+  }
+  
+  .info-panel {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  }
+  
+  .info-title {
+    font-weight: 700;
+    font-size: 16px;
+    color: #0f172a;
+    margin-bottom: 8px;
+  }
+  
+  .info-desc {
+    font-size: 14px;
+    color: #475569;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  
+  .data-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: #0f172a;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  
+  .data-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .data-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #2563eb;
+  }
+</style>
+
+<div class="ctrl-wrapper">
+  <div>
+    <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 4px 0;">Simulation Controls</h2>
+    <p style="font-size: 14px; color: #64748b; margin: 0 0 20px 0;">Control the red circle's motion.</p>
+    <button id="play-btn" class="ctrl-btn" onclick="togglePlay()">
+      <span id="btn-icon">▶</span>
+      <span id="btn-text">Start Orbit</span>
+    </button>
+  </div>
+  
+  <div class="slider-container">
+    <div class="slider-label">
+      <span>Orbital Speed Velocity</span>
+      <span id="speed-display" class="slider-badge">2.0x</span>
+    </div>
+    <input type="range" id="speed-slider" class="slider" min="0.5" max="5" step="0.5" value="2.0" oninput="changeSpeed(this.value)">
+  </div>
+  
+  <div class="info-panel">
+    <div class="info-title">System Telemetry</div>
+    <div class="info-desc">Real-time tracking of the small red circle's position along its rotational path.</div>
+    <div class="data-row">
+      <span style="font-weight:600;">Current Angle</span>
+      <span id="info-angle" class="data-value">0°</span>
+    </div>
+    <div class="data-row">
+      <span style="font-weight:600;">Status</span>
+      <span id="info-status" class="data-value" style="color: #64748b;">Idle</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  let angle = 0;
+  let isPlaying = false;
+  let speed = 2.0;
+  let animFrame;
+
+  function updateSimulation() {
+    if (!isPlaying) return;
+    
+    // Update state
+    angle = (angle + speed) % 360;
+    
+    // Visually rotate the SVG group around the center (300, 300)
+    const group = document.getElementById('rotating-group');
+    if(group) {
+      group.setAttribute('transform', `rotate(${angle} 300 300)`);
+    }
+    
+    // Format angle for display (ensure it reads 0-359 neatly)
+    const formattedAngle = Math.floor(angle);
+    
+    // Update SVG Label
+    const display = document.getElementById('angle-display');
+    if(display) {
+      display.textContent = `${formattedAngle}°`;
+    }
+
+    // Update Telemetry Panel
+    const infoAngle = document.getElementById('info-angle');
+    if (infoAngle) {
+      infoAngle.textContent = `${formattedAngle}°`;
+    }
+
+    // Continue animation loop
+    animFrame = requestAnimationFrame(updateSimulation);
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    const btn = document.getElementById('play-btn');
+    const btnIcon = document.getElementById('btn-icon');
+    const btnText = document.getElementById('btn-text');
+    const statusText = document.getElementById('info-status');
+    
+    if (isPlaying) {
+      btn.classList.add('playing');
+      btnIcon.textContent = '⏸';
+      btnText.textContent = 'Pause Orbit';
+      statusText.textContent = 'In Motion';
+      statusText.style.color = '#ef4444';
+      
+      updateSimulation();
+      
+      if (window.sendEventToAI) {
+        window.sendEventToAI(`Started simulation at speed ${speed}x`);
+      }
+    } else {
+      btn.classList.remove('playing');
+      btnIcon.textContent = '▶';
+      btnText.textContent = 'Resume Orbit';
+      statusText.textContent = 'Paused';
+      statusText.style.color = '#f59e0b';
+      
+      cancelAnimationFrame(animFrame);
+      
+      if (window.sendEventToAI) {
+        window.sendEventToAI(`Paused simulation at angle ${Math.floor(angle)}°`);
+      }
+    }
+  }
+
+  function changeSpeed(val) {
+    speed = parseFloat(val);
+    
+    // Format display string precisely (e.g., 2.0 instead of 2)
+    const displayStr = Number.isInteger(speed) ? `${speed}.0x` : `${speed}x`;
+    document.getElementById('speed-display').textContent = displayStr;
+    
+    if (window.sendEventToAI && !isPlaying) {
+       window.sendEventToAI(`User adjusted speed to ${displayStr}`);
+    }
+  }
+</script>
+    </div>
+</body>
+</html>
