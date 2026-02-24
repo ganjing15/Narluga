@@ -41,7 +41,12 @@ function App() {
     currentSvgRef.current = svg
     _setCurrentSvg(svg)
   }
-  const [currentControls, setCurrentControls] = useState<string | null>(null)
+  const [currentControls, _setCurrentControls] = useState<string | null>(null)
+  const currentControlsRef = useRef<string | null>(null)
+  const setCurrentControls = (controls: string | null) => {
+    currentControlsRef.current = controls
+    _setCurrentControls(controls)
+  }
   const [currentTitle, setCurrentTitle] = useState<string | null>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null)
   const narrationContextRef = useRef<string>('')
@@ -58,6 +63,7 @@ function App() {
   const eventQueueRef = useRef<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const nextPlayTimeRef = useRef<number>(0)
+  const activeAudioNodesRef = useRef<AudioBufferSourceNode[]>([])
 
   // Detect input type from text
   const detectInputType = useCallback((text: string): { type: SourceType, label: string } => {
@@ -157,31 +163,55 @@ function App() {
   }, [])
 
   // Attach a global function so the generated SVG's <script> can send events to the Voice AI
+  // Also listen for iframe postMessage events (Hover & Interactions)
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout>;
+    let hoverDebounceTimer: ReturnType<typeof setTimeout>;
+
+    const sendToVoiceAI = (textPayload: string) => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        if (hasStartedRef.current) {
+          wsRef.current.send(JSON.stringify({
+            clientContent: {
+              turns: [{ role: "user", parts: [{ text: textPayload }] }],
+              turnComplete: true
+            }
+          }));
+        } else {
+          eventQueueRef.current.push(textPayload);
+        }
+      }
+    };
 
     (window as any).sendEventToAI = (textMessage: string) => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          const textPayload = `[System Status: The user just interacted with the dashboard UI. Action: ${textMessage}]`;
-          if (hasStartedRef.current) {
-            wsRef.current.send(JSON.stringify({
-              clientContent: {
-                turns: [{ role: "user", parts: [{ text: textPayload }] }],
-                turnComplete: true
-              }
-            }));
-          } else {
-            eventQueueRef.current.push(textPayload);
-          }
-        }
+        sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${textMessage}]`);
       }, 1000);
     };
 
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (data && data.type === 'HOVER_EVENT') {
+        clearTimeout(hoverDebounceTimer);
+        hoverDebounceTimer = setTimeout(() => {
+          sendToVoiceAI(`[Cursor position: ${data.payload}]`);
+        }, 300); // Small debounce for hover events
+      } else if (data && data.type === 'INTERACTION_EVENT') {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
+        }, 1000);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
     return () => {
       clearTimeout(debounceTimer);
+      clearTimeout(hoverDebounceTimer);
       delete (window as any).sendEventToAI;
+      window.removeEventListener('message', handleMessage);
     };
   }, []);
 
@@ -277,7 +307,9 @@ function App() {
         ws.send(JSON.stringify({
           type: "restart_live",
           narration_context: narrationContextRef.current,
-          source_labels: sourceLabelsRef.current
+          source_labels: sourceLabelsRef.current,
+          svg_html: currentSvgRef.current || "",
+          controls_html: currentControlsRef.current || ""
         }))
         // Immediately send start_live_session
         ws.send(JSON.stringify({
@@ -303,9 +335,12 @@ function App() {
           setupMic()
         } else if (data.type === 'clear') {
           if (audioCtxRef.current) {
-            audioCtxRef.current.close().catch(console.error)
-            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-            audioCtxRef.current = new AudioContext({ sampleRate: 24000 })
+            // Stop all currently scheduled/playing audio nodes instantly without destroying the AudioContext
+            activeAudioNodesRef.current.forEach(node => {
+              try { node.stop() } catch (e) { }
+            })
+            activeAudioNodesRef.current = []
+            // Reset the playhead so new audio plays immediately
             nextPlayTimeRef.current = audioCtxRef.current.currentTime
           }
         } else if (data.type === 'audio') {
@@ -330,6 +365,13 @@ function App() {
             const startTime = Math.max(audioCtxRef.current.currentTime, nextPlayTimeRef.current)
             source.start(startTime)
             nextPlayTimeRef.current = startTime + audioBuffer.duration
+
+            // Track the playing node so we can interrupt it later
+            activeAudioNodesRef.current.push(source)
+            // Clean up node from tracking array when it finishes naturally
+            source.onended = () => {
+              activeAudioNodesRef.current = activeAudioNodesRef.current.filter(n => n !== source)
+            }
           }
         } else if (data.type === 'error') {
           setError(data.message)
@@ -1014,6 +1056,7 @@ function App() {
         }
       } else if (action === 'click_element') {
         const kw = (params.element_id || '').toLowerCase().trim();
+        console.log("[IFRAME TOOL] click_element initiated with kw: '" + kw + "'");
         if (!kw) return;
         const containers = document.querySelectorAll('.svg-area, .controls-area');
         let clicked = false;
@@ -1025,12 +1068,40 @@ function App() {
             const id = (el.id || '').toLowerCase();
             const title = (el.getAttribute('title') || '').toLowerCase();
             const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
-            if (text.includes(kw) || kw.includes(text) || id.includes(kw) || title.includes(kw) || ariaLabel.includes(kw)) {
+            
+            const matchText = text && (text.includes(kw) || kw.includes(text));
+            const matchId = id && (id.includes(kw) || kw.includes(id));
+            const matchTitle = title && (title.includes(kw) || kw.includes(title));
+            const matchAria = ariaLabel && (ariaLabel.includes(kw) || kw.includes(ariaLabel));
+            
+            console.log("  -> Checking element: <" + el.tagName + "> id='" + id + "' text='" + text + "'. Match? " + !!(matchText || matchId || matchTitle || matchAria));
+            
+            if (matchText || matchId || matchTitle || matchAria) {
               el.style.transition = 'all 0.2s ease';
               el.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.5)';
+              
               setTimeout(() => {
                 el.style.boxShadow = '';
-                el.click();
+                if (el.tagName.toLowerCase() === 'input' && el.type === 'range') {
+                   // For sliders, a raw click does nothing useful. If params.value was passed, use it,
+                   // otherwise advance it by roughly 15% of its max.
+                   let advanceStr = params.value;
+                   if (!advanceStr) {
+                       const current = parseFloat(el.value || '0');
+                       const max = parseFloat(el.max || '100');
+                       const step = parseFloat(el.step || '1');
+                       let next = current + (max * 0.15);
+                       if (next > max) next = parseFloat(el.min || '0');
+                       // snap to step
+                       next = Math.round(next / step) * step;
+                       advanceStr = next.toString();
+                   }
+                   el.value = advanceStr;
+                   el.dispatchEvent(new Event('input', { bubbles: true }));
+                   el.dispatchEvent(new Event('change', { bubbles: true }));
+                } else {
+                   el.click();
+                }
               }, 300);
               clicked = true;
             }
@@ -1100,7 +1171,7 @@ function App() {
         report = elementDesc;
       }
 
-      if (!report || report === report) return;
+      if (!report || report === lastReport) return;
       lastReport = report;
 
       if (debounceTimer) clearTimeout(debounceTimer);

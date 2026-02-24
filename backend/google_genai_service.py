@@ -246,8 +246,8 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
        - Create controls like `<input type="range">` (sliders), standard buttons, or Play/Pause toggles in the `<controls-panel>`.
        - Write bespoke Javascript functions that directly mutate the SVG DOM elements (e.g., changing `transform="rotate(...)"`, `x`, `y`, `fill`, `opacity`, `stroke-dashoffset`, or text content) based on the user's input.
        - Always include an info-panel that updates its title and description dynamically based on the current state.
-       - CRITICAL SYNTAX WARNING: You MUST use backticks (\` \`) for ALL strings in your Javascript (e.g., \`The Earth's axis\`). NEVER use single quotes (') or double quotes ("). Single quotes will cause a fatal syntax error when your text contains apostrophes (like "Earth's").
-       - Send telemetry using `if (window.sendEventToAI) {{ window.sendEventToAI(\`User changed state to ${{value}}\`); }}`.
+       - CRITICAL SYNTAX WARNING: You MUST use backticks (` `) for ALL strings in your Javascript (e.g., `The Earth's axis`). NEVER use single quotes (') or double quotes ("). Single quotes will cause a fatal syntax error when your text contains apostrophes (like "Earth's").
+       - Send telemetry using `if (window.sendEventToAI) {{ window.sendEventToAI(`User changed state to ${{value}}`); }}`.
        
        EXAMPLE ADVANCED PATTERN (Adapt this to your specific concept):
        ```
@@ -267,14 +267,14 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
        
        function updateState(val) {{
          // 1. Mutate SVG visually (bespoke math/logic based on the concept)
-         document.getElementById('planet-orbit').setAttribute('transform', \`rotate(${{val * 3.6}} 400 250)\`);
+         document.getElementById('planet-orbit').setAttribute('transform', `rotate(${{val * 3.6}} 400 250)`);
          
          // 2. Update Info Panel
-         document.getElementById('info-title').textContent = \`Phase ${{Math.floor(val/25)}}\`;
-         document.getElementById('info-desc').textContent = \`At ${{val}}%, the system is transitioning...\`;
+         document.getElementById('info-title').textContent = `Phase ${{Math.floor(val/25)}}`;
+         document.getElementById('info-desc').textContent = `At ${{val}}%, the system is transitioning...`;
          
          if (window.sendEventToAI && val % 25 === 0) {{ 
-           window.sendEventToAI(\`User moved graphic to phase ${{val}}\`); 
+           window.sendEventToAI(`User moved graphic to phase ${{val}}`); 
          }}
        }}
        
@@ -298,7 +298,8 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
 
     4. ANIMATION: The SVG must have animated elements. Use CSS @keyframes for idle animations (pulsing, rotating, dashed line flow). All node groups need `transition: all 0.3s ease` for smooth highlight effects.
     5. NO BORDER RADIUS ON SVG: Keep `<svg>` elements square/rectangular. Do not use `border-radius` on `<svg>`.
-    6. ANIMATION STATE TEXT: If you add play/pause buttons or auto-run features, the active/playing state button MUST contain the text "Pause" or "Stop" (e.g., "⏸ Pause Orbit") so the system knows the graphic is actively animating.
+    6. ANIMATION STATE TEXT: If you add play/pause buttons, the active/playing state button MUST contain the text "Pause" or "Stop" (e.g., "⏸ Pause Orbit"). The inactive/paused state MUST contain "Play" or "Start" (e.g., "▶ Auto-Grow"). 
+       - CRUCIAL FOR LIVE AI: When you receive an interaction event saying the user clicked a button labeled "Pause" or "Stop", it means the animation is NOW PLAYING (because the button offers the option to pause it). When you receive an event that they clicked "Play" or "Start", it means the animation is NOW PAUSED. Always narrate the state it transitioned INTO, not the label of the button.
     7. TEXT WRAPPING: SVG text elements do not auto-wrap. Use foreignObject with explicit width/height for any text longer than 3 words. Inner div must use `overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px;`.
     8. NARRATION: Write a concise 1-paragraph summary in `<narration>...</narration>` tags describing the diagram for a voice assistant.
     9. SVG CLEANLINESS: The svg-panel must contain ONLY the visual diagram — NO paragraphs of text. Short labels (1-3 words) are OK. All explanations go in controls-panel.
@@ -380,9 +381,9 @@ async def handle_live_session(websocket: WebSocket, sources: list):
         controls_html = "<div style='padding: 24px;'>No controls generated.</div>"
 
         
-    # FORCE CLEAN: Remove literal backslash escapes for quotes just in case the model hallucinates them
-    svg_html = svg_html.replace('\\"', '"').replace("\\'", "'")
-    controls_html = controls_html.replace('\\"', '"').replace("\\'", "'")
+    # FORCE CLEAN: Remove literal backslash escapes for quotes, backticks, and dollar signs just in case the model hallucinates them
+    svg_html = svg_html.replace('\\"', '"').replace("\\'", "'").replace('\\`', '`').replace('\\$', '$')
+    controls_html = controls_html.replace('\\"', '"').replace("\\'", "'").replace('\\`', '`').replace('\\$', '$')
     
     # Extract Narration
     narration_context = "No specific narration context provided."
@@ -464,25 +465,26 @@ async def handle_live_session(websocket: WebSocket, sources: list):
     await websocket.send_json({"type": "phase", "phase": "complete"})
     
     # 2. Phase 2: Live Presenter — delegate to shared helper
-    await _run_live_session(websocket, narration_context, source_labels, svg_html)
+    await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html)
 
 
-async def handle_live_restart(websocket: WebSocket, narration_context: str, source_labels: list[str]):
+async def handle_live_restart(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = ""):
     """
     Restart a live conversation on an existing graphic.
     Skips graphic generation and goes straight to the Live API.
     """
     print(f"[Live Restart] Starting with {len(source_labels)} source label(s)")
-    await _run_live_session(websocket, narration_context, source_labels, "")
+    await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html)
 
 
-def _extract_controls_inventory(svg_html: str) -> str:
+def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
     """Extract a text inventory of interactive controls from the generated HTML."""
-    if not svg_html:
+    full_html = svg_html + "\n" + controls_html
+    if not full_html.strip():
         return "No controls information available."
     try:
-        soup = BeautifulSoup(svg_html, "html.parser")
-        controls_panel = soup.find("controls-panel")
+        soup = BeautifulSoup(full_html, "html.parser")
+        controls_panel = soup.find(id="controls-panel") or soup.find("div", class_="controls-container")
         if not controls_panel:
             return "No controls panel found."
         
@@ -518,7 +520,7 @@ def _extract_controls_inventory(svg_html: str) -> str:
         return f"Could not parse controls: {e}"
 
 
-async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str):
+async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = ""):
     """
     Shared Live API session logic. Handles system instruction, tool declarations,
     Gemini connection, and bidirectional audio/tool streaming.
@@ -540,7 +542,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     Here are the ACTUAL interactive controls available in the diagram's control panel:
     
     <available_controls>
-    {_extract_controls_inventory(svg_html)}
+    {_extract_controls_inventory(svg_html, controls_html)}
     </available_controls>
     
     YOUR BEHAVIOR:
@@ -560,7 +562,10 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     - Call ONE tool at a time, not multiple simultaneously.
     - Always speak while or after using a tool — never go silent after a tool call.
     - The element_id for tools should match labels or keywords visible in the diagram.
-    - For modify_element, use SVG attributes like 'fill', 'opacity', 'transform', or CSS properties like 'display', 'font-size'.
+    - For modify_element, prioritize CSS properties like 'display', 'opacity', 'scale', 'fill', or 'color'. This safely avoids breaking existing animation transforms.
+      - E.g., to resize an element, use css_property 'scale' and value '2' or '0.5'. (Do NOT use 'transform').
+      - E.g., to hide an element, use css_property 'display' and value 'none'.
+      - E.g., to recolor, use css_property 'fill' and a hex value.
     - For click_element, match the exact button text from <available_controls>.
     """
     
@@ -720,7 +725,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             await websocket.send_json({"type": "ready"})
         
         # Kick off the conversation — send a prompt so the AI starts talking immediately
+        # CRITICAL: We wait 1.2 seconds to allow the microphone connection to stabilize.
+        # If we send the text prompt the exact millisecond the mic connects, the initial burst
+        # of hardware static will trigger Gemini's Voice Activity Detection (VAD) and abort the welcome message!
         try:
+            await asyncio.sleep(1.2)
             await session.send_client_content(
                 turns=[types.Content(parts=[types.Part.from_text(
                     text="The user just joined the session. Begin your welcome and overview now."
@@ -807,7 +816,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                             for func_call in response.tool_call.function_calls:
                                 tool_name = func_call.name
                                 tool_args = dict(func_call.args) if func_call.args else {}
-                                print(f"[Tool Call] {tool_name}({tool_args})")
+                                print(f"\n[AI TOOL FIRING] {tool_name}({json.dumps(tool_args)})")
                                 
                                 if tool_name in ("highlight_element", "navigate_to_section", "zoom_view", "modify_element", "click_element"):
                                     # Forward visual action to frontend
