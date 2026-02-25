@@ -187,7 +187,7 @@ function App() {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${textMessage}]`);
-      }, 1000);
+      }, 300);
     };
 
     let aiEventPending = false;
@@ -216,7 +216,7 @@ function App() {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
-        }, 1000);
+        }, 300);
       }
     };
 

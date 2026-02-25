@@ -691,21 +691,21 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             ),
             types.FunctionDeclaration(
                 name="modify_element",
-                description="Modify the visual appearance of an element in the SVG diagram in real-time. Use this when the user asks you to change something about the graphic (e.g., 'make the sun bigger', 'change the ocean to green', 'hide the clouds'). You can change any CSS property.",
+                description="Modify the visual appearance of an element in the SVG diagram in real-time. Use this when the user asks you to change something about the graphic (e.g., 'make the sun bigger', 'change the ocean to green', 'hide the clouds').",
                 parameters=types.Schema(
                     type="OBJECT",
                     properties=dict(
                         element_id=types.Schema(
                             type="STRING",
-                            description="A keyword or identifier for the element to modify. Should match visible labels, text, or section names in the diagram."
+                            description="A human-readable keyword matching a visible label or name in the diagram. Examples: 'probe', 'sun', 'electron', 'barrier', 'accretion disk'. Do NOT use CSS selectors, hex colors, or technical syntax like '#fff circle'. Just use a simple descriptive word."
                         ),
                         css_property=types.Schema(
                             type="STRING",
-                            description="The CSS property to change. Common ones: 'fill' (color), 'opacity' (0-1), 'transform' (e.g. 'scale(1.5)'), 'display' ('none' to hide, 'block' to show), 'stroke', 'stroke-width', 'font-size', 'visibility' ('hidden'/'visible')."
+                            description="The CSS property name to change. Use one of: 'scale' (to resize), 'fill' (to recolor), 'opacity' (for transparency), 'display' (to show/hide), 'stroke' (border color), 'stroke-width' (border thickness), 'filter' (for visual effects)."
                         ),
                         value=types.Schema(
                             type="STRING",
-                            description="The new value for the CSS property. E.g., '#ef4444' for red fill, '0.5' for semi-transparent, 'scale(2)' to double size, 'none' to hide."
+                            description="The value for the CSS property. Examples: for scale use '2' (doubles size) or '0.5' (halves size). For fill use '#ef4444'. For opacity use '0.5'. For display use 'none' to hide. For filter use 'blur(3px)' or 'drop-shadow(0 0 10px gold)'."
                         )
                     ),
                     required=["element_id", "css_property", "value"]
@@ -751,16 +751,6 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             # Session resumption: enables auto-reconnect with conversation state preserved
             session_resumption=types.SessionResumptionConfig(
                 handle=handle  # None for new sessions, token string for resuming
-            ),
-            # --- VOICE INTERRUPTION ---
-            # Voice interruption config — balanced sensitivity
-            realtime_input_config=types.RealtimeInputConfig(
-                automatic_activity_detection=types.AutomaticActivityDetection(
-                    start_of_speech_sensitivity="START_SENSITIVITY_LOW",
-                    end_of_speech_sensitivity="END_SENSITIVITY_LOW",  # Don't cut off user too quickly
-                    prefix_padding_ms=200,  # Small buffer before detecting speech start
-                ),
-                activity_handling="START_OF_ACTIVITY_INTERRUPTS",  # Interrupt AI on confirmed user speech
             ),
         )
     

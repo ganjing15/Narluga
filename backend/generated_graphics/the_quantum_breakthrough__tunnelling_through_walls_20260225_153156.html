@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Quantum Breakthrough: Tunnelling Through Walls</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 500" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="background-color: transparent; font-family: system-ui, -apple-system, sans-serif;">
+  <defs>
+    <!-- Pattern for the solid barrier -->
+    <pattern id="wall-pattern" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="#334155" />
+      <path d="M 10 0 L 10 20" stroke="#475569" stroke-width="2" />
+      <path d="M 0 10 L 20 10" stroke="#475569" stroke-width="2" />
+    </pattern>
+
+    <!-- Glowing effect for the quantum wave -->
+    <radialGradient id="quantum-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="#3b82f6" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.8" />
+    </radialGradient>
+
+    <!-- CSS Animations -->
+    <style>
+      @keyframes breathe {
+        0% { transform: scale(0.95); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(0.95); }
+      }
+      .quantum-inner {
+        transform-origin: center;
+        transform-box: fill-box;
+        animation: breathe 3s infinite ease-in-out;
+      }
+      .transition-all {
+        transition: all 0.3s ease;
+      }
+    </style>
+  </defs>
+
+  <!-- Superconducting Circuit Wires -->
+  <path d="M 50 250 L 370 250" stroke="#cbd5e1" stroke-width="24" stroke-linecap="round" />
+  <path d="M 430 250 L 700 250" stroke="#cbd5e1" stroke-width="24" stroke-linecap="round" />
+  
+  <!-- The Josephson Junction (Insulating Barrier) -->
+  <rect x="370" y="100" width="60" height="300" rx="4" fill="url(#wall-pattern)" stroke="#0f172a" stroke-width="4" />
+
+  <!-- The Voltage Meter -->
+  <g id="meter" transform="translate(680, 250)">
+    <!-- Base -->
+    <rect x="-60" y="-120" width="120" height="90" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="3" />
+    <path d="M 0 -30 L 0 0" stroke="#94a3b8" stroke-width="6" />
+    <!-- Screen -->
+    <rect id="meter-screen" x="-50" y="-110" width="100" height="45" rx="4" fill="#0f172a" class="transition-all" />
+    <!-- Text -->
+    <text id="meter-text" x="0" y="-80" fill="#64748b" text-anchor="middle" font-family="monospace" font-size="18" font-weight="bold" class="transition-all">0.0 mV</text>
+    <text x="0" y="-50" fill="#475569" text-anchor="middle" font-size="12" font-weight="bold">VOLTAGE</text>
+  </g>
+
+  <!-- Everyday Object (Normal Ball) -->
+  <g id="obj-normal" class="transition-all" style="opacity: 0;">
+    <circle cx="0" cy="0" r="30" fill="#ef4444" stroke="#b91c1c" stroke-width="4" />
+    <!-- Curve lines on the ball -->
+    <path d="M -20 -20 Q 0 0 -20 20" stroke="#b91c1c" stroke-width="3" fill="none" />
+    <path d="M 20 -20 Q 0 0 20 20" stroke="#b91c1c" stroke-width="3" fill="none" />
+  </g>
+
+  <!-- Macroscopic Quantum System -->
+  <g id="obj-quantum" class="transition-all" style="opacity: 1;">
+    <g id="quantum-inner" class="quantum-inner transition-all">
+      <!-- Outer boundary (Wave Function) -->
+      <circle cx="0" cy="0" r="50" fill="url(#quantum-glow)" stroke="#60a5fa" stroke-width="3" stroke-dasharray="8 4" />
+      
+      <!-- Cooper Pairs (Electrons) -->
+      <circle cx="-20" cy="-15" r="4" fill="#ffffff" />
+      <circle cx="-12" cy="-15" r="4" fill="#ffffff" />
+      <path d="M -20 -15 L -12 -15" stroke="#ffffff" stroke-width="1.5" />
+
+      <circle cx="15" cy="-25" r="4" fill="#ffffff" />
+      <circle cx="23" cy="-25" r="4" fill="#ffffff" />
+      <path d="M 15 -25 L 23 -25" stroke="#ffffff" stroke-width="1.5" />
+
+      <circle cx="-25" cy="15" r="4" fill="#ffffff" />
+      <circle cx="-17" cy="15" r="4" fill="#ffffff" />
+      <path d="M -25 15 L -17 15" stroke="#ffffff" stroke-width="1.5" />
+
+      <circle cx="10" cy="20" r="4" fill="#ffffff" />
+      <circle cx="18" cy="20" r="4" fill="#ffffff" />
+      <path d="M 10 20 L 18 20" stroke="#ffffff" stroke-width="1.5" />
+
+      <circle cx="5" cy="0" r="4" fill="#ffffff" />
+      <circle cx="-3" cy="0" r="4" fill="#ffffff" />
+      <path d="M 5 0 L -3 0" stroke="#ffffff" stroke-width="1.5" />
+
+      <circle cx="-5" cy="-30" r="4" fill="#ffffff" />
+      <circle cx="3" cy="-30" r="4" fill="#ffffff" />
+      <path d="M -5 -30 L 3 -30" stroke="#ffffff" stroke-width="1.5" />
+    </g>
+  </g>
+
+  <!-- Labels (Painter's Model - Rendered Last) -->
+  
+  <!-- Label: Left Side -->
+  <rect x="55" y="65" width="240" height="40" rx="6" fill="rgba(255,255,255,0.85)" />
+  <text x="175" y="90" fill="#0f172a" text-anchor="middle" font-size="15" font-weight="bold">Zero-Voltage State</text>
+
+  <!-- Label: Barrier -->
+  <rect x="315" y="420" width="170" height="40" rx="6" fill="rgba(255,255,255,0.85)" />
+  <text x="400" y="445" fill="#334155" text-anchor="middle" font-size="15" font-weight="bold">Insulating Barrier</text>
+  
+  <!-- Label: Right Side -->
+  <rect x="525" y="65" width="200" height="40" rx="6" fill="rgba(255,255,255,0.85)" />
+  <text x="625" y="90" fill="#0f172a" text-anchor="middle" font-size="15" font-weight="bold">Voltage Generated</text>
+
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Quantum Breakthrough: Tunnelling Through Walls</h2>
+        <p style="color: #64748b;">Use the controls on the right to compare an everyday object with a macroscopic quantum system!</p>
+        <p style="font-size: 13px; margin-top: -8px;"><a href="https://www.nobelprize.org/prizes/physics/2025/popular-information/" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="padding: 24px; display: flex; flex-direction: column; gap: 20px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; width: 100%; height: 100%;">
+    
+    <!-- Mode Selection -->
+    <div>
+      <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Select System Type</h3>
+      <div style="display: flex; gap: 12px;">
+        <button id="btn-normal" onclick="setMode('normal')" style="flex: 1; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; background: #ffffff; color: #0f172a; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+          Everyday Object
+        </button>
+        <button id="btn-quantum" onclick="setMode('quantum')" style="flex: 1; padding: 12px; border: 2px solid #2563eb; border-radius: 8px; background: #eff6ff; color: #1d4ed8; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+          Macroscopic Quantum
+        </button>
+      </div>
+    </div>
+
+    <!-- Timeline Control -->
+    <div>
+      <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Time / Energy Progression</h3>
+      <input type="range" id="timeSlider" min="0" max="100" value="0" oninput="onSliderChange(this.value)" style="width: 100%; cursor: pointer; accent-color: #2563eb;">
+    </div>
+
+    <!-- Play/Pause Button -->
+    <button id="btn-play" onclick="togglePlay()" style="width: 100%; padding: 14px; border: none; border-radius: 8px; background: #2563eb; color: #ffffff; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;">
+      ▶ Play Simulation
+    </button>
+
+    <!-- Info Panel -->
+    <div style="margin-top: auto; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div id="info-title" style="font-weight: 700; font-size: 16px; color: #0f172a; margin-bottom: 8px;">Phase 1: Synchronized State</div>
+      <div id="info-desc" style="font-size: 14px; color: #475569; line-height: 1.6;">Billions of paired electrons act as a single, giant quantum wave. They are stuck in a zero-voltage state.</div>
+    </div>
+
+  </div>
+
+  <script>
+    const state = {
+      mode: `quantum`,
+      progress: 0,
+      isPlaying: false
+    };
+    let intervalId = null;
+
+    function setMode(newMode) {
+      state.mode = newMode;
+      state.progress = 0;
+      document.getElementById(`timeSlider`).value = 0;
+      
+      if (state.isPlaying) {
+        togglePlay(); 
+      }
+      
+      const btnNormal = document.getElementById(`btn-normal`);
+      const btnQuantum = document.getElementById(`btn-quantum`);
+      
+      if (newMode === `normal`) {
+        btnNormal.style.borderColor = `#ef4444`;
+        btnNormal.style.backgroundColor = `#fef2f2`;
+        btnNormal.style.color = `#b91c1c`;
+        
+        btnQuantum.style.borderColor = `#e2e8f0`;
+        btnQuantum.style.backgroundColor = `#ffffff`;
+        btnQuantum.style.color = `#0f172a`;
+      } else {
+        btnNormal.style.borderColor = `#e2e8f0`;
+        btnNormal.style.backgroundColor = `#ffffff`;
+        btnNormal.style.color = `#0f172a`;
+        
+        btnQuantum.style.borderColor = `#2563eb`;
+        btnQuantum.style.backgroundColor = `#eff6ff`;
+        btnQuantum.style.color = `#1d4ed8`;
+      }
+      
+      if (window.sendEventToAI) {
+        window.sendEventToAI(`User switched to ${newMode} mode`);
+      }
+      
+      updateVisuals();
+    }
+
+    function togglePlay() {
+      state.isPlaying = !state.isPlaying;
+      const btn = document.getElementById(`btn-play`);
+      
+      if (state.isPlaying) {
+        btn.innerHTML = `⏸ Pause Simulation`;
+        btn.style.backgroundColor = `#e2e8f0`;
+        btn.style.color = `#0f172a`;
+        
+        if (window.sendEventToAI) {
+          window.sendEventToAI(`User started the simulation`);
+        }
+        
+        intervalId = setInterval(() => {
+          state.progress += 1;
+          if (state.progress > 100) {
+            state.progress = 0;
+          }
+          document.getElementById(`timeSlider`).value = state.progress;
+          updateVisuals();
+        }, 40);
+      } else {
+        btn.innerHTML = `▶ Play Simulation`;
+        btn.style.backgroundColor = `#2563eb`;
+        btn.style.color = `#ffffff`;
+        
+        if (window.sendEventToAI) {
+          window.sendEventToAI(`User paused the simulation`);
+        }
+        
+        clearInterval(intervalId);
+      }
+    }
+
+    function onSliderChange(val) {
+      state.progress = parseInt(val, 10);
+      updateVisuals();
+      
+      if (window.sendEventToAI && state.progress % 25 === 0) {
+        window.sendEventToAI(`User manually scrubbed timeline to ${state.progress}%`);
+      }
+    }
+
+    function updateVisuals() {
+      const p = state.progress;
+      const normalObj = document.getElementById(`obj-normal`);
+      const quantumObj = document.getElementById(`obj-quantum`);
+      const quantumInner = document.getElementById(`quantum-inner`);
+      const meterText = document.getElementById(`meter-text`);
+      const meterScreen = document.getElementById(`meter-screen`);
+      const infoTitle = document.getElementById(`info-title`);
+      const infoDesc = document.getElementById(`info-desc`);
+
+      if (state.mode === `normal`) {
+        quantumObj.style.opacity = `0`;
+        normalObj.style.opacity = `1`;
+        
+        let xPos;
+        let rotation;
+        // Ball bounces off the barrier (barrier left edge is roughly x=340 for the ball center)
+        if (p <= 50) {
+          xPos = 120 + (220 * (p / 50)); 
+          rotation = p * 7.2;
+        } else {
+          xPos = 340 - (220 * ((p - 50) / 50));
+          rotation = 360 - ((p - 50) * 7.2);
+        }
+        
+        normalObj.setAttribute(`transform`, `translate(${xPos}, 250) rotate(${rotation})`);
+        
+        meterText.textContent = `0.0 mV`;
+        meterText.setAttribute(`fill`, `#64748b`);
+        meterScreen.setAttribute(`fill`, `#0f172a`);
+        
+        if (p < 40) {
+          infoTitle.textContent = `Phase 1: Approach`;
+          infoDesc.textContent = `A macroscopic object (like a ball) approaches a solid insulating barrier.`;
+        } else if (p <= 60) {
+          infoTitle.textContent = `Phase 2: Collision`;
+          infoDesc.textContent = `The object lacks the energy to break through the solid barrier, resulting in a collision.`;
+        } else {
+          infoTitle.textContent = `Phase 3: Bounce`;
+          infoDesc.textContent = `The object bounces back entirely. It cannot pass through, so no voltage is generated on the other side.`;
+        }
+
+      } else {
+        quantumObj.style.opacity = `1`;
+        normalObj.style.opacity = `0`;
+        
+        // Quantum system tunnels through (Starts at 120, ends at 600)
+        let xPos = 120 + (480 * (p / 100));
+        let qScale = 1;
+        let qOpacity = 1;
+        
+        // Visual distortion while tunneling through the barrier (Barrier is x=370 to x=430)
+        if (xPos > 320 && xPos < 480) {
+          qOpacity = 0.35;
+          qScale = 0.85;
+        }
+        
+        quantumObj.setAttribute(`transform`, `translate(${xPos}, 250)`);
+        quantumInner.style.opacity = qOpacity.toString();
+        quantumInner.style.transform = `scale(${qScale})`;
+        
+        // Voltage jumps when the wave function materializes on the right
+        if (xPos > 440) {
+          meterText.textContent = `1.5 mV`;
+          meterText.setAttribute(`fill`, `#10b981`); 
+          meterScreen.setAttribute(`fill`, `#022c22`); 
+        } else {
+          meterText.textContent = `0.0 mV`;
+          meterText.setAttribute(`fill`, `#64748b`);
+          meterScreen.setAttribute(`fill`, `#0f172a`);
+        }
+        
+        if (p < 35) {
+          infoTitle.textContent = `Phase 1: Synchronized State`;
+          infoDesc.textContent = `Billions of paired electrons act as a single, giant quantum wave. They are stuck in a zero-voltage state.`;
+        } else if (p <= 65) {
+          infoTitle.textContent = `Phase 2: Macroscopic Tunnelling`;
+          infoDesc.textContent = `Instead of bouncing, the entire macroscopic quantum system magically tunnels straight through the solid barrier!`;
+        } else {
+          infoTitle.textContent = `Phase 3: Voltage Generated!`;
+          infoDesc.textContent = `The system emerges on the other side, successfully escaping its trapped state and instantly generating a measurable voltage.`;
+        }
+      }
+    }
+
+    // Initialize the visuals on load
+    document.addEventListener(`DOMContentLoaded`, updateVisuals);
+  </script>
+    </div>
+</body>
+</html>
