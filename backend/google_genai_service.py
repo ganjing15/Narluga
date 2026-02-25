@@ -484,47 +484,90 @@ def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
         return "No controls information available."
     try:
         soup = BeautifulSoup(full_html, "html.parser")
-        controls_panel = soup.find(id="controls-panel") or soup.find("div", class_="controls-container")
-        if not controls_panel:
-            return "No controls panel found."
+        
+        # Try to find a specific controls panel first, then fall back to entire HTML
+        search_root = (
+            soup.find(id="controls-panel")
+            or soup.find("div", class_="controls-container")
+            or soup.find("div", class_="controls-area")
+            or soup.find("div", class_="controls")
+        )
+        
+        # If no specific panel found, parse just the controls_html if available
+        if not search_root and controls_html.strip():
+            controls_soup = BeautifulSoup(controls_html, "html.parser")
+            search_root = controls_soup  # Use entire controls HTML as search root
+        
+        # Last resort: search the entire document
+        if not search_root:
+            search_root = soup
         
         items = []
         # Find buttons — detect toggle/play-pause buttons
-        for btn in controls_panel.find_all("button"):
+        for btn in search_root.find_all("button"):
             text = btn.get_text(strip=True)
             if text:
                 onclick = btn.get("onclick", "")
                 text_lower = text.lower()
                 # Detect toggle/play-pause buttons
-                is_toggle = any(kw in onclick.lower() for kw in ["toggleplay", "toggle", "isplaying", "autoplay", "auto_play"])
-                has_play_text = any(kw in text_lower for kw in ["play", "start", "auto", "▶"])
-                has_pause_text = any(kw in text_lower for kw in ["pause", "stop", "⏸"])
+                is_toggle = any(kw in onclick.lower() for kw in ["toggleplay", "toggle", "isplaying", "autoplay", "auto_play", "toggleflight", "toggleanim"])
+                has_play_text = any(kw in text_lower for kw in ["play", "start", "auto", "▶", "resume", "begin", "launch"])
+                has_pause_text = any(kw in text_lower for kw in ["pause", "stop", "⏸", "halt", "‖"])
                 if is_toggle or has_play_text or has_pause_text:
-                    items.append(f'- Button (toggle): "{text}" — toggles auto-play on/off. Click once to start auto-playing, click again to pause.')
+                    items.append(f'- Button (toggle): "{text}" — toggles play/pause. The label shows what the NEXT action will be (opposite of current state).')
                 else:
-                    items.append(f"- Button: \"{text}\"")
+                    items.append(f'- Button: "{text}"')
         # Find sliders/range inputs
-        for inp in controls_panel.find_all("input"):
+        for inp in search_root.find_all("input"):
             inp_type = inp.get("type", "text")
-            label = inp.get("aria-label") or inp.get("title") or inp.get("id") or inp_type
-            items.append(f"- Input ({inp_type}): \"{label}\"")
+            # Build a descriptive label from multiple sources
+            label = inp.get("aria-label") or inp.get("title") or ""
+            if not label:
+                # Check for a nearby label element
+                inp_id = inp.get("id", "")
+                if inp_id:
+                    label_el = search_root.find("label", attrs={"for": inp_id})
+                    if label_el:
+                        label = label_el.get_text(strip=True)
+            if not label:
+                # Check preceding sibling text or parent text
+                parent = inp.parent
+                if parent:
+                    parent_text = parent.get_text(strip=True)
+                    # Remove the input's own value from parent text
+                    inp_val = inp.get("value", "")
+                    clean_text = parent_text.replace(inp_val, "").strip()[:60]
+                    if clean_text:
+                        label = clean_text
+            if not label:
+                label = inp.get("id") or inp_type
+            
+            if inp_type == "range":
+                min_val = inp.get("min", "?")
+                max_val = inp.get("max", "?")
+                cur_val = inp.get("value", "?")
+                items.append(f'- Slider: "{label}" (range: {min_val}–{max_val}, current: {cur_val}). NOTE: You cannot drag sliders directly — tell the user to adjust it manually.')
+            else:
+                items.append(f'- Input ({inp_type}): "{label}"')
         # Find select dropdowns
-        for sel in controls_panel.find_all("select"):
+        for sel in search_root.find_all("select"):
             label = sel.get("aria-label") or sel.get("id") or "dropdown"
             options = [opt.get_text(strip=True) for opt in sel.find_all("option")]
-            items.append(f"- Dropdown: \"{label}\" with options: {', '.join(options)}")
+            items.append(f'- Dropdown: "{label}" with options: {", ".join(options)}')
         # Find clickable divs/spans with onclick
-        for el in controls_panel.find_all(attrs={"onclick": True}):
+        for el in search_root.find_all(attrs={"onclick": True}):
             text = el.get_text(strip=True)[:60]
             if text and not el.name == "button":
-                items.append(f"- Clickable: \"{text}\"")
+                items.append(f'- Clickable: "{text}"')
         
         if not items:
             # Fallback: just get visible text blocks
-            text_content = controls_panel.get_text(separator="\n", strip=True)
+            text_content = search_root.get_text(separator="\n", strip=True)
             return f"Controls panel text content:\n{text_content[:500]}"
         
-        return "\n".join(items)
+        result = "\n".join(items)
+        print(f"[Controls Inventory] Detected {len(items)} control(s):\n{result}")
+        return result
     except Exception as e:
         return f"Could not parse controls: {e}"
 
@@ -568,6 +611,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     11. CURSOR AWARENESS: You will receive "[Cursor position: ...]" messages telling you where the user's cursor is on the diagram. When you see these, briefly acknowledge what they're pointing at (e.g., "I see you're looking at the Database node — that's where...") and offer a short explanation. Don't repeat the same explanation if they stay on the same element. Don't interrupt yourself mid-sentence to acknowledge cursor moves.
     12. PLAY/PAUSE STATE: When you receive an interaction event saying a toggle button was clicked, pay attention to the RESULTING STATE reported in the event (e.g., "now PLAYING" or "now PAUSED"). The button label shows what the NEXT action will be, which is the OPPOSITE of the current state. For example, a button that says "▶ Play" means the animation is currently PAUSED. A button that says "⏸ Pause" means it is currently PLAYING. After auto-play starts, briefly narrate what is animating on screen.
     13. AUTO-PLAY CAPABILITY: If a toggle button exists in <available_controls> (e.g., "▶ Auto-Process Data"), you CAN and SHOULD use click_element to start or stop it when the user asks. Just use the keyword from the button text.
+    14. SLIDERS/RANGE INPUTS: If a slider/range input exists in <available_controls>, you CANNOT drag it programmatically. Instead, tell the user to adjust it manually and describe what it controls.
     
     TOOL TIPS:
     - Call ONE tool at a time, not multiple simultaneously.
