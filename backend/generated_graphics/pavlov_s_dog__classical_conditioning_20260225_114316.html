@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pavlov's Dog: Classical Conditioning</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <style>
+    @keyframes flow {
+      from { stroke-dashoffset: 24; }
+      to { stroke-dashoffset: 0; }
+    }
+    .path-flow {
+      stroke-dasharray: 12;
+      animation: flow 0.8s linear infinite;
+      transition: all 0.4s ease;
+    }
+    @keyframes ring {
+      0% { transform: rotate(0deg); }
+      15% { transform: rotate(15deg); }
+      30% { transform: rotate(-15deg); }
+      45% { transform: rotate(10deg); }
+      60% { transform: rotate(-10deg); }
+      75% { transform: rotate(5deg); }
+      100% { transform: rotate(0deg); }
+    }
+    .ringing {
+      animation: ring 1.5s ease-in-out infinite;
+    }
+    @keyframes drip {
+      0% { opacity: 0; transform: translateY(0) scale(0.8); }
+      30% { opacity: 1; transform: translateY(15px) scale(1); }
+      70% { opacity: 1; transform: translateY(35px) scale(1); }
+      100% { opacity: 0; transform: translateY(50px) scale(0.5); }
+    }
+    .drip-drop {
+      animation: drip 2s infinite;
+    }
+    .drip-2 { animation-delay: 0.6s; }
+    .drip-3 { animation-delay: 1.2s; }
+    
+    .label-bg {
+      stroke: #f8fafc;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      fill: none;
+    }
+    .label-fg {
+      fill: #0f172a;
+    }
+    .fade-transition {
+      transition: opacity 0.4s ease, filter 0.4s ease, stroke 0.4s ease;
+    }
+  </style>
+
+  <svg viewBox="0 0 800 400" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="background-color: transparent; font-family: system-ui, sans-serif;">
+    <defs>
+      <!-- Arrowheads for neural pathways -->
+      <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+      </marker>
+      <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+      </marker>
+      <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b5cf6" />
+      </marker>
+      <marker id="arrow-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#cbd5e1" />
+      </marker>
+    </defs>
+
+    <!-- Neural Pathways (Drawn Behind Dog) -->
+    <path id="bell-path" class="path-flow fade-transition" d="M 210 140 C 350 140, 450 180, 560 180" fill="none" stroke="#3b82f6" stroke-width="4" opacity="0.1" marker-end="url(#arrow-gray)" />
+    <path id="food-path" class="path-flow fade-transition" d="M 210 260 C 350 260, 450 180, 560 180" fill="none" stroke="#ef4444" stroke-width="4" opacity="1" marker-end="url(#arrow-red)" />
+    <path id="brain-drool-path" class="path-flow fade-transition" d="M 590 204 C 590 240, 530 240, 490 240" fill="none" stroke="#ef4444" stroke-width="4" opacity="1" marker-end="url(#arrow-red)" />
+
+    <!-- Dog Anatomy -->
+    <g id="dog-group">
+      <!-- Back Ear -->
+      <path d="M 500 130 C 520 100, 550 110, 540 140 Z" fill="#b45309" />
+      <!-- Head Base -->
+      <rect x="490" y="130" width="140" height="130" rx="60" fill="#fcd34d" />
+      <!-- Snout -->
+      <rect x="440" y="180" width="100" height="60" rx="30" fill="#fef3c7" />
+      <!-- Nose -->
+      <circle cx="445" cy="195" r="12" fill="#1e293b" />
+      <!-- Front Ear -->
+      <path d="M 580 140 C 620 140, 640 220, 610 240 C 580 260, 560 200, 570 140 Z" fill="#d97706" />
+      <!-- Eye -->
+      <ellipse cx="510" cy="165" rx="6" ry="10" fill="#1e293b" />
+      <circle cx="508" cy="162" r="2" fill="#ffffff" />
+      <!-- Mouth -->
+      <path d="M 460 225 Q 480 235, 510 225" fill="none" stroke="#1e293b" stroke-width="4" stroke-linecap="round" />
+      <!-- Collar -->
+      <rect x="530" y="240" width="80" height="20" rx="5" fill="#ef4444" transform="rotate(10 570 250)" />
+      <circle cx="560" cy="265" r="10" fill="#fbbf24" />
+    </g>
+
+    <!-- Brain / Learning Node -->
+    <g id="brain-group" class="fade-transition" transform="translate(590, 180)">
+      <circle id="brain-glow" cx="0" cy="0" r="28" fill="#ffffff" opacity="0.8" filter="drop-shadow(0px 0px 8px #ef4444)" class="fade-transition" />
+      <circle cx="0" cy="0" r="24" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3" />
+      <text id="brain-text" x="0" y="5" font-size="13" font-weight="800" text-anchor="middle" fill="#64748b" class="fade-transition">INSTINCT</text>
+    </g>
+
+    <!-- Stimulus 1: Bell -->
+    <g id="bell-container" class="fade-transition" style="opacity: 0.3;">
+      <g id="bell-group" style="transform-origin: 160px 110px;">
+        <!-- Handle -->
+        <rect x="155" y="90" width="10" height="20" fill="#94a3b8" rx="3" />
+        <!-- Dome -->
+        <path d="M 160 110 C 130 110, 120 150, 120 160 L 200 160 C 200 150, 190 110, 160 110 Z" fill="#fbbf24" />
+        <rect x="115" y="155" width="90" height="10" rx="5" fill="#f59e0b" />
+        <!-- Clapper -->
+        <circle cx="160" cy="170" r="6" fill="#ca8a04" />
+        
+        <!-- Sound Waves -->
+        <g id="bell-waves" opacity="0" class="fade-transition">
+          <path d="M 105 120 Q 90 135, 105 150" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" />
+          <path d="M 95 110 Q 75 135, 95 160" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" />
+          <path d="M 215 120 Q 230 135, 215 150" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" />
+          <path d="M 225 110 Q 245 135, 225 160" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" />
+        </g>
+      </g>
+      <!-- Label -->
+      <g transform="translate(160, 205)">
+        <text id="bell-bg" class="label-bg" text-anchor="middle" font-size="14" font-weight="700">Neutral Stimulus (Idle)</text>
+        <text id="bell-fg" class="label-fg" text-anchor="middle" font-size="14" font-weight="700" fill="#64748b">Neutral Stimulus (Idle)</text>
+      </g>
+    </g>
+
+    <!-- Stimulus 2: Food -->
+    <g id="food-container" class="fade-transition" style="opacity: 1;">
+      <g id="food-group">
+        <!-- Kibble Mound -->
+        <path d="M 130 250 Q 160 210, 190 250 Z" fill="#b45309" />
+        <path d="M 145 240 Q 160 200, 175 240 Z" fill="#92400e" />
+        <!-- Bowl -->
+        <path d="M 120 250 L 130 290 Q 160 300, 190 290 L 200 250 Z" fill="#ef4444" />
+        <ellipse cx="160" cy="250" rx="42" ry="12" fill="#dc2626" />
+      </g>
+      <!-- Label -->
+      <g transform="translate(160, 325)">
+        <text id="food-bg" class="label-bg" text-anchor="middle" font-size="14" font-weight="700">Unconditioned Stimulus</text>
+        <text id="food-fg" class="label-fg" text-anchor="middle" font-size="14" font-weight="700" fill="#ef4444">Unconditioned Stimulus</text>
+      </g>
+    </g>
+
+    <!-- Response: Drool & Question Mark -->
+    <g id="response-container">
+      <g id="drool-group" class="fade-transition" opacity="1">
+        <path class="drip-drop" d="M 470 230 Q 475 245 470 250 Q 465 245 470 230" fill="#38bdf8" />
+        <path class="drip-drop drip-2" d="M 485 235 Q 490 250 485 255 Q 480 250 485 235" fill="#38bdf8" />
+        <path class="drip-drop drip-3" d="M 500 225 Q 505 240 500 245 Q 495 240 500 225" fill="#38bdf8" />
+      </g>
+      <g id="mouth-q-group" class="fade-transition" opacity="0">
+        <text x="480" y="270" font-size="32" font-weight="800" fill="#94a3b8" text-anchor="middle">?</text>
+      </g>
+      <!-- Label -->
+      <g transform="translate(485, 325)">
+        <text id="resp-bg" class="label-bg" text-anchor="middle" font-size="14" font-weight="700">Unconditioned Response</text>
+        <text id="resp-fg" class="label-fg" text-anchor="middle" font-size="14" font-weight="700" fill="#ef4444">Unconditioned Response</text>
+      </g>
+    </g>
+
+  </svg>
+    </div>
+    <div class="controls-container">
+        <h2>Pavlov's Dog: Classical Conditioning</h2>
+        <p style="color: #64748b;">Use the interactive controls on the right to train the dog and explore the four phases of classical conditioning.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+    #controls-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .grid-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .phase-btn {
+      padding: 14px 12px;
+      border-radius: 10px;
+      border: 2px solid #e2e8f0;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .phase-btn:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+    .phase-btn.active {
+      background: #2563eb;
+      border-color: #1d4ed8;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    }
+    .phase-btn .subtitle {
+      font-size: 11px;
+      opacity: 0.8;
+      font-weight: 500;
+    }
+    .play-btn {
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      background: #10b981;
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+      margin-top: 4px;
+    }
+    .play-btn:hover {
+      background: #059669;
+    }
+    .play-btn.playing {
+      background: #ef4444;
+    }
+    .play-btn.playing:hover {
+      background: #dc2626;
+    }
+    #info-panel {
+      flex-grow: 1;
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .info-tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    #info-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+    #info-desc {
+      font-size: 14px;
+      color: #475569;
+      line-height: 1.6;
+    }
+  </style>
+
+  <div id="controls-wrapper">
+    <div class="grid-btns">
+      <button class="phase-btn active" id="btn-1" onclick="setPhase(1)">
+        <span>Phase 1</span>
+        <span class="subtitle">Food Only</span>
+      </button>
+      <button class="phase-btn" id="btn-2" onclick="setPhase(2)">
+        <span>Phase 2</span>
+        <span class="subtitle">Bell Only</span>
+      </button>
+      <button class="phase-btn" id="btn-3" onclick="setPhase(3)">
+        <span>Phase 3</span>
+        <span class="subtitle">Conditioning</span>
+      </button>
+      <button class="phase-btn" id="btn-4" onclick="setPhase(4)">
+        <span>Phase 4</span>
+        <span class="subtitle">Bell Learned</span>
+      </button>
+    </div>
+
+    <button id="play-btn" class="play-btn" onclick="togglePlay()">▶ Auto-Play</button>
+
+    <div id="info-panel">
+      <div>
+        <span id="info-tag" class="info-tag" style="background: #fee2e2; color: #b91c1c;">Natural Reflex</span>
+      </div>
+      <div id="info-title">Before Conditioning: Food</div>
+      <div id="info-desc">
+        The dog naturally drools when presented with food. No learning is required. Food is the <strong>Unconditioned Stimulus (UCS)</strong>, and drooling is the <strong>Unconditioned Response (UCR)</strong>.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      phase: 1,
+      isPlaying: false,
+      intervalId: null
+    };
+
+    const config = {
+      1: {
+        tagText: `Natural Reflex`,
+        tagBg: `#fee2e2`, tagColor: `#b91c1c`,
+        title: `Phase 1: Before Conditioning (Food)`,
+        desc: `The dog naturally drools when presented with food. No learning is required. Food is the <strong>Unconditioned Stimulus (UCS)</strong>, and drooling is the <strong>Unconditioned Response (UCR)</strong>.`,
+        bellOp: 0.3, foodOp: 1,
+        bellRing: false, droolOp: 1, mouthQ: 0,
+        bellPathOp: 0.1, foodPathOp: 1, droolPathOp: 1,
+        bellPathColor: `#3b82f6`, droolPathColor: `#ef4444`,
+        bellPathMarker: `url(#arrow-gray)`, droolPathMarker: `url(#arrow-red)`,
+        brainText: `INSTINCT`, brainColor: `#64748b`, brainGlow: `#ef4444`,
+        labels: {
+          bell: { t: `Neutral Stimulus (Idle)`, c: `#64748b` },
+          food: { t: `Unconditioned Stimulus`, c: `#ef4444` },
+          resp: { t: `Unconditioned Response`, c: `#ef4444` }
+        }
+      },
+      2: {
+        tagText: `No Meaning`,
+        tagBg: `#f1f5f9`, tagColor: `#475569`,
+        title: `Phase 2: Before Conditioning (Bell)`,
+        desc: `A ringing bell means nothing to the dog. The signal stops at the brain, causing no drool. The bell is a <strong>Neutral Stimulus (NS)</strong>.`,
+        bellOp: 1, foodOp: 0.3,
+        bellRing: true, droolOp: 0, mouthQ: 1,
+        bellPathOp: 1, foodPathOp: 0.1, droolPathOp: 0,
+        bellPathColor: `#3b82f6`, droolPathColor: `#ef4444`,
+        bellPathMarker: `url(#arrow-blue)`, droolPathMarker: `url(#arrow-red)`,
+        brainText: `UNKNOWN ?`, brainColor: `#64748b`, brainGlow: `transparent`,
+        labels: {
+          bell: { t: `Neutral Stimulus (Active)`, c: `#3b82f6` },
+          food: { t: `Inactive`, c: `#64748b` },
+          resp: { t: `No Response`, c: `#64748b` }
+        }
+      },
+      3: {
+        tagText: `Active Learning`,
+        tagBg: `#f3e8ff`, tagColor: `#7e22ce`,
+        title: `Phase 3: During Conditioning`,
+        desc: `We ring the bell AND show the food. The dog drools at the food. Deep in the brain, a new neural link forms, associating the <strong>Blue Bell</strong> with the <strong>Red Food</strong>.`,
+        bellOp: 1, foodOp: 1,
+        bellRing: true, droolOp: 1, mouthQ: 0,
+        bellPathOp: 1, foodPathOp: 1, droolPathOp: 1,
+        bellPathColor: `#3b82f6`, droolPathColor: `#a855f7`,
+        bellPathMarker: `url(#arrow-blue)`, droolPathMarker: `url(#arrow-purple)`,
+        brainText: `LEARNING...`, brainColor: `#7e22ce`, brainGlow: `#a855f7`,
+        labels: {
+          bell: { t: `Neutral Stimulus ➔ CS`, c: `#3b82f6` },
+          food: { t: `Unconditioned Stimulus`, c: `#ef4444` },
+          resp: { t: `Unconditioned Response`, c: `#ef4444` }
+        }
+      },
+      4: {
+        tagText: `Conditioned Reflex`,
+        tagBg: `#e0e7ff`, tagColor: `#4338ca`,
+        title: `Phase 4: After Conditioning`,
+        desc: `The food is gone, but the newly formed neural pathway remains! Now, just the bell makes the dog drool. The bell has become a <strong>Conditioned Stimulus (CS)</strong> triggering a <strong>Conditioned Response (CR)</strong>.`,
+        bellOp: 1, foodOp: 0.3,
+        bellRing: true, droolOp: 1, mouthQ: 0,
+        bellPathOp: 1, foodPathOp: 0.1, droolPathOp: 1,
+        bellPathColor: `#a855f7`, droolPathColor: `#a855f7`,
+        bellPathMarker: `url(#arrow-purple)`, droolPathMarker: `url(#arrow-purple)`,
+        brainText: `ASSOCIATED!`, brainColor: `#7e22ce`, brainGlow: `#a855f7`,
+        labels: {
+          bell: { t: `Conditioned Stimulus (CS)`, c: `#a855f7` },
+          food: { t: `Inactive`, c: `#64748b` },
+          resp: { t: `Conditioned Response (CR)`, c: `#a855f7` }
+        }
+      }
+    };
+
+    function setPhase(p) {
+      state.phase = p;
+      if (window.sendEventToAI) {
+        window.sendEventToAI(`User transitioned to phase ${p}`);
+      }
+      applyPhase();
+    }
+
+    function togglePlay() {
+      state.isPlaying = !state.isPlaying;
+      const playBtn = document.getElementById(`play-btn`);
+      if (state.isPlaying) {
+        playBtn.innerHTML = `⏸ Pause Auto-Play`;
+        playBtn.classList.add(`playing`);
+        if (window.sendEventToAI) window.sendEventToAI(`User started auto-play (transitioning to animated state)`);
+        
+        state.intervalId = setInterval(() => {
+          state.phase = state.phase >= 4 ? 1 : state.phase + 1;
+          applyPhase();
+        }, 4000);
+      } else {
+        playBtn.innerHTML = `▶ Auto-Play`;
+        playBtn.classList.remove(`playing`);
+        if (window.sendEventToAI) window.sendEventToAI(`User paused auto-play (transitioning to manual state)`);
+        clearInterval(state.intervalId);
+      }
+    }
+
+    function applyPhase() {
+      const p = state.phase;
+      const c = config[p];
+
+      // Update UI Buttons
+      for (let i = 1; i <= 4; i++) {
+        const btn = document.getElementById(`btn-${i}`);
+        if(i === p) btn.classList.add(`active`);
+        else btn.classList.remove(`active`);
+      }
+
+      // Update Info Panel
+      document.getElementById(`info-tag`).textContent = c.tagText;
+      document.getElementById(`info-tag`).style.background = c.tagBg;
+      document.getElementById(`info-tag`).style.color = c.tagColor;
+      document.getElementById(`info-title`).textContent = c.title;
+      document.getElementById(`info-desc`).innerHTML = c.desc;
+
+      // Update SVG Opacities
+      document.getElementById(`bell-container`).style.opacity = c.bellOp;
+      document.getElementById(`food-container`).style.opacity = c.foodOp;
+      document.getElementById(`drool-group`).style.opacity = c.droolOp;
+      document.getElementById(`mouth-q-group`).style.opacity = c.mouthQ;
+      
+      // Update Bell Ringing Animation
+      const bellGroup = document.getElementById(`bell-group`);
+      const bellWaves = document.getElementById(`bell-waves`);
+      if (c.bellRing) {
+        bellGroup.classList.add(`ringing`);
+        bellWaves.setAttribute(`opacity`, `1`);
+      } else {
+        bellGroup.classList.remove(`ringing`);
+        bellWaves.setAttribute(`opacity`, `0`);
+      }
+
+      // Update Paths
+      const bPath = document.getElementById(`bell-path`);
+      const fPath = document.getElementById(`food-path`);
+      const dPath = document.getElementById(`brain-drool-path`);
+      
+      bPath.style.opacity = c.bellPathOp;
+      fPath.style.opacity = c.foodPathOp;
+      dPath.style.opacity = c.droolPathOp;
+
+      bPath.setAttribute(`stroke`, c.bellPathColor);
+      bPath.setAttribute(`marker-end`, c.bellPathMarker);
+      dPath.setAttribute(`stroke`, c.droolPathColor);
+      dPath.setAttribute(`marker-end`, c.droolPathMarker);
+
+      // Update Brain
+      const bText = document.getElementById(`brain-text`);
+      bText.textContent = c.brainText;
+      bText.setAttribute(`fill`, c.brainColor);
+      document.getElementById(`brain-glow`).style.filter = `drop-shadow(0px 0px 8px ${c.brainGlow})`;
+
+      // Update Text Labels
+      const setLabel = (id, text, color) => {
+        document.getElementById(`${id}-bg`).textContent = text;
+        const fg = document.getElementById(`${id}-fg`);
+        fg.textContent = text;
+        fg.setAttribute(`fill`, color);
+      };
+      
+      setLabel(`bell`, c.labels.bell.t, c.labels.bell.c);
+      setLabel(`food`, c.labels.food.t, c.labels.food.c);
+      setLabel(`resp`, c.labels.resp.t, c.labels.resp.c);
+    }
+
+    // Initialize first state
+    applyPhase();
+  </script>
+    </div>
+</body>
+</html>

@@ -380,8 +380,11 @@ function App() {
       }
 
       ws.onclose = (event) => {
-        if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
-          setError(`Connection lost (${event.code}).`)
+        if (event.code === 1000 && event.reason) {
+          // Clean server-side close with a reason — show it as info, not error
+          setStatusMessage(event.reason)
+        } else if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
+          setError(`Connection lost (${event.code}). Click 'Start Live Conversation' to reconnect.`)
         }
         disconnect()
       }
@@ -715,8 +718,10 @@ function App() {
       }
 
       ws.onclose = (event) => {
-        if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
-          setError(`Connection lost (${event.code}).`)
+        if (event.code === 1000 && event.reason) {
+          setStatusMessage(event.reason)
+        } else if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
+          setError(`Connection lost (${event.code}). Click 'Start Live Conversation' to reconnect.`)
         }
         disconnect()
       }
@@ -1182,20 +1187,51 @@ function App() {
 
     // --- INTERACTION TRACKING ---
     // Automatically tell the parent when the user clicks a button or changes an input
-    ['click', 'change'].forEach(eventType => {
-      document.addEventListener(eventType, (e) => {
-        let target = e.target;
-        // Find the closest interactive element (button, a, input, select)
-        const interactiveEl = target.closest('button, a, input, select, [role="button"]');
-        if (!interactiveEl) return;
-        
-        let label = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
-        // If it's a structural click that happened to hit a giant container without a specific label, ignore it
-        if (!label || label.length > 50) return;
-        
-        let actionDesc = eventType === 'click' ? '"' + label + '" clicked' : '"' + label + '" changed to "' + interactiveEl.value + '"';
+    // For clicks: we defer label capture by 50ms so the button's onclick handler
+    // has time to update the text (e.g., "▶ Play" → "⏸ Pause") before we read it.
+    document.addEventListener('click', (e) => {
+      let target = e.target;
+      const interactiveEl = target.closest('button, a, input, select, [role="button"]');
+      if (!interactiveEl) return;
+
+      // Capture the BEFORE label immediately
+      let beforeLabel = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
+      if (!beforeLabel || beforeLabel.length > 50) return;
+
+      // Defer to capture the AFTER label (post-click handler update)
+      setTimeout(() => {
+        let afterLabel = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
+        let actionDesc = '';
+
+        // Detect if this is a toggle button (label changed after click)
+        if (afterLabel && afterLabel !== beforeLabel) {
+          // Toggle detected — report resulting state
+          const afterLower = afterLabel.toLowerCase();
+          const isNowPaused = afterLower.includes('play') || afterLower.includes('start') || afterLower.includes('▶');
+          const isNowPlaying = afterLower.includes('pause') || afterLower.includes('stop') || afterLower.includes('⏸');
+          if (isNowPlaying) {
+            actionDesc = 'clicked "' + beforeLabel + '" — animation is now PLAYING (button now shows "' + afterLabel + '")';
+          } else if (isNowPaused) {
+            actionDesc = 'clicked "' + beforeLabel + '" — animation is now PAUSED (button now shows "' + afterLabel + '")';
+          } else {
+            actionDesc = 'clicked "' + beforeLabel + '" (button changed to "' + afterLabel + '")';
+          }
+        } else {
+          actionDesc = '"' + (afterLabel || beforeLabel) + '" clicked';
+        }
+
         window.parent.postMessage({ type: 'INTERACTION_EVENT', payload: actionDesc }, '*');
-      });
+      }, 50);
+    });
+
+    document.addEventListener('change', (e) => {
+      let target = e.target;
+      const interactiveEl = target.closest('input, select');
+      if (!interactiveEl) return;
+      let label = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
+      if (!label || label.length > 50) return;
+      let actionDesc = '"' + label + '" changed to "' + interactiveEl.value + '"';
+      window.parent.postMessage({ type: 'INTERACTION_EVENT', payload: actionDesc }, '*');
     });
   </script>
 

@@ -489,11 +489,20 @@ def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
             return "No controls panel found."
         
         items = []
-        # Find buttons
+        # Find buttons — detect toggle/play-pause buttons
         for btn in controls_panel.find_all("button"):
             text = btn.get_text(strip=True)
             if text:
-                items.append(f"- Button: \"{text}\"")
+                onclick = btn.get("onclick", "")
+                text_lower = text.lower()
+                # Detect toggle/play-pause buttons
+                is_toggle = any(kw in onclick.lower() for kw in ["toggleplay", "toggle", "isplaying", "autoplay", "auto_play"])
+                has_play_text = any(kw in text_lower for kw in ["play", "start", "auto", "▶"])
+                has_pause_text = any(kw in text_lower for kw in ["pause", "stop", "⏸"])
+                if is_toggle or has_play_text or has_pause_text:
+                    items.append(f'- Button (toggle): "{text}" — toggles auto-play on/off. Click once to start auto-playing, click again to pause.')
+                else:
+                    items.append(f"- Button: \"{text}\"")
         # Find sliders/range inputs
         for inp in controls_panel.find_all("input"):
             inp_type = inp.get("type", "text")
@@ -557,6 +566,8 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     9. Keep responses concise and conversational. You're a tutor, not a lecturer.
     10. NEVER mention or reference buttons, controls, or UI elements that don't appear in <available_controls>. If a control doesn't exist, tell the user what IS available instead.
     11. CURSOR AWARENESS: You will receive "[Cursor position: ...]" messages telling you where the user's cursor is on the diagram. When you see these, briefly acknowledge what they're pointing at (e.g., "I see you're looking at the Database node — that's where...") and offer a short explanation. Don't repeat the same explanation if they stay on the same element. Don't interrupt yourself mid-sentence to acknowledge cursor moves.
+    12. PLAY/PAUSE STATE: When you receive an interaction event saying a toggle button was clicked, pay attention to the RESULTING STATE reported in the event (e.g., "now PLAYING" or "now PAUSED"). The button label shows what the NEXT action will be, which is the OPPOSITE of the current state. For example, a button that says "▶ Play" means the animation is currently PAUSED. A button that says "⏸ Pause" means it is currently PLAYING. After auto-play starts, briefly narrate what is animating on screen.
+    13. AUTO-PLAY CAPABILITY: If a toggle button exists in <available_controls> (e.g., "▶ Auto-Process Data"), you CAN and SHOULD use click_element to start or stop it when the user asks. Just use the keyword from the button text.
     
     TOOL TIPS:
     - Call ONE tool at a time, not multiple simultaneously.
@@ -676,15 +687,36 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     # Use the specific audio-preview model
     model = "gemini-2.5-flash-native-audio-preview-12-2025"
     
-    config = types.LiveConnectConfig(
-        response_modalities=["AUDIO"],
-        system_instruction=types.Content(parts=[types.Part.from_text(text=system_instruction)]),
-        tools=agent_tools
-    )
+    # Session resumption state
+    resumption_handle = None
     
+    def _build_config(handle=None):
+        """Build LiveConnectConfig with optional resumption handle."""
+        return types.LiveConnectConfig(
+            response_modalities=["AUDIO"],
+            system_instruction=types.Content(parts=[types.Part.from_text(text=system_instruction)]),
+            tools=agent_tools,
+            # --- STABILITY FEATURES ---
+            # Context window compression: prevents context overflow from hover/interaction events
+            context_window_compression=types.ContextWindowCompressionConfig(
+                sliding_window=types.SlidingWindow(),
+                trigger_tokens=50000  # Compress at ~80% of typical limit
+            ),
+            # Session resumption: enables auto-reconnect with conversation state preserved
+            session_resumption=types.SessionResumptionConfig(
+                handle=handle  # None for new sessions, token string for resuming
+            ),
+        )
+    
+    config = _build_config()
     
     # WebSocket collision lock to prevent Starlette RuntimeError
     ws_lock = asyncio.Lock()
+    
+    # Shared mutable state for the session & reconnection signaling
+    session_holder = {"session": None, "alive": True}
+    go_away_event = asyncio.Event()  # Set when server sends GoAway
+    client_disconnected = asyncio.Event()  # Set when frontend WS closes
     
     # --------------------------------------------------------------------------------
     # 2. WAIT FOR USER TO START PRESENTATION
@@ -709,231 +741,346 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     await websocket.send_json({"type": "phase", "phase": "conversation"})
 
     # --------------------------------------------------------------------------------
-    # 3. Phase 2: Live Presenter (Connect to Gemini Live API)
+    # 3. Phase 2: Live Presenter — Reconnection Loop
     # --------------------------------------------------------------------------------
-    print("[Gemini] Attempting to connect to Live API...")
-    async with client.aio.live.connect(model=model, config=config) as session:
-        print("[Gemini] Connected to Live API")
-        
-        # Note: We intentionally do NOT flush pre-session initial_events here.
-        # Sending queued events before the welcome causes Gemini to re-introduce itself
-        # a second time after the overview. Those events are stale anyway.
-        if initial_events:
-            print(f"[Gemini] Dropping {len(initial_events)} stale pre-session event(s) to prevent double overview.")
-                 
-        async with ws_lock:
-            await websocket.send_json({"type": "ready"})
-        
-        # Kick off the conversation — send a prompt so the AI starts talking immediately
-        # CRITICAL: We wait 1.2 seconds to allow the microphone connection to stabilize.
-        # If we send the text prompt the exact millisecond the mic connects, the initial burst
-        # of hardware static will trigger Gemini's Voice Activity Detection (VAD) and abort the welcome message!
+    MAX_RECONNECT_ATTEMPTS = 3
+    reconnect_count = 0
+    is_first_connection = True
+
+    while session_holder["alive"] and not client_disconnected.is_set():
+        # Build config (with resumption handle for reconnections)
+        if not is_first_connection and resumption_handle:
+            config = _build_config(handle=resumption_handle)
+            print(f"[Gemini] Reconnecting with resumption handle...")
+        elif not is_first_connection:
+            print("[Gemini] No resumption handle available, cannot reconnect.")
+            break
+
         try:
-            await asyncio.sleep(1.2)
-            await session.send_client_content(
-                turns=[types.Content(parts=[types.Part.from_text(
-                    text="The user just joined the session. Begin your welcome and overview now."
-                )])]
-            )
-        except Exception as e:
-            print(f"[Gemini] Error sending initial prompt: {e}")
-        
-        async def receive_from_client_and_send_to_gemini():
-            try:
-                while True:
-                    data = await websocket.receive_text()
-                    payload = json.loads(data)
-                    
-                    if "realtimeInput" in payload:
-                        chunk = payload["realtimeInput"]["mediaChunks"][0]
-                        b64_data = chunk["data"]
-                        mime_type = chunk["mimeType"]
-                        raw_bytes = base64.b64decode(b64_data)
-                        
-                        try:
-                            await session.send_realtime_input(
-                                media=types.Blob(mime_type=mime_type, data=raw_bytes)
-                            )
-                        except Exception as inner_e:
-                            err_str = str(inner_e)
-                            if "1011" in err_str:
-                                print(f"[Receive Task] Gemini session died (1011). Stopping audio send.")
-                                return
-                            print(f"[Receive Task] Error sending audio to Gemini: {inner_e}")
-                    elif "clientContent" in payload:
-                        try:
-                            text = payload["clientContent"]["turns"][0]["parts"][0]["text"]
-                            await session.send_client_content(
-                                turns=[types.Content(parts=[types.Part.from_text(text=text)])]
-                            )
-                        except Exception as inner_e:
-                            print(f"[Receive Task] Error sending text to Gemini: {inner_e}")
-            
-            except WebSocketDisconnect:
-                print("[Receive Task] Client WebSocket Disconnected normally.")
-            except Exception as e:
-                print(f"[Receive Task] Error/Disconnected: {type(e).__name__} - {e}")
+            print("[Gemini] Attempting to connect to Live API...")
+            async with client.aio.live.connect(model=model, config=config) as session:
+                session_holder["session"] = session
+                go_away_event.clear()
+                reconnect_count = 0  # Reset on successful connection
+                print("[Gemini] Connected to Live API")
 
-        async def receive_from_gemini_and_send_to_client():
-            interrupted = False
-            error_1011_count = 0
-            while True:
-                try:
-                    async for response in session.receive():
-                        server_content = response.server_content
-                        if server_content:
-                            if getattr(server_content, "interrupted", False):
-                                print("[Gemini] User Interruption Detected! Halting queue...")
-                                interrupted = True
-                                async with ws_lock:
-                                    await websocket.send_json({"type": "clear"})
-                                # Don't break — continue processing to drain any pending responses
-                                continue
-                                    
-                        if server_content and server_content.model_turn:
-                            interrupted = False  # Model is actively responding, clear interrupt flag
-                            error_1011_count = 0  # Reset error counter on successful response
-                            for part in server_content.model_turn.parts:
-                                if part.inline_data:
-                                    # Gemini Native Audio response - stream to frontend
-                                    audio_base64 = base64.b64encode(part.inline_data.data).decode("utf-8")
-                                    async with ws_lock:
-                                        await websocket.send_json({
-                                            "type": "audio",
-                                            "mimeType": part.inline_data.mime_type,
-                                            "data": audio_base64
-                                        })
-                        
-                        # Handle Tool Calls
-                        if response.tool_call:
-                            if interrupted:
-                                # Skip tool responses if the user interrupted — Gemini doesn't expect them
-                                print(f"[Tool Call] Skipping {len(response.tool_call.function_calls)} tool call(s) due to interruption")
-                                interrupted = False
-                                continue
-                            
-                            func_responses = []
-                            for func_call in response.tool_call.function_calls:
-                                tool_name = func_call.name
-                                tool_args = dict(func_call.args) if func_call.args else {}
-                                print(f"\n[AI TOOL FIRING] {tool_name}({json.dumps(tool_args)})")
-                                
-                                if tool_name in ("highlight_element", "navigate_to_section", "zoom_view", "modify_element", "click_element"):
-                                    # Forward visual action to frontend
-                                    async with ws_lock:
-                                        await websocket.send_json({
-                                            "type": "tool_action",
-                                            "action": tool_name,
-                                            "params": tool_args
-                                        })
-                                    func_responses.append(
-                                        types.FunctionResponse(
-                                            name=func_call.name,
-                                            id=func_call.id,
-                                            response={"result": "ok", "message": f"{tool_name} executed on the user's screen."}
-                                        )
-                                    )
-                                
-                                elif tool_name == "fetch_more_detail":
-                                    query = tool_args.get("query", "")
-                                    print(f"[Tool Call] Fetching more detail: {query}")
-                                    # Send status to frontend
-                                    async with ws_lock:
-                                        await websocket.send_json({
-                                            "type": "tool_action",
-                                            "action": "fetch_more_detail",
-                                            "params": {"query": query, "status": "searching"}
-                                        })
-                                    try:
-                                        search_response = await asyncio.to_thread(
-                                            pro_client.models.generate_content,
-                                            model='gemini-2.5-flash',
-                                            contents=f"Provide a concise, factual summary about: {query}",
-                                            config=types.GenerateContentConfig(
-                                                tools=[types.Tool(google_search=types.GoogleSearch())]
-                                            )
-                                        )
-                                        result_text = search_response.text[:2000] if search_response.text else "No results found."
-                                    except Exception as fetch_err:
-                                        print(f"[Tool Call] fetch_more_detail error: {fetch_err}")
-                                        result_text = f"Could not fetch information: {fetch_err}"
-                                    
-                                    async with ws_lock:
-                                        await websocket.send_json({
-                                            "type": "tool_action",
-                                            "action": "fetch_more_detail",
-                                            "params": {"query": query, "status": "complete"}
-                                        })
-                                    func_responses.append(
-                                        types.FunctionResponse(
-                                            name=func_call.name,
-                                            id=func_call.id,
-                                            response={"result": result_text}
-                                        )
-                                    )
-                                
-                                elif tool_name == "show_interactive_graphic":
-                                    # Legacy tool — re-send existing graphic
-                                    async with ws_lock:
-                                        await websocket.send_json({
-                                            "type": "interactive_svg",
-                                            "svg_html": svg_html
-                                        })
-                                    func_responses.append(
-                                        types.FunctionResponse(
-                                            name=func_call.name,
-                                            id=func_call.id,
-                                            response={"result": "ok"}
-                                        )
-                                    )
-                                
-                                else:
-                                    print(f"[Tool Call] Unknown tool: {tool_name}")
-                                    func_responses.append(
-                                        types.FunctionResponse(
-                                            name=func_call.name,
-                                            id=func_call.id,
-                                            response={"error": f"Unknown tool: {tool_name}"}
-                                        )
-                                    )
-                                    
-                            if func_responses:
+                if is_first_connection:
+                    is_first_connection = False
+                    # Drop stale pre-session events
+                    if initial_events:
+                        print(f"[Gemini] Dropping {len(initial_events)} stale pre-session event(s) to prevent double overview.")
+
+                    async with ws_lock:
+                        await websocket.send_json({"type": "ready"})
+
+                    # Kick off the conversation — send a prompt so the AI starts talking immediately
+                    # Wait 1.2s to let the mic stabilize and avoid VAD false-triggers
+                    try:
+                        await asyncio.sleep(1.2)
+                        await session.send_client_content(
+                            turns=[types.Content(parts=[types.Part.from_text(
+                                text="The user just joined the session. Begin your welcome and overview now."
+                            )])]
+                        )
+                    except Exception as e:
+                        print(f"[Gemini] Error sending initial prompt: {e}")
+                else:
+                    print("[Gemini] Session resumed successfully — conversation continues seamlessly.")
+
+                # ------------------------------------------------------------------
+                # CLIENT → GEMINI relay
+                # ------------------------------------------------------------------
+                async def receive_from_client_and_send_to_gemini():
+                    try:
+                        while session_holder["alive"]:
+                            data = await websocket.receive_text()
+                            payload = json.loads(data)
+
+                            cur_session = session_holder["session"]
+                            if cur_session is None:
+                                continue  # Reconnecting, skip
+
+                            if "realtimeInput" in payload:
+                                chunk = payload["realtimeInput"]["mediaChunks"][0]
+                                b64_data = chunk["data"]
+                                mime_type = chunk["mimeType"]
+                                raw_bytes = base64.b64decode(b64_data)
+
                                 try:
-                                    await session.send_tool_response(function_responses=func_responses)
-                                except Exception as e:
-                                    print(f"[Gemini Task] Warning: Failed to send tool response: {e}")
-                                    
-                except APIError as e:
-                    if "1011" in str(e):
-                        error_1011_count += 1
-                        print(f"[Gemini Task] Trapped 1011 APIError ({error_1011_count}/3). Resuming...")
-                        interrupted = False
-                        if error_1011_count >= 3:
-                            print("[Gemini Task] Too many 1011 errors, ending session.")
-                            break
-                        await asyncio.sleep(0.5)
-                        continue
-                    else:
-                        print(f"[Gemini Task] Fatal APIError: {e}")
-                        break
-                except WebSocketDisconnect:
-                    print("[Gemini Task] Client WebSocket Disconnected normally. Ending Gemini session.")
-                    break
-                except asyncio.CancelledError:
-                    print("[Gemini Task] Task cancelled. Ending Gemini session.")
-                    break
-                except Exception as e:
-                    print(f"[Gemini Task] Error/Disconnected: {type(e).__name__} - {e}")
-                    break
+                                    await cur_session.send_realtime_input(
+                                        media=types.Blob(mime_type=mime_type, data=raw_bytes)
+                                    )
+                                except Exception as inner_e:
+                                    err_str = str(inner_e)
+                                    if "1011" in err_str or "close" in err_str.lower():
+                                        print(f"[Receive Task] Gemini session died (1011). Will reconnect.")
+                                        return  # Let the outer loop handle reconnection
+                                    print(f"[Receive Task] Error sending audio to Gemini: {inner_e}")
+                            elif "clientContent" in payload:
+                                try:
+                                    text = payload["clientContent"]["turns"][0]["parts"][0]["text"]
+                                    await cur_session.send_client_content(
+                                        turns=[types.Content(parts=[types.Part.from_text(text=text)])]
+                                    )
+                                except Exception as inner_e:
+                                    err_str = str(inner_e)
+                                    if "1011" in err_str or "close" in err_str.lower():
+                                        print(f"[Receive Task] Gemini session died while sending text. Will reconnect.")
+                                        return
+                                    print(f"[Receive Task] Error sending text to Gemini: {inner_e}")
 
-        # Run both loops concurrently. If either fails, we kill the other
-        receive_task = asyncio.create_task(receive_from_client_and_send_to_gemini())
-        gemini_task = asyncio.create_task(receive_from_gemini_and_send_to_client())
-        
-        done, pending = await asyncio.wait(
-            [receive_task, gemini_task],
-            return_when=asyncio.FIRST_COMPLETED
-        )
-        for task in pending:
-            task.cancel()
-        print("[Live Session] Complete/Terminated.")
+                    except WebSocketDisconnect:
+                        print("[Receive Task] Client WebSocket Disconnected normally.")
+                        client_disconnected.set()
+                        session_holder["alive"] = False
+                    except asyncio.CancelledError:
+                        pass
+                    except Exception as e:
+                        print(f"[Receive Task] Error/Disconnected: {type(e).__name__} - {e}")
+
+                # ------------------------------------------------------------------
+                # GEMINI → CLIENT relay (with GoAway & resumption handle tracking)
+                # ------------------------------------------------------------------
+                async def receive_from_gemini_and_send_to_client():
+                    nonlocal resumption_handle
+                    interrupted = False
+                    error_1011_count = 0
+                    while True:
+                        try:
+                            async for response in session.receive():
+                                # --- Track session resumption handles ---
+                                if response.session_resumption_update:
+                                    update = response.session_resumption_update
+                                    if getattr(update, "resumable", False) and getattr(update, "new_handle", None):
+                                        resumption_handle = update.new_handle
+                                        print(f"[Gemini] ✅ Resumption handle stored")
+
+                                # --- Handle GoAway (proactive reconnection) ---
+                                if response.go_away:
+                                    time_left = getattr(response.go_away, "time_left", "unknown")
+                                    print(f"[Gemini] ⚠️ GoAway received — connection closing in {time_left}")
+                                    go_away_event.set()
+                                    # Don't break — let current response finish, then the outer loop will reconnect
+
+                                server_content = response.server_content
+                                if server_content:
+                                    if getattr(server_content, "interrupted", False):
+                                        print("[Gemini] User Interruption Detected! Halting queue...")
+                                        interrupted = True
+                                        async with ws_lock:
+                                            await websocket.send_json({"type": "clear"})
+                                        continue
+
+                                if server_content and server_content.model_turn:
+                                    interrupted = False
+                                    error_1011_count = 0
+                                    for part in server_content.model_turn.parts:
+                                        if part.inline_data:
+                                            audio_base64 = base64.b64encode(part.inline_data.data).decode("utf-8")
+                                            async with ws_lock:
+                                                await websocket.send_json({
+                                                    "type": "audio",
+                                                    "mimeType": part.inline_data.mime_type,
+                                                    "data": audio_base64
+                                                })
+
+                                # Check turnComplete — if GoAway was received, now is safe to reconnect
+                                if server_content and getattr(server_content, "turn_complete", False):
+                                    if go_away_event.is_set():
+                                        print("[Gemini] Turn complete after GoAway — triggering reconnection.")
+                                        return  # Exit to outer reconnection loop
+
+                                # Handle Tool Calls
+                                if response.tool_call:
+                                    if interrupted:
+                                        print(f"[Tool Call] Skipping {len(response.tool_call.function_calls)} tool call(s) due to interruption")
+                                        interrupted = False
+                                        continue
+
+                                    func_responses = []
+                                    for func_call in response.tool_call.function_calls:
+                                        tool_name = func_call.name
+                                        tool_args = dict(func_call.args) if func_call.args else {}
+                                        print(f"\n[AI TOOL FIRING] {tool_name}({json.dumps(tool_args)})")
+
+                                        if tool_name in ("highlight_element", "navigate_to_section", "zoom_view", "modify_element", "click_element"):
+                                            async with ws_lock:
+                                                await websocket.send_json({
+                                                    "type": "tool_action",
+                                                    "action": tool_name,
+                                                    "params": tool_args
+                                                })
+                                            func_responses.append(
+                                                types.FunctionResponse(
+                                                    name=func_call.name,
+                                                    id=func_call.id,
+                                                    response={"result": "ok", "message": f"{tool_name} executed on the user's screen."}
+                                                )
+                                            )
+
+                                        elif tool_name == "fetch_more_detail":
+                                            query = tool_args.get("query", "")
+                                            print(f"[Tool Call] Fetching more detail: {query}")
+                                            async with ws_lock:
+                                                await websocket.send_json({
+                                                    "type": "tool_action",
+                                                    "action": "fetch_more_detail",
+                                                    "params": {"query": query, "status": "searching"}
+                                                })
+                                            try:
+                                                search_response = await asyncio.to_thread(
+                                                    pro_client.models.generate_content,
+                                                    model='gemini-2.5-flash',
+                                                    contents=f"Provide a concise, factual summary about: {query}",
+                                                    config=types.GenerateContentConfig(
+                                                        tools=[types.Tool(google_search=types.GoogleSearch())]
+                                                    )
+                                                )
+                                                result_text = search_response.text[:2000] if search_response.text else "No results found."
+                                            except Exception as fetch_err:
+                                                print(f"[Tool Call] fetch_more_detail error: {fetch_err}")
+                                                result_text = f"Could not fetch information: {fetch_err}"
+
+                                            async with ws_lock:
+                                                await websocket.send_json({
+                                                    "type": "tool_action",
+                                                    "action": "fetch_more_detail",
+                                                    "params": {"query": query, "status": "complete"}
+                                                })
+                                            func_responses.append(
+                                                types.FunctionResponse(
+                                                    name=func_call.name,
+                                                    id=func_call.id,
+                                                    response={"result": result_text}
+                                                )
+                                            )
+
+                                        elif tool_name == "show_interactive_graphic":
+                                            async with ws_lock:
+                                                await websocket.send_json({
+                                                    "type": "interactive_svg",
+                                                    "svg_html": svg_html
+                                                })
+                                            func_responses.append(
+                                                types.FunctionResponse(
+                                                    name=func_call.name,
+                                                    id=func_call.id,
+                                                    response={"result": "ok"}
+                                                )
+                                            )
+
+                                        else:
+                                            print(f"[Tool Call] Unknown tool: {tool_name}")
+                                            func_responses.append(
+                                                types.FunctionResponse(
+                                                    name=func_call.name,
+                                                    id=func_call.id,
+                                                    response={"error": f"Unknown tool: {tool_name}"}
+                                                )
+                                            )
+
+                                    if func_responses:
+                                        try:
+                                            await session.send_tool_response(function_responses=func_responses)
+                                        except Exception as e:
+                                            print(f"[Gemini Task] Warning: Failed to send tool response: {e}")
+
+                        except APIError as e:
+                            if "1011" in str(e):
+                                error_1011_count += 1
+                                print(f"[Gemini Task] Trapped 1011 APIError ({error_1011_count}/3). Resuming...")
+                                interrupted = False
+                                if error_1011_count >= 3:
+                                    print("[Gemini Task] Too many 1011 errors, ending session.")
+                                    break
+                                await asyncio.sleep(0.5)
+                                continue
+                            else:
+                                print(f"[Gemini Task] Fatal APIError: {e}")
+                                break
+                        except WebSocketDisconnect:
+                            print("[Gemini Task] Client WebSocket Disconnected normally.")
+                            client_disconnected.set()
+                            session_holder["alive"] = False
+                            break
+                        except asyncio.CancelledError:
+                            print("[Gemini Task] Task cancelled.")
+                            break
+                        except Exception as e:
+                            print(f"[Gemini Task] Error/Disconnected: {type(e).__name__} - {e}")
+                            break
+
+                # ------------------------------------------------------------------
+                # KEEP-ALIVE: send silent audio every 25 seconds to prevent idle timeout
+                # ------------------------------------------------------------------
+                async def keep_alive_ping():
+                    """Send a minimal silent audio blob every 25s to prevent idle disconnects."""
+                    # 160 bytes of silence = 10ms of 16kHz 16-bit PCM
+                    silent_blob = types.Blob(mime_type="audio/pcm;rate=16000", data=b'\x00' * 160)
+                    try:
+                        while session_holder["alive"]:
+                            await asyncio.sleep(25)
+                            cur_session = session_holder["session"]
+                            if cur_session:
+                                try:
+                                    await cur_session.send_realtime_input(media=silent_blob)
+                                except Exception:
+                                    pass  # Session might be closing, that's fine
+                    except asyncio.CancelledError:
+                        pass
+
+                # ------------------------------------------------------------------
+                # Run all three tasks concurrently. If any exits, cancel the others.
+                # ------------------------------------------------------------------
+                receive_task = asyncio.create_task(receive_from_client_and_send_to_gemini())
+                gemini_task = asyncio.create_task(receive_from_gemini_and_send_to_client())
+                keepalive_task = asyncio.create_task(keep_alive_ping())
+
+                done, pending = await asyncio.wait(
+                    [receive_task, gemini_task, keepalive_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in pending:
+                    task.cancel()
+
+                # Clear session reference while reconnecting
+                session_holder["session"] = None
+
+            # --- End of `async with ... as session` ---
+            # If we got here due to GoAway and have a handle, loop will reconnect.
+            # Otherwise, a normal exit or error — check if we should retry.
+            if go_away_event.is_set() and resumption_handle:
+                go_away_event.clear()
+                print("[Gemini] Performing proactive GoAway reconnection...")
+                await asyncio.sleep(0.2)  # Brief pause before reconnect
+                continue
+            elif not session_holder["alive"] or client_disconnected.is_set():
+                break
+            elif resumption_handle:
+                # Unexpected disconnect but we have a handle — try to resume
+                reconnect_count += 1
+                if reconnect_count > MAX_RECONNECT_ATTEMPTS:
+                    print(f"[Gemini] Max reconnect attempts ({MAX_RECONNECT_ATTEMPTS}) exceeded. Ending session.")
+                    break
+                print(f"[Gemini] Unexpected disconnect. Attempting reconnection ({reconnect_count}/{MAX_RECONNECT_ATTEMPTS})...")
+                await asyncio.sleep(1.0 * reconnect_count)  # Backoff: 1s, 2s, 3s
+                continue
+            else:
+                break
+
+        except Exception as e:
+            print(f"[Gemini] Connection error: {type(e).__name__} - {e}")
+            reconnect_count += 1
+            if reconnect_count > MAX_RECONNECT_ATTEMPTS or not resumption_handle:
+                print(f"[Gemini] Cannot reconnect. Ending session.")
+                break
+            print(f"[Gemini] Will retry in {reconnect_count}s...")
+            await asyncio.sleep(1.0 * reconnect_count)
+
+    print("[Live Session] Complete/Terminated.")
+
+    # Send a clean WebSocket close so the frontend gets a 1000 instead of 1006
+    try:
+        await websocket.close(code=1000, reason="Live session ended. Click 'Start Live Conversation' to reconnect.")
+    except Exception:
+        pass  # Already closed by client
