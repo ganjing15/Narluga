@@ -822,6 +822,27 @@ function App() {
   </style>
   
   <script>
+    // --- INTERVAL TRACKING ---
+    // Monkey-patch setInterval/clearInterval to track all intervals created by generated code.
+    // This prevents the interval-stacking bug where multiple setIntervals accumulate
+    // because generated togglePlay()/stopAutoPlay() has a race condition.
+    var __trackedIntervals = new Set();
+    var __origSetInterval = window.setInterval.bind(window);
+    var __origClearInterval = window.clearInterval.bind(window);
+    window.setInterval = function(fn, ms) {
+      var id = __origSetInterval(fn, ms);
+      __trackedIntervals.add(id);
+      return id;
+    };
+    window.clearInterval = function(id) {
+      __trackedIntervals.delete(id);
+      return __origClearInterval(id);
+    };
+    window.__clearAllIntervals = function() {
+      __trackedIntervals.forEach(function(id) { __origClearInterval(id); });
+      __trackedIntervals.clear();
+    };
+
     // Communication bridge to host React app
     window.sendEventToAI = function(message) {
       window.parent.postMessage({ type: 'AI_EVENT', payload: message }, '*');
@@ -997,6 +1018,12 @@ function App() {
                    el.dispatchEvent(new Event('input', { bubbles: true }));
                    el.dispatchEvent(new Event('change', { bubbles: true }));
                 } else {
+                   // Before clicking, clear any stale intervals to prevent stacking
+                   // (generated code's togglePlay may create new intervals without clearing old ones)
+                   var btnText = (el.textContent || '').toLowerCase();
+                   if (btnText.includes('play') || btnText.includes('pause') || btnText.includes('auto') || btnText.includes('▶') || btnText.includes('⏸')) {
+                     if (window.__clearAllIntervals) window.__clearAllIntervals();
+                   }
                    el.click();
                 }
               }, 300);
@@ -1101,10 +1128,12 @@ function App() {
           const afterLower = afterLabel.toLowerCase();
           const isNowPaused = afterLower.includes('play') || afterLower.includes('start') || afterLower.includes('▶');
           const isNowPlaying = afterLower.includes('pause') || afterLower.includes('stop') || afterLower.includes('⏸');
-          if (isNowPlaying) {
+           if (isNowPlaying) {
             actionDesc = 'clicked "' + beforeLabel + '" — animation is now PLAYING (button now shows "' + afterLabel + '")';
           } else if (isNowPaused) {
             actionDesc = 'clicked "' + beforeLabel + '" — animation is now PAUSED (button now shows "' + afterLabel + '")';
+            // SAFETY: force-clear ALL intervals to handle generated code's toggle race condition
+            if (window.__clearAllIntervals) window.__clearAllIntervals();
           } else {
             actionDesc = 'clicked "' + beforeLabel + '" (button changed to "' + afterLabel + '")';
           }
