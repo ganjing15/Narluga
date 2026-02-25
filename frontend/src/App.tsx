@@ -190,6 +190,8 @@ function App() {
       }, 1000);
     };
 
+    let aiEventPending = false;
+
     const handleMessage = (event: MessageEvent) => {
       const data = event.data;
       if (data && data.type === 'HOVER_EVENT') {
@@ -197,7 +199,20 @@ function App() {
         hoverDebounceTimer = setTimeout(() => {
           sendToVoiceAI(`[Cursor position: ${data.payload}]`);
         }, 300); // Small debounce for hover events
+      } else if (data && data.type === 'AI_EVENT') {
+        // Explicit state event from generated code (e.g., "User paused flight animation")
+        // HIGH PRIORITY: cancel any pending INTERACTION_EVENT and block new ones briefly
+        aiEventPending = true;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
+          aiEventPending = false;
+        }, 200);
+        // Release the lock after 500ms in case no timer fires
+        setTimeout(() => { aiEventPending = false; }, 500);
       } else if (data && data.type === 'INTERACTION_EVENT') {
+        // Generic click event — skip if an AI_EVENT from the same click is pending
+        if (aiEventPending) return;
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
@@ -917,6 +932,15 @@ function App() {
           if (el instanceof SVGElement && ['fill', 'stroke', 'opacity', 'stroke-width', 'r', 'cx', 'cy', 'x', 'y', 'width', 'height', 'transform', 'display'].includes(prop)) {
             el.setAttribute(prop, val);
           } else {
+            // For SVG elements with scale, set transform-origin to element center
+            // to prevent position shifting
+            if (el instanceof SVGElement && (prop === 'scale' || prop === 'transform')) {
+              try {
+                const bbox = el.getBBox();
+                el.style.transformOrigin = (bbox.x + bbox.width / 2) + 'px ' + (bbox.y + bbox.height / 2) + 'px';
+                el.style.transformBox = 'fill-box';
+              } catch (e) { /* getBBox may fail on hidden elements */ }
+            }
             const camelProp = prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
             el.style[camelProp] = val;
           }

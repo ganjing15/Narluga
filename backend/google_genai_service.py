@@ -617,10 +617,12 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     - Call ONE tool at a time, not multiple simultaneously.
     - Always speak while or after using a tool — never go silent after a tool call.
     - The element_id for tools should match labels or keywords visible in the diagram.
-    - For modify_element, prioritize CSS properties like 'display', 'opacity', 'scale', 'fill', or 'color'. This safely avoids breaking existing animation transforms.
-      - E.g., to resize an element, use css_property 'scale' and value '2' or '0.5'. (Do NOT use 'transform').
-      - E.g., to hide an element, use css_property 'display' and value 'none'.
-      - E.g., to recolor, use css_property 'fill' and a hex value.
+    - For modify_element, you can change visual properties in real-time:
+      - 'scale' — resize elements (e.g., value '2' doubles size, '0.5' halves it). Works on any element including probes/spaceships.
+      - 'fill' — recolor SVG elements (e.g., value '#ef4444' for red).
+      - 'opacity' — make elements transparent (e.g., value '0.5').
+      - 'display' — hide elements (value 'none') or show them (value 'block').
+      - 'filter' — add visual effects (e.g., 'blur(3px)', 'drop-shadow(0 0 10px #fff)').
     - For click_element, match the exact button text from <available_controls>.
     """
     
@@ -749,6 +751,16 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             # Session resumption: enables auto-reconnect with conversation state preserved
             session_resumption=types.SessionResumptionConfig(
                 handle=handle  # None for new sessions, token string for resuming
+            ),
+            # --- VOICE INTERRUPTION ---
+            # Voice interruption config — balanced sensitivity
+            realtime_input_config=types.RealtimeInputConfig(
+                automatic_activity_detection=types.AutomaticActivityDetection(
+                    start_of_speech_sensitivity="START_SENSITIVITY_LOW",
+                    end_of_speech_sensitivity="END_SENSITIVITY_LOW",  # Don't cut off user too quickly
+                    prefix_padding_ms=200,  # Small buffer before detecting speech start
+                ),
+                activity_handling="START_OF_ACTIVITY_INTERRUPTS",  # Interrupt AI on confirmed user speech
             ),
         )
     
@@ -937,9 +949,17 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                 # Handle Tool Calls
                                 if response.tool_call:
                                     if interrupted:
-                                        print(f"[Tool Call] Skipping {len(response.tool_call.function_calls)} tool call(s) due to interruption")
+                                        # Only skip cosmetic tools — actionable tools (click, modify) should always execute
+                                        skippable = {"highlight_element", "navigate_to_section", "zoom_view"}
+                                        actionable_calls = [fc for fc in response.tool_call.function_calls if fc.name not in skippable]
+                                        skipped_calls = [fc for fc in response.tool_call.function_calls if fc.name in skippable]
+                                        if skipped_calls:
+                                            print(f"[Tool Call] Skipping {len(skipped_calls)} cosmetic tool call(s) due to interruption")
+                                        if not actionable_calls:
+                                            interrupted = False
+                                            continue
+                                        # Process only actionable calls — rebuild the tool_call with filtered list
                                         interrupted = False
-                                        continue
 
                                     func_responses = []
                                     for func_call in response.tool_call.function_calls:

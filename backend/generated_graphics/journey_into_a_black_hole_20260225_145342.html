@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Journey into a Black Hole</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 600" style="width: 100%; height: 100%; display: block; background-color: #020617; overflow: hidden; font-family: system-ui, -apple-system, sans-serif;">
+    <defs>
+        <!-- Gradients for Black Hole Anatomy -->
+        <radialGradient id="accretion-grad" cx="50%" cy="50%" r="50%">
+            <stop offset="35%" stop-color="#000000" stop-opacity="0" />
+            <stop offset="40%" stop-color="#f59e0b" stop-opacity="0.95" />
+            <stop offset="60%" stop-color="#ea580c" stop-opacity="0.6" />
+            <stop offset="80%" stop-color="#7c2d12" stop-opacity="0.2" />
+            <stop offset="100%" stop-color="#020617" stop-opacity="0" />
+        </radialGradient>
+        
+        <radialGradient id="photon-grad" cx="50%" cy="50%" r="50%">
+            <stop offset="75%" stop-color="#000000" stop-opacity="0" />
+            <stop offset="85%" stop-color="#fef08a" stop-opacity="0.9" />
+            <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+        </radialGradient>
+
+        <!-- Glow Filters -->
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+        <filter id="intense-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+    </defs>
+
+    <style>
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes flicker {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+        .orbiting {
+            animation: spin 20s linear infinite;
+            transform-origin: 600px 300px;
+        }
+        .ship-flame {
+            animation: flicker 0.1s infinite;
+        }
+        .photon-ring {
+            animation: pulse 3s ease-in-out infinite;
+            transform-origin: 600px 300px;
+        }
+    </style>
+
+    <!-- Starfield Background -->
+    <g id="stars" fill="#ffffff">
+        <circle cx="50" cy="80" r="1.5" opacity="0.6" />
+        <circle cx="150" cy="150" r="1" opacity="0.3" />
+        <circle cx="280" cy="60" r="2" opacity="0.8" />
+        <circle cx="350" cy="220" r="1" opacity="0.4" />
+        <circle cx="90" cy="380" r="1.5" opacity="0.7" />
+        <circle cx="200" cy="500" r="2" opacity="0.5" />
+        <circle cx="420" cy="450" r="1" opacity="0.6" />
+        <circle cx="750" cy="120" r="1.5" opacity="0.8" />
+        <circle cx="680" cy="520" r="1" opacity="0.5" />
+        <circle cx="120" cy="550" r="2" opacity="0.4" />
+        <circle cx="30" cy="250" r="1" opacity="0.3" />
+    </g>
+
+    <!-- Black Hole Structure -->
+    <g id="black-hole-system">
+        <!-- Outer Accretion Disk Base -->
+        <circle cx="600" cy="300" r="280" fill="url(#accretion-grad)" />
+        
+        <!-- Swirling Accretion Matter (Animated) -->
+        <g class="orbiting">
+            <path d="M 600 70 A 230 230 0 0 1 830 300" stroke="#fcd34d" stroke-width="2" fill="none" stroke-dasharray="15 30" opacity="0.4" />
+            <path d="M 600 530 A 230 230 0 0 1 370 300" stroke="#fcd34d" stroke-width="2" fill="none" stroke-dasharray="15 30" opacity="0.4" />
+            <path d="M 370 300 A 230 230 0 0 1 600 70" stroke="#fcd34d" stroke-width="2" fill="none" stroke-dasharray="15 30" opacity="0.4" />
+            <path d="M 830 300 A 230 230 0 0 1 600 530" stroke="#fcd34d" stroke-width="2" fill="none" stroke-dasharray="15 30" opacity="0.4" />
+            
+            <circle cx="600" cy="300" r="160" fill="none" stroke="#fbbf24" stroke-width="3" stroke-dasharray="20 40" opacity="0.6"/>
+            <circle cx="600" cy="300" r="120" fill="none" stroke="#fef08a" stroke-width="1.5" stroke-dasharray="10 20" opacity="0.8"/>
+        </g>
+
+        <!-- Inner Photon Area -->
+        <circle cx="600" cy="300" r="130" fill="url(#photon-grad)" />
+        
+        <!-- Photon Sphere (Glowing Ring) -->
+        <circle class="photon-ring" cx="600" cy="300" r="102" fill="none" stroke="#fef08a" stroke-width="3" filter="url(#glow)"/>
+        
+        <!-- Event Horizon (The Point of No Return) -->
+        <circle id="event-horizon" cx="600" cy="300" r="100" fill="#000000" />
+        
+        <!-- Singularity (The Infinite Center) -->
+        <circle cx="600" cy="300" r="3" fill="#ffffff" filter="url(#intense-glow)" />
+    </g>
+
+    <!-- Interactive Spaceship -->
+    <!-- The origin of the ship is at its nose (0,0) so tidal stretching pulls the tail backward -->
+    <g id="spaceship" transform="translate(100, 300) scale(1, 1)" style="transition: transform 0.1s linear, opacity 0.2s linear;">
+        <polygon points="-30,-10 0,0 -30,10 -22,0" fill="#f8fafc" />
+        <polygon points="-30,-10 -15,0 -22,0" fill="#cbd5e1" />
+        <circle cx="-12" cy="0" r="2.5" fill="#3b82f6" />
+        <polygon points="-28,-4 -42,0 -28,4" fill="#f59e0b" class="ship-flame" />
+    </g>
+
+    <!-- Explanatory Labels and Pointers (Painter's Algorithm: Drawn Last) -->
+    <!-- Singularity Label -->
+    <g transform="translate(620, 240)">
+        <line x1="25" y1="12" x2="-15" y2="55" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8"/>
+        <rect x="0" y="-12" width="95" height="24" fill="rgba(255, 255, 255, 0.9)" rx="6"/>
+        <text x="10" y="4" font-size="13" font-weight="700" fill="#0f172a">Singularity</text>
+    </g>
+
+    <!-- Event Horizon Label -->
+    <g transform="translate(430, 160)">
+        <line x1="55" y1="12" x2="115" y2="85" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8"/>
+        <rect x="0" y="-12" width="115" height="24" fill="rgba(255, 255, 255, 0.9)" rx="6"/>
+        <text x="10" y="4" font-size="13" font-weight="700" fill="#0f172a">Event Horizon</text>
+    </g>
+
+    <!-- Accretion Disk Label -->
+    <g transform="translate(280, 480)">
+        <line x1="60" y1="-12" x2="160" y2="-90" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8"/>
+        <rect x="0" y="-12" width="120" height="24" fill="rgba(255, 255, 255, 0.9)" rx="6"/>
+        <text x="10" y="4" font-size="13" font-weight="700" fill="#0f172a">Accretion Disk</text>
+    </g>
+    
+    <!-- Distance Marker Axis -->
+    <g transform="translate(0, 560)">
+        <line x1="100" y1="0" x2="600" y2="0" stroke="#475569" stroke-width="2" />
+        <circle cx="100" cy="0" r="4" fill="#475569" />
+        <text x="90" y="20" font-size="12" fill="#94a3b8" font-weight="600">Start</text>
+        <circle cx="600" cy="0" r="4" fill="#ef4444" />
+        <text x="585" y="20" font-size="12" fill="#ef4444" font-weight="600">Center</text>
+        
+        <!-- Moving Indicator -->
+        <polygon id="distance-marker" points="95,-10 105,-10 100,-2" fill="#3b82f6" style="transition: transform 0.1s linear;" />
+    </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>Journey into a Black Hole</h2>
+        <p style="color: #64748b;">Use the mission controls on the right to fly the spaceship towards the Singularity and observe the physical effects of extreme gravity.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="height: 100%; display: flex; flex-direction: column; gap: 20px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; padding: 12px 4px;">
+    
+    <div>
+        <h2 style="margin: 0 0 8px 0; font-size: 22px; color: #0f172a; font-weight: 800;">Mission Control</h2>
+        <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.5;">
+            Control the spaceship's distance to the center. Watch how extreme gravity causes physical spaghettification!
+        </p>
+    </div>
+    
+    <div style="background: #f1f5f9; padding: 16px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 14px; font-weight: 700; color: #0f172a;">Distance to Singularity:</label>
+            <span id="dist-readout" style="font-size: 14px; font-weight: 700; color: #2563eb; background: #dbeafe; padding: 2px 8px; border-radius: 12px;">100%</span>
+        </div>
+        <input type="range" id="distanceSlider" min="0" max="100" value="100" 
+               style="width: 100%; accent-color: #2563eb; cursor: pointer; height: 6px;" 
+               oninput="updateState(this.value)">
+        
+        <button id="play-btn" onclick="togglePlay()" 
+                style="background: #2563eb; color: #ffffff; border: none; border-radius: 8px; padding: 12px 16px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.2s; margin-top: 4px; display: flex; justify-content: center; align-items: center; gap: 8px;">
+            ▶ Auto-Fly
+        </button>
+    </div>
+    
+    <div id="info-panel" style="margin-top: auto; padding: 20px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); min-height: 160px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <div id="status-dot" style="width: 14px; height: 14px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);"></div>
+            <div id="info-title" style="font-weight: 800; font-size: 18px; color: #0f172a;">Safe Distance</div>
+        </div>
+        <div id="info-desc" style="font-size: 14px; color: #475569; line-height: 1.6;">
+            The spaceship is at a safe distance from the black hole. The gravity here is relatively normal, and we can comfortably observe the massive astronomical structure from afar.
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let isPlaying = false;
+    let playInterval;
+
+    function updateState(val) {
+        val = Number(val);
+        const ship = document.getElementById(`spaceship`);
+        const marker = document.getElementById(`distance-marker`);
+        
+        // Math mapping: 
+        // val=100 -> xPos=100 (Safe zone)
+        // val=20 -> xPos=500 (Event Horizon edge, r=100, center=600)
+        // val=0 -> xPos=600 (Singularity center)
+        let xPos = 600 - (val * 5); 
+        let stretchX = 1;
+        let stretchY = 1;
+        let opacity = 1;
+        
+        let title = `Safe Distance`;
+        let desc = `The spaceship is at a safe distance from the black hole. The gravity here is relatively normal, and we can comfortably observe the massive astronomical structure from afar.`;
+        let statusColor = `#10b981`; // Green
+        let shadowColor = `rgba(16, 185, 129, 0.4)`;
+
+        if (val <= 60 && val > 20) {
+            title = `Accretion Disk`;
+            desc = `The spaceship enters the superheated ring of dust and gas swirling around the black hole at immense speeds. The extreme friction here generates intense heat and radiation!`;
+            statusColor = `#f59e0b`; // Yellow
+            shadowColor = `rgba(245, 158, 11, 0.4)`;
+        } else if (val <= 20 && val > 5) {
+            title = `Event Horizon & Spaghettification`;
+            desc = `Point of no return! The tidal forces are so extreme that gravity pulls the front of the ship much harder than the back. The ship stretches vertically and compresses horizontally into a noodle shape—a real phenomenon known as Spaghettification!`;
+            statusColor = `#ef4444`; // Red
+            shadowColor = `rgba(239, 68, 68, 0.4)`;
+            
+            // Calculate spaghettification stretching physics
+            let factor = (20 - val); // Range: 0 to 15
+            stretchX = 1 + (factor * 0.45); // Stretches length heavily
+            stretchY = Math.max(0.08, 1 - (factor * 0.055)); // Compresses width
+        } else if (val <= 5) {
+            title = `The Singularity`;
+            desc = `The ship is instantly crushed into the singularity—a point of infinite density and zero volume at the exact center of the black hole, where our current laws of physics completely break down.`;
+            statusColor = `#a855f7`; // Purple
+            shadowColor = `rgba(168, 85, 247, 0.4)`;
+            
+            let factor = (20 - val);
+            stretchX = 1 + (factor * 0.45);
+            stretchY = Math.max(0.02, 1 - (factor * 0.055));
+            opacity = val / 5; // Fades out into the void
+        }
+
+        // Apply transformations dynamically
+        ship.setAttribute(`transform`, `translate(${xPos}, 300) scale(${stretchX}, ${stretchY})`);
+        ship.style.opacity = opacity;
+        
+        // Update marker axis
+        marker.setAttribute(`transform`, `translate(${xPos - 100}, 0)`);
+
+        // Update UI Panel
+        document.getElementById(`info-title`).textContent = title;
+        document.getElementById(`info-desc`).textContent = desc;
+        
+        const dot = document.getElementById(`status-dot`);
+        dot.style.background = statusColor;
+        dot.style.boxShadow = `0 0 8px ${shadowColor}`;
+        
+        document.getElementById(`dist-readout`).textContent = `${val}%`;
+
+        // Telemetry Event
+        if (window.sendEventToAI && val % 20 === 0 && val !== 100) {
+            window.sendEventToAI(`User moved spaceship to distance ${val}%, currently observing: ${title}`);
+        }
+    }
+
+    function togglePlay() {
+        isPlaying = !isPlaying;
+        const btn = document.getElementById(`play-btn`);
+        const slider = document.getElementById(`distanceSlider`);
+        
+        if (isPlaying) {
+            btn.innerHTML = `⏸ Pause Flight`;
+            btn.style.background = `#334155`;
+            
+            playInterval = setInterval(() => {
+                let nextVal = Number(slider.value) - 0.5;
+                if (nextVal < 0) {
+                    togglePlay(); // Pause at Singularity
+                    setTimeout(() => {
+                        slider.value = 100;
+                        updateState(100);
+                    }, 2500); // Auto-reset after giving time to read
+                    return;
+                }
+                slider.value = nextVal;
+                updateState(nextVal);
+            }, 50); // 50ms interval for smooth sub-percentage animation
+            
+            if (window.sendEventToAI) window.sendEventToAI(`User started Auto-Fly simulation`);
+        } else {
+            btn.innerHTML = `▶ Auto-Fly`;
+            btn.style.background = `#2563eb`;
+            clearInterval(playInterval);
+            if (window.sendEventToAI) window.sendEventToAI(`User paused Auto-Fly simulation`);
+        }
+    }
+
+    // Initialize layout
+    updateState(100);
+</script>
+    </div>
+</body>
+</html>
