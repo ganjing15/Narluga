@@ -559,148 +559,9 @@ function App() {
           }
         } else if (data.type === 'tool_action') {
           const { action, params } = data
-          const svgContainer = document.querySelector('[data-svg-container]') as HTMLElement
-          if (!svgContainer) return
 
-          // Helper: find SVG elements by fuzzy text/ID match
-          const findElements = (keyword: string): Element[] => {
-            const kw = keyword.toLowerCase().replace(/[-_]/g, ' ').trim()
-            if (!kw) return []
-            const results: Element[] = []
-            const containerRect = svgContainer.getBoundingClientRect()
-
-            // Skip elements that are too large (>60% of container = probably a wrapper)
-            const isTooLarge = (el: Element): boolean => {
-              const rect = el.getBoundingClientRect()
-              return rect.width > containerRect.width * 0.6 && rect.height > containerRect.height * 0.6
-            }
-
-            // 1. Match by id or data attributes (exact-ish match)
-            svgContainer.querySelectorAll('[id], [data-label], [data-section]').forEach(el => {
-              const id = (el.id || '').toLowerCase().replace(/[-_]/g, ' ')
-              const label = (el.getAttribute('data-label') || '').toLowerCase()
-              const section = (el.getAttribute('data-section') || '').toLowerCase()
-              // Only match if id is meaningful (3+ chars) and keyword is contained in it
-              if ((id.length >= 3 && id.includes(kw)) || label.includes(kw) || section.includes(kw)) {
-                if (!isTooLarge(el)) results.push(el)
-              }
-            })
-
-            // 2. Match by visible text content — target the text element itself, not a parent
-            if (results.length === 0) {
-              svgContainer.querySelectorAll('text, tspan, foreignObject, h1, h2, h3, h4, p, span, label, button').forEach(el => {
-                const text = (el.textContent || '').toLowerCase().trim()
-                if (text.length > 0 && text.length < 200 && (text.includes(kw) || kw.split(' ').every(w => text.includes(w)))) {
-                  // For SVG text elements, go up ONE level to the immediate parent <g> only
-                  let target: Element = el
-                  if (el instanceof SVGElement && el.parentElement && el.parentElement.tagName.toLowerCase() === 'g') {
-                    target = el.parentElement
-                  }
-                  if (!isTooLarge(target) && !results.includes(target)) results.push(target)
-                }
-              })
-            }
-
-            // Sort by size (smaller = more specific = better)
-            results.sort((a, b) => {
-              const aRect = a.getBoundingClientRect()
-              const bRect = b.getBoundingClientRect()
-              return (aRect.width * aRect.height) - (bRect.width * bRect.height)
-            })
-
-            return results.slice(0, 3) // Cap at 3 best matches
-          }
-
-          if (action === 'highlight_element') {
-            const elements = findElements(params.element_id || '')
-            const color = params.color || '#3b82f6'
-            elements.forEach(el => {
-              const htmlEl = el as HTMLElement | SVGElement
-              const prev = htmlEl.style.cssText
-              htmlEl.style.transition = 'all 0.4s ease'
-              htmlEl.style.filter = `drop-shadow(0 0 16px ${color}) drop-shadow(0 0 8px ${color})`
-              if (htmlEl instanceof SVGElement) {
-                htmlEl.style.transform = 'scale(1.03)'
-                htmlEl.style.transformOrigin = 'center'
-              }
-              setTimeout(() => {
-                htmlEl.style.filter = ''
-                htmlEl.style.transform = ''
-                setTimeout(() => { htmlEl.style.cssText = prev }, 400)
-              }, 4000)
-            })
-            if (elements.length > 0) {
-              elements[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-            }
-          } else if (action === 'navigate_to_section') {
-            const elements = findElements(params.section || '')
-            if (elements.length > 0) {
-              elements[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-            }
-          } else if (action === 'zoom_view') {
-            const dir = params.direction || 'in'
-            const currentScale = parseFloat(svgContainer.dataset.zoomScale || '1')
-            let newScale: number
-            if (dir === 'in') newScale = Math.min(currentScale * 1.4, 3)
-            else if (dir === 'out') newScale = Math.max(currentScale / 1.4, 0.5)
-            else newScale = 1 // reset
-            svgContainer.style.transition = 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
-            svgContainer.style.transform = `scale(${newScale})`
-            svgContainer.style.transformOrigin = 'center center'
-            svgContainer.dataset.zoomScale = newScale.toString()
-          } else if (action === 'modify_element') {
-            const elements = findElements(params.element_id || '')
-            const prop = params.css_property || ''
-            const val = params.value || ''
-            elements.forEach(el => {
-              const htmlEl = el as HTMLElement | SVGElement
-              htmlEl.style.transition = 'all 0.5s ease'
-              // Handle SVG-specific attributes that work better as attributes than CSS
-              if (htmlEl instanceof SVGElement && ['fill', 'stroke', 'opacity', 'stroke-width'].includes(prop)) {
-                htmlEl.setAttribute(prop, val)
-              } else {
-                // Convert kebab-case to camelCase for style property
-                const camelProp = prop.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase())
-                  ; (htmlEl.style as any)[camelProp] = val
-              }
-            })
-            if (elements.length > 0) {
-              // Brief highlight to show what changed
-              const el = elements[0] as HTMLElement | SVGElement
-              const prevFilter = el.style.filter
-              el.style.filter = 'drop-shadow(0 0 8px #3b82f6)'
-              setTimeout(() => { el.style.filter = prevFilter }, 1500)
-            }
-          } else if (action === 'click_element') {
-            // Search both SVG container and controls panel for clickable elements
-            const kw = (params.element_id || '').toLowerCase().trim()
-            if (!kw) return
-            const containers = document.querySelectorAll('[data-svg-container], [data-controls-container]')
-            let clicked = false
-            containers.forEach(container => {
-              if (clicked) return
-              // Search buttons, inputs, and anything with onclick
-              container.querySelectorAll('button, input[type="button"], input[type="submit"], input[type="checkbox"], input[type="range"], a, [onclick], [role="button"]').forEach(el => {
-                if (clicked) return
-                const text = (el.textContent || '').toLowerCase().trim()
-                const id = (el.id || '').toLowerCase()
-                const title = (el.getAttribute('title') || '').toLowerCase()
-                const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase()
-                if (text.includes(kw) || kw.includes(text) || id.includes(kw) || title.includes(kw) || ariaLabel.includes(kw)) {
-                  // Visual flash before clicking
-                  const htmlEl = el as HTMLElement
-                  htmlEl.style.transition = 'all 0.2s ease'
-                  htmlEl.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.5)'
-                  setTimeout(() => {
-                    htmlEl.style.boxShadow = ''
-                    htmlEl.click()
-                  }, 300)
-                  clicked = true
-                }
-              })
-            })
-          } else if (action === 'fetch_more_detail') {
-            // Show a brief search indicator
+          // Handle fetch_more_detail indicator in the parent (it's a fixed overlay)
+          if (action === 'fetch_more_detail') {
             if (params.status === 'searching') {
               const badge = document.createElement('div')
               badge.id = 'fetch-indicator'
@@ -710,6 +571,13 @@ function App() {
             } else {
               document.getElementById('fetch-indicator')?.remove()
             }
+          }
+
+          // Forward ALL tool actions into the iframe where the SVG elements actually live
+          if (iframeRef.current && iframeRef.current.contentWindow) {
+            iframeRef.current.contentWindow.postMessage(
+              { type: 'TOOL_ACTION', action, params }, '*'
+            )
           }
         } else if (data.type === 'error') {
           setError(data.message)
