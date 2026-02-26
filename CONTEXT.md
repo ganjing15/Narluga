@@ -19,6 +19,7 @@ The user adds one or more sources in the sidebar, and the app:
 | **React 19** + **TypeScript** | UI framework |
 | **Vite 7** | Dev server and bundler |
 | **Tailwind CSS 4** | Utility-first CSS (used alongside vanilla CSS) |
+| **Firebase SDK** | Authentication (Google Sign-In) and Firestore database interactions |
 | **Web Audio API** | Real-time audio playback from Gemini Live API |
 | **AudioWorklet** | Mic capture → PCM encoding for Gemini |
 
@@ -28,44 +29,58 @@ The user adds one or more sources in the sidebar, and the app:
 | **FastAPI** | REST + WebSocket server |
 | **Python 3** | Runtime |
 | **google-genai** | Gemini SDK (standard + Live API) |
+| **firebase-admin** | Firebase Admin SDK for auth token verification |
 | **Gemini 3.1 Pro Preview** | Interactive graphic generation (SVG + controls) |
 | **Gemini 2.5 Flash Native Audio Preview** | Live voice conversation (`gemini-2.5-flash-native-audio-preview-12-2025`) |
 | **aiohttp** + **BeautifulSoup** | Website scraping |
 | **Supadata API** | YouTube transcript extraction (falls back to Gemini audio transcription) |
 | **uvicorn** | ASGI server |
 
+### Infrastructure
+| Service | Purpose |
+|---|---|
+| **GCP e2-micro VM** | Always-on, free-tier Debian VM hosting the backend |
+| **Docker** | Containerizing the FastAPI backend application |
+| **Caddy** | Reverse proxy on the VM providing auto-SSL (Let's Encrypt) |
+| **Firebase Hosting** | Static file hosting and global CDN for the frontend SPA |
+| **Cloud Firestore** | NoSQL database storing user-generated graphics and metadata |
+| **DuckDNS** | Free dynamic DNS providing the backend domain (`narluga.duckdns.org`) |
+
 ---
 
 ## Architecture
 
 ```
-┌─────────────────┐      WebSocket       ┌──────────────────┐
-│                 │  ◄──────────────────► │                  │
-│   React SPA     │   init_sources →      │   FastAPI Server │
-│   (Vite dev)    │   ← phase/status      │   (Python)       │
-│   Port 5173     │   ← interactive_svg   │   Port 8000      │
-│                 │   ← audio chunks      │                  │
-└─────────────────┘                       └────────┬─────────┘
-                                                   │
-                                          ┌────────▼─────────┐
-                                          │  Gemini API      │
-                                          │  3.1 Pro Preview │
-                                          │  (graphic gen)   │
-                                          │                  │
-                                          │  2.5 Flash Audio │
-                                          │  (live voice)    │
-                                          └──────────────────┘
+┌─────────────────┐      WebSocket / HTTPS   ┌──────────────────┐
+│                 │  ◄─────────────────────► │                  │
+│   React SPA     │   init_sources →         │   FastAPI Server │
+│ (Firebase Host) │   ← phase/status         │  (GCP e2-micro VM)│
+│                 │   ← interactive_svg      │                  │
+│                 │   ← audio chunks         │                  │
+└────────┬────────┘                          └────────┬─────────┘
+         │                                            │
+  Firebase Auth                               ┌───────▼──────────┐
+  (Google Auth)                               │  Gemini API      │
+         │                                    │  3.1 Pro Preview │
+         ▼                                    │  (graphic gen)   │
+  Cloud Firestore                             │                  │
+  (Saved Graphics)                            │  2.5 Flash Audio │
+         ▲                                    │  (live voice)    │
+         │                                    └──────────────────┘
+         └────────────────────────────────────────────┘
+         (Auto-saves graphics when generated)
 ```
 
 ### Communication Flow
-1. **Frontend** sends `init_sources` message over WebSocket with an array of `{ type, content, label }` objects
-2. **Backend** aggregates content from all sources (scraping URLs, fetching YouTube transcripts, reading uploaded files)
-3. **Backend** sends `phase` messages (`analyzing` → `designing` → `complete`)
-4. **Backend** calls Gemini Pro to generate the interactive SVG + controls
-5. **Backend** sends `interactive_svg` message with `svg_html`, `controls_html`, `title`, `subtitle`
-6. When the user starts a live conversation, frontend sends `start_live_session`
-7. **Backend** connects to Gemini Live API for real-time voice interaction
-8. Audio streams bidirectionally via the WebSocket (PCM ↔ base64)
+1. **Frontend** sends `init_sources` message over WebSocket with an array of `{ type, content, label }` objects and an optional auth token.
+2. **Backend** authenticates the user (if token provided) and aggregates content from all sources (scraping URLs, fetching YouTube transcripts, reading uploaded files).
+3. **Backend** sends `phase` messages (`analyzing` → `designing` → `complete`).
+4. **Backend** calls Gemini Pro to generate the interactive SVG + controls.
+5. **Backend** sends `interactive_svg` message with `svg_html`, `controls_html`, `title`, `subtitle`.
+6. **Frontend** automatically saves the received graphic payload to **Cloud Firestore** if the user is signed in.
+7. When the user starts a live conversation, frontend sends `start_live_session`.
+8. **Backend** connects to Gemini Live API for real-time voice interaction.
+9. Audio streams bidirectionally via the WebSocket (PCM ↔ base64).
 
 ---
 
@@ -91,6 +106,20 @@ Gemini Live Agent Challenge/
 │   ├── package.json               # Node dependencies
 │   ├── vite.config.ts             # Vite configuration
 │   └── tailwind.config.js         # Tailwind configuration
+│
+├── deploy/
+│   ├── README.md                  # Deployment documentation
+│   ├── provision.sh               # Create GCP VM, static IP, firewall
+│   ├── setup-vm.sh                # Install Docker + Caddy on VM
+│   ├── deploy-backend.sh          # Build & deploy backend container
+│   ├── deploy-frontend.sh         # Build & deploy frontend to Firebase
+│   ├── teardown.sh                # Delete all GCP resources
+│   └── Caddyfile                  # Caddy reverse proxy config
+│
+├── firebase.json                  # Firebase Hosting config
+├── firestore.rules                # Firestore security rules
+├── .firebaserc                    # Firebase project alias
+└── CONTEXT.md                     # This file
 ```
 
 ---
@@ -145,8 +174,39 @@ Tools are called autonomously by Gemini during conversation — the AI decides w
 |---|---|---|
 | `GEMINI_API_KEY` | ✅ | Google Gemini API key |
 | `SUPADATA_API_KEY` | Optional | Supadata API key for YouTube transcript extraction |
+| `GITHUB_TOKEN` | Optional | GitHub API token for extending limits when scraping GitHub |
+| `DISABLE_AUTH` | Optional | Set to `true` to disable Firebase Auth verification on the backend (useful for local dev or public demos) |
+| `ALLOWED_ORIGINS` | Optional | Comma-separated list of allowed CORS origins. Defaults to `*`. |
 
 Set in `backend/.env`.
+
+### Frontend (.env and .env.production)
+
+| Variable | Requirement | Description |
+|---|---|---|
+| `VITE_BACKEND_URL` | Local dev | Usually `http://localhost:8000` |
+| `VITE_FIREBASE_API_KEY` | Production | Firebase configuration |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Production | Firebase configuration |
+| `VITE_FIREBASE_PROJECT_ID` | Production | Firebase configuration |
+| `VITE_FIREBASE_STORAGE_BUCKET`| Production | Firebase configuration |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID`| Production | Firebase configuration |
+| `VITE_FIREBASE_APP_ID` | Production | Firebase configuration |
+| `VITE_FIREBASE_MEASUREMENT_ID`| Production | Firebase configuration |
+
+---
+
+## Cloud Deployment
+
+Narluga includes fully automated deployment scripts in `deploy/`. Deploy the entire stack from scratch:
+
+```bash
+./deploy/provision.sh <PROJECT_ID> <DOMAIN>      # GCP VM + IP + firewall
+./deploy/setup-vm.sh <PROJECT_ID>                 # Install Docker + Caddy
+./deploy/deploy-backend.sh <PROJECT_ID> <DOMAIN>  # Build & run backend
+./deploy/deploy-frontend.sh <PROJECT_ID>           # Build & deploy frontend
+```
+
+All scripts are **idempotent** — safe to re-run. See [`deploy/README.md`](deploy/README.md) for full documentation.
 
 ---
 
