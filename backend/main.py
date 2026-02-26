@@ -4,22 +4,38 @@ import os
 import json
 from dotenv import load_dotenv
 from google_genai_service import handle_live_session, handle_live_restart
+from auth import init_firebase, FirebaseAuthMiddleware, verify_ws_token
 
 load_dotenv()
 
+# Initialize Firebase Admin SDK
+init_firebase()
+
 app = FastAPI()
 
+# CORS: allow frontend origins
+# In production, set ALLOWED_ORIGINS env var to your Firebase Hosting domain
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Firebase Auth middleware for HTTP routes
+# Set DISABLE_AUTH=true for local development without Firebase
+if os.getenv("DISABLE_AUTH", "").lower() != "true":
+    app.add_middleware(FirebaseAuthMiddleware)
+
 @app.get("/")
 def read_root():
-    return {"message": "Lumina Live API is running"}
+    return {"message": "Narluga API is running"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -58,6 +74,14 @@ async def upload_file(file: UploadFile = File(...)):
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+
+    # Verify Firebase token for WebSocket connections
+    if os.getenv("DISABLE_AUTH", "").lower() != "true":
+        user = await verify_ws_token(websocket)
+        if user is None:
+            return  # Connection was closed by verify_ws_token
+        print(f"[WebSocket] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
+    
     print(f"[WebSocket] Connected. Waiting for sources...")
     try:
         # Wait for the init_sources message with the array of sources
@@ -96,6 +120,14 @@ async def websocket_endpoint(websocket: WebSocket):
 async def websocket_restart_endpoint(websocket: WebSocket):
     """Restart a live conversation on an existing graphic (skip graphic generation)."""
     await websocket.accept()
+
+    # Verify Firebase token for WebSocket connections
+    if os.getenv("DISABLE_AUTH", "").lower() != "true":
+        user = await verify_ws_token(websocket)
+        if user is None:
+            return
+        print(f"[WebSocket Restart] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
+    
     print(f"[WebSocket Restart] Connected. Waiting for restart context...")
     try:
         init_data = await websocket.receive_text()
@@ -128,4 +160,5 @@ async def websocket_restart_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

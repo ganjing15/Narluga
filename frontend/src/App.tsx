@@ -6,6 +6,15 @@ import {
   LinkIcon, YoutubeIcon, FileUploadIcon, TextIcon,
   CheckCircleIcon, XIcon, RefreshIcon, PlusIcon, NarlugaLogo
 } from './Icons'
+import {
+  signInWithGoogle, firebaseSignOut, getIdToken, onAuthChange,
+  isFirebaseConfigured, saveGraphic, listGraphics, deleteGraphic,
+  type User, type SavedGraphic
+} from './firebase'
+
+// Backend URL from environment (defaults to localhost for dev)
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+const WS_BACKEND_URL = BACKEND_URL.replace(/^http/, 'ws')
 
 // Source types
 type SourceType = 'url' | 'youtube' | 'text' | 'file'
@@ -33,6 +42,13 @@ function App() {
   const [error, setError] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+
+  // Auth state
+  const [user, setUser] = useState<User | null>(null)
+
+  // Saved graphics gallery
+  const [savedGraphics, setSavedGraphics] = useState<SavedGraphic[]>([])
+  const [galleryLoading, setGalleryLoading] = useState(false)
 
   // SVG display state
   const [currentSvg, _setCurrentSvg] = useState<string | null>(null)
@@ -131,9 +147,11 @@ function App() {
       formData.append('file', file)
 
       try {
-        const response = await fetch('http://localhost:8000/upload', {
+        const token = await getIdToken()
+        const response = await fetch(`${BACKEND_URL}/upload`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
           method: 'POST',
-          body: formData
+          body: formData,
         })
         const data = await response.json()
 
@@ -160,6 +178,28 @@ function App() {
   // Remove a source
   const removeSource = useCallback((id: string) => {
     setSources(prev => prev.filter(s => s.id !== id))
+  }, [])
+
+  // Firebase auth state listener
+  useEffect(() => {
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
+      setUser(firebaseUser)
+      if (firebaseUser) {
+        // Load saved graphics when user signs in
+        setGalleryLoading(true)
+        try {
+          const graphics = await listGraphics(firebaseUser.uid)
+          setSavedGraphics(graphics)
+        } catch (e) {
+          console.error('[Gallery] Failed to load graphics:', e)
+        } finally {
+          setGalleryLoading(false)
+        }
+      } else {
+        setSavedGraphics([])
+      }
+    })
+    return unsubscribe
   }, [])
 
   // Attach a global function so the generated SVG's <script> can send events to the Voice AI
@@ -312,7 +352,8 @@ function App() {
       setError('')
       setStatusMessage('Reconnecting...')
 
-      const wsUrl = `ws://localhost:8000/ws/live-restart`
+      const token = await getIdToken()
+      const wsUrl = token ? `${WS_BACKEND_URL}/ws/live-restart?token=${encodeURIComponent(token)}` : `${WS_BACKEND_URL}/ws/live-restart`
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
@@ -498,7 +539,8 @@ function App() {
     setStatusMessage('Connecting...')
 
     try {
-      const wsUrl = `ws://localhost:8000/ws/live`
+      const token = await getIdToken()
+      const wsUrl = token ? `${WS_BACKEND_URL}/ws/live?token=${encodeURIComponent(token)}` : `${WS_BACKEND_URL}/ws/live`
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
@@ -538,6 +580,29 @@ function App() {
           // Store narration context for conversation restart
           if (data.narration_context) narrationContextRef.current = data.narration_context
           if (data.source_labels) sourceLabelsRef.current = data.source_labels
+
+          // Auto-save to Firestore if user is signed in
+          if (user && isFirebaseConfigured) {
+            saveGraphic(user.uid, {
+              title: data.title || 'Untitled',
+              subtitle: data.subtitle || '',
+              svg_html: data.svg_html || '',
+              controls_html: data.controls_html || '',
+              narration_context: data.narration_context || '',
+              source_labels: data.source_labels || [],
+            }).then(id => {
+              setSavedGraphics(prev => [{
+                id,
+                title: data.title || 'Untitled',
+                subtitle: data.subtitle || '',
+                svg_html: data.svg_html || '',
+                controls_html: data.controls_html || '',
+                narration_context: data.narration_context || '',
+                source_labels: data.source_labels || [],
+                created_at: null,
+              }, ...prev])
+            }).catch(e => console.error('[Gallery] Failed to save graphic:', e))
+          }
         } else if (data.type === 'clear') {
           if (audioCtxRef.current) {
             audioCtxRef.current.close().catch(console.error)
@@ -1228,6 +1293,41 @@ function App() {
               <span className="pulse-dot"></span> Live Chat
             </div>
           )}
+          {isFirebaseConfigured && (
+            user ? (
+              <div className="flex items-center gap-2">
+                {user.photoURL && (
+                  <img
+                    src={user.photoURL}
+                    alt=""
+                    className="w-8 h-8 rounded-full border border-slate-200"
+                  />
+                )}
+                <span className="text-sm text-slate-600 hidden sm:inline">{user.displayName?.split(' ')[0]}</span>
+                <button
+                  onClick={() => firebaseSignOut()}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors px-2 py-1"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={async () => {
+                  try { await signInWithGoogle() } catch (e: any) { setError(e.message) }
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all text-sm font-medium text-slate-700"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                </svg>
+                Sign in with Google
+              </button>
+            )
+          )}
         </div>
       </header>
 
@@ -1353,6 +1453,73 @@ function App() {
                     >
                       Clear All Sources
                     </button>
+                  )}
+
+                  {/* My Graphics Gallery */}
+                  {isFirebaseConfigured && user && (
+                    <div className="mt-6">
+                      <div className="source-roster-header mb-2">
+                        <span className="source-roster-title">My Graphics</span>
+                        {galleryLoading
+                          ? <span className="text-xs text-slate-400">Loading...</span>
+                          : <span className="source-count">{savedGraphics.length}</span>
+                        }
+                      </div>
+
+                      {!galleryLoading && savedGraphics.length === 0 && (
+                        <p className="text-xs text-slate-400 text-center py-3">
+                          Your generated graphics will appear here.
+                        </p>
+                      )}
+
+                      <div className="flex flex-col gap-2">
+                        {savedGraphics.map(g => (
+                          <div
+                            key={g.id}
+                            className="group relative rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-200 hover:shadow-sm transition-all p-3 cursor-pointer"
+                            onClick={() => {
+                              setCurrentSvg(g.svg_html)
+                              setCurrentControls(g.controls_html || null)
+                              setCurrentTitle(g.title)
+                              setCurrentSubtitle(g.subtitle || null)
+                              narrationContextRef.current = g.narration_context || ''
+                              sourceLabelsRef.current = g.source_labels || []
+                              setSessionPhase('complete')
+                            }}
+                          >
+                            {/* Title */}
+                            <p className="text-xs font-semibold text-slate-700 truncate pr-6">{g.title}</p>
+
+                            {/* Source labels */}
+                            {g.source_labels?.length > 0 && (
+                              <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                {g.source_labels.join(', ')}
+                              </p>
+                            )}
+
+                            {/* Timestamp */}
+                            {g.created_at && (
+                              <p className="text-[10px] text-slate-300 mt-1">
+                                {new Date((g.created_at as any).seconds * 1000).toLocaleDateString()}
+                              </p>
+                            )}
+
+                            {/* Delete button */}
+                            <button
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all"
+                              title="Delete graphic"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                await deleteGraphic(user.uid, g.id)
+                                setSavedGraphics(prev => prev.filter(x => x.id !== g.id))
+                              }}
+                            >
+                              <XIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
 
                   {/* Generate button */}

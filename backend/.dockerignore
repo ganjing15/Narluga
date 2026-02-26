@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+generated_graphics/
+backend.log
+test_ws.py

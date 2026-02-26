@@ -106,9 +106,10 @@ Gemini Live Agent Challenge/
 ### Interactive Graphic Generation
 - Gemini Pro generates a complete SVG animation and HTML controls panel.
 - To prevent CSS/JS conflicts with the main React app, the generated graphic is securely isolated inside a **sandboxed iframe**.
-- An intermediate tracking script is dynamically injected into the iframe to restore telemetry:
-  - **Hover Tracking**: Debounced cursor position tracking that pauses during CSS animations.
-  - **Interaction Tracking**: Global listeners that capture slider drags and button clicks in the controls pane.
+- An intermediate tracking script is dynamically injected into the iframe to restore telemetry and fix common generation bugs:
+  - **Hover Tracking**: 1500ms debounced cursor position tracking that pauses during CSS animations.
+  - **Interaction Tracking**: Fast 300ms debounced global listeners that capture slider drags and button clicks, detecting toggle states (e.g. "Play" -> "Pause").
+  - **Interval Stacking Protection**: A `setInterval`/`clearInterval` monkey-patch prevents a common AI generation bug where toggle buttons create new intervals without clearing old ones. All intervals are tracked and force-cleared when a pause state is detected.
   - Telemetry is sent via `postMessage` to the parent window and forwarded to the AI.
 - Each graphic is auto-saved to `backend/generated_graphics/` as a standalone HTML file.
 
@@ -117,12 +118,14 @@ Gemini Live Agent Challenge/
 - Bidirectional audio: mic → PCM 16kHz → Gemini → 24kHz audio → speaker
 - AI is contextually aware of the graphic via narration context
 - Supports interruptions and event-driven context updates
+  - *Note*: The native-audio model handles Voice Activity Detection (VAD) automatically. Custom `RealtimeInputConfig` settings are not supported (causes 1008 API error).
+  - During a voice interruption, **actionable tools** (`click_element`, `modify_element`, `fetch_more_detail`) are always executed to ensure responsiveness, while cosmetic tools (`highlight_element`, `zoom_view`) are skipped.
 
 ### Agentic Tool Use (Live Session)
 The AI ("Narluga") proactively uses tools to manipulate the diagram inside the iframe sandbox while speaking:
 - **`highlight_element`** — Pulse/glow a diagram element with colored drop-shadow animation
-- **`modify_element`** — Dynamically updates SVG attributes (`r`, `cx`, `width`, `fill`, etc.) or CSS properties in real-time, allowing for structural resizing or color changes.
-- **`click_element`** — Programmatically triggers a click on buttons or inputs in the controls panel.
+- **`modify_element`** — Dynamically updates CSS properties in real-time. Explicitly supports `scale`, `fill`, `opacity`, `display`, and `filter`. The `element_id` must be a human-readable keyword, not a CSS selector. Includes special handling for SVG `transform-origin` to prevent position shifting when scaling.
+- **`click_element`** — Programmatically triggers a click on buttons or inputs in the controls panel. Automatically force-clears existing intervals before clicking play/toggle buttons to prevent stacking.
 - **`navigate_to_section`** — Smooth scroll the viewport to focus on a section
 - **`zoom_view`** — Zoom in for details, zoom out for overview, or reset
 - **`fetch_more_detail`** — Query Google Search for supplementary info when the user asks beyond the diagram's scope

@@ -1,6 +1,10 @@
 fastapi
-uvicorn
+uvicorn[standard]
 google-genai
 requests
 python-dotenv
 pydantic
+aiohttp
+beautifulsoup4
+firebase-admin
+python-multipart
