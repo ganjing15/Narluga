@@ -1,14 +1,15 @@
 import { useState, useRef, type FormEvent, useEffect, useCallback, useMemo } from 'react'
 import './App.css'
+import { GraphicsPage } from './GraphicsPage'
 import {
   MicIcon, StopIcon, DisplayIcon, SparklesIcon,
   ChevronLeftIcon, ChevronRightIcon,
   LinkIcon, YoutubeIcon, FileUploadIcon, TextIcon,
-  CheckCircleIcon, XIcon, RefreshIcon, PlusIcon, NarlugaLogo
+  CheckCircleIcon, XIcon, RefreshIcon, PlusIcon, PencilIcon, NarlugaLogo
 } from './Icons'
 import {
   signInWithGoogle, firebaseSignOut, getIdToken, onAuthChange,
-  isFirebaseConfigured, saveGraphic, listGraphics, deleteGraphic,
+  isFirebaseConfigured, saveGraphic, listGraphics,
   type User, type SavedGraphic
 } from './firebase'
 
@@ -31,6 +32,8 @@ type SessionPhase = 'idle' | 'analyzing' | 'designing' | 'complete' | 'conversat
 function App() {
   // Source management
   const [sources, setSources] = useState<Source[]>([])
+  const [editingSourceId, setEditingSourceId] = useState<string | null>(null)
+  const [editingValue, setEditingValue] = useState('')
   const [inputValue, setInputValue] = useState('')
   const [showTextArea, setShowTextArea] = useState(false)
   const [textAreaValue, setTextAreaValue] = useState('')
@@ -43,6 +46,7 @@ function App() {
   const [hasStarted, setHasStarted] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
+  const [currentPage, setCurrentPage] = useState<'home' | 'gallery'>('home')
   const accountMenuRef = useRef<HTMLDivElement>(null)
 
   // Auth state
@@ -89,8 +93,7 @@ function App() {
 
     // YouTube detection
     if (/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)/.test(trimmed)) {
-      const match = trimmed.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/)
-      return { type: 'youtube', label: `YouTube: ${match ? match[1] : trimmed.slice(0, 40)}` }
+      return { type: 'youtube', label: trimmed }
     }
 
     // URL detection
@@ -180,6 +183,22 @@ function App() {
   // Remove a source
   const removeSource = useCallback((id: string) => {
     setSources(prev => prev.filter(s => s.id !== id))
+  }, [setSources])
+
+  const updateSource = useCallback((id: string, newValue: string) => {
+    const trimmed = newValue.trim()
+    if (!trimmed) return
+    setSources(prev => prev.map(s => {
+      if (s.id !== id) return s
+      // Re-detect type from new value
+      const { type } = detectInputType(trimmed)
+      const displayLabel = type === 'youtube'
+        ? trimmed
+        : type === 'url'
+          ? trimmed
+          : trimmed
+      return { ...s, type, content: trimmed, label: displayLabel }
+    }))
   }, [])
 
   // Firebase auth state listener
@@ -1308,453 +1327,477 @@ function App() {
   const isProcessing = sessionPhase === 'analyzing' || sessionPhase === 'designing'
 
   return (
-    <div className="app-wrapper">
-      <header className="app-header">
-        <div className="app-logo flex items-center gap-3">
-          <NarlugaLogo className="w-11 h-11 drop-shadow-sm" />
-          <span className="text-2xl font-extrabold tracking-tighter text-slate-800">
-            Narluga
-          </span>
-        </div>
+    <>
+      {currentPage === 'gallery' && user && (
+        <GraphicsPage
+          savedGraphics={savedGraphics}
+          galleryLoading={galleryLoading}
+          user={user}
+          onOpenGraphic={(g) => {
+            setCurrentSvg(g.svg_html)
+            setCurrentControls(g.controls_html || null)
+            setCurrentTitle(g.title)
+            setCurrentSubtitle(g.subtitle || null)
+            narrationContextRef.current = g.narration_context || ''
+            sourceLabelsRef.current = g.source_labels || []
+            // Reconstruct sources so the left panel shows the original links
+            setSources((g.source_labels || []).map((label, i) => {
+              const l = label.toLowerCase()
+              const type: SourceType = l.startsWith('youtube:') ? 'youtube'
+                : l.startsWith('http') ? 'url'
+                  : (l.startsWith('file:') || l.endsWith('.pdf') || l.endsWith('.txt')) ? 'file'
+                    : 'text'
+              const content = label.replace(/^(youtube|url|file|text):\s*/i, '')
+              const displayLabel = type === 'youtube'
+                ? `https://youtube.com/watch?v=${content}`
+                : content
+              return { id: `loaded-${i}`, type, content, label: displayLabel }
+            }))
+            setSessionPhase('complete')
+            setCurrentPage('home')
+          }}
+          onDeleteGraphic={(id) => setSavedGraphics(prev => prev.filter(x => x.id !== id))}
+          onBack={() => setCurrentPage('home')}
+        />
+      )}
+      <div className="app-wrapper" style={{ display: currentPage === 'gallery' ? 'none' : undefined }}>
+        <header className="app-header">
+          <div className="app-logo flex items-center gap-3">
+            <NarlugaLogo className="w-11 h-11 drop-shadow-sm" />
+            <span className="text-2xl font-extrabold tracking-tighter text-slate-800">
+              Narluga
+            </span>
+          </div>
 
-        <div className="flex items-center gap-4">
-          {sessionPhase === 'conversation' && (
-            <div className="live-badge">
-              <span className="pulse-dot"></span> Live Chat
-            </div>
-          )}
-          {isFirebaseConfigured && (
-            user ? (
-              <div className="relative" ref={accountMenuRef}>
-                <button
-                  onClick={() => setShowAccountMenu(!showAccountMenu)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/60 transition-all cursor-pointer border border-transparent hover:border-slate-200"
-                >
-                  {user.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      alt=""
-                      className="w-8 h-8 rounded-full border border-slate-200"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-[var(--accent-primary)] text-white flex items-center justify-center text-sm font-semibold">
-                      {(user.displayName || user.email || '?')[0].toUpperCase()}
+          <div className="flex items-center gap-4">
+            {sessionPhase === 'conversation' && (
+              <div className="live-badge">
+                <span className="pulse-dot"></span> Live Chat
+              </div>
+            )}
+            {isFirebaseConfigured && (
+              user ? (
+                <div className="relative" ref={accountMenuRef}>
+                  <button
+                    onClick={() => setShowAccountMenu(!showAccountMenu)}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/60 transition-all cursor-pointer border border-transparent hover:border-slate-200"
+                  >
+                    {user.photoURL ? (
+                      <img
+                        src={user.photoURL}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="w-8 h-8 rounded-full border border-slate-200"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-[var(--accent-primary)] text-white flex items-center justify-center text-sm font-semibold">
+                        {(user.displayName || user.email || '?')[0].toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-sm text-slate-600 hidden sm:inline font-medium">{user.displayName?.split(' ')[0]}</span>
+                  </button>
+
+                  {/* Account Dropdown */}
+                  {showAccountMenu && (
+                    <div className="account-dropdown">
+                      {/* User Info */}
+                      <div className="px-4 py-3 border-b border-slate-100">
+                        <p className="text-sm font-semibold text-slate-800">{user.displayName}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{user.email}</p>
+                      </div>
+
+                      {/* My Graphics nav link */}
+                      <div className="px-2 py-2">
+                        <button
+                          onClick={() => { setCurrentPage('gallery'); setShowAccountMenu(false) }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700 font-medium group"
+                        >
+                          <span>My Graphics</span>
+                          <span className="flex items-center gap-1.5 text-slate-400 group-hover:text-slate-600 transition-colors">
+                            {savedGraphics.length > 0 && <span className="source-count">{savedGraphics.length}</span>}
+                            <span className="text-base leading-none">→</span>
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Sign Out */}
+                      <div className="border-t border-slate-100 px-4 py-2">
+                        <button
+                          onClick={() => { firebaseSignOut(); setShowAccountMenu(false) }}
+                          className="w-full text-left text-sm text-slate-500 hover:text-red-500 py-1.5 transition-colors"
+                        >
+                          Sign out
+                        </button>
+                      </div>
                     </div>
                   )}
-                  <span className="text-sm text-slate-600 hidden sm:inline font-medium">{user.displayName?.split(' ')[0]}</span>
+                </div>
+              ) : (
+                <button
+                  onClick={async () => {
+                    try { await signInWithGoogle() } catch (e: any) { setError(e.message) }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all text-sm font-medium text-slate-700"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                  </svg>
+                  Sign in with Google
                 </button>
+              )
+            )}
+          </div>
+        </header>
 
-                {/* Account Dropdown */}
-                {showAccountMenu && (
-                  <div className="account-dropdown">
-                    {/* User Info */}
-                    <div className="px-4 py-3 border-b border-slate-100">
-                      <p className="text-sm font-semibold text-slate-800">{user.displayName}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{user.email}</p>
-                    </div>
+        <main className="app-container">
+          <section className="dashboard-layout-nblm">
+            {/* LEFT PANEL: Sources */}
+            <div
+              className="nblm-card flex basis-[320px] max-w-[320px] shrink-0 relative overflow-hidden"
+              style={{ display: isSidebarOpen ? 'flex' : 'none' }}
+            >
+              <div className="nblm-header">
+                <span>Sources</span>
+              </div>
+              <button onClick={() => setIsSidebarOpen(false)} className="absolute top-[12px] right-[12px] w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors z-10" style={{ background: '#f1f5f9', color: '#475569' }} title="Collapse sidebar">
+                <ChevronLeftIcon className="w-5 h-5" />
+              </button>
+              <div className="flex-1 overflow-auto flex flex-col p-4 relative">
 
-                    {/* My Graphics */}
-                    <div className="px-4 py-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My Graphics</span>
-                        {galleryLoading
-                          ? <span className="text-xs text-slate-400">Loading...</span>
-                          : savedGraphics.length > 0 && <span className="source-count">{savedGraphics.length}</span>
-                        }
+                {/* Phase: idle or complete — show source manager */}
+                {(sessionPhase === 'idle' || sessionPhase === 'complete') && !isProcessing && (
+                  <div className="sidebar-input-area">
+                    {/* Main input bar */}
+                    <form onSubmit={addSource} className="url-form">
+                      <div className="url-input-wrapper shadow-none">
+                        <input
+                          type="text"
+                          placeholder="Paste a URL or YouTube video link"
+                          value={inputValue}
+                          onChange={(e) => setInputValue(e.target.value)}
+                          className="url-input"
+                          disabled={isConnecting}
+                        />
+                        {inputValue.trim() && (
+                          <button type="submit" className="enter-icon-btn" title="Add source">
+                            <PlusIcon className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
+                    </form>
 
-                      {!galleryLoading && savedGraphics.length === 0 && (
-                        <p className="text-xs text-slate-400 text-center py-3">
-                          Your generated graphics will appear here.
-                        </p>
-                      )}
-
-                      <div className="account-dropdown-list">
-                        {savedGraphics.map(g => (
-                          <div
-                            key={g.id}
-                            className="group relative rounded-lg border border-slate-100 bg-slate-50/80 hover:bg-white hover:border-slate-200 hover:shadow-sm transition-all p-2.5 cursor-pointer"
-                            onClick={() => {
-                              setCurrentSvg(g.svg_html)
-                              setCurrentControls(g.controls_html || null)
-                              setCurrentTitle(g.title)
-                              setCurrentSubtitle(g.subtitle || null)
-                              narrationContextRef.current = g.narration_context || ''
-                              sourceLabelsRef.current = g.source_labels || []
-                              setSessionPhase('complete')
-                              setShowAccountMenu(false)
-                            }}
-                          >
-                            <p className="text-xs font-semibold text-slate-700 truncate pr-5">{g.title}</p>
-                            {g.source_labels?.length > 0 && (
-                              <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                                {g.source_labels.join(', ')}
-                              </p>
-                            )}
-                            {g.created_at && (
-                              <p className="text-[10px] text-slate-300 mt-0.5">
-                                {new Date((g.created_at as any).seconds * 1000).toLocaleDateString()}
-                              </p>
-                            )}
-                            <button
-                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all"
-                              title="Delete graphic"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                await deleteGraphic(user.uid, g.id)
-                                setSavedGraphics(prev => prev.filter(x => x.id !== g.id))
-                              }}
-                            >
-                              <XIcon className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Sign Out */}
-                    <div className="border-t border-slate-100 px-4 py-2">
+                    {/* Source type chips */}
+                    <div className="source-chips">
                       <button
-                        onClick={() => { firebaseSignOut(); setShowAccountMenu(false) }}
-                        className="w-full text-left text-sm text-slate-500 hover:text-red-500 py-1.5 transition-colors"
+                        className="source-chip"
+                        onClick={() => setShowTextArea(!showTextArea)}
+                        title="Add text/notes"
                       >
-                        Sign out
+                        <TextIcon className="w-4 h-4" /> Text
                       </button>
+                      <button
+                        className="source-chip"
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Upload a file"
+                      >
+                        <FileUploadIcon className="w-4 h-4" /> Upload
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".txt,.md,.pdf"
+                        multiple
+                        style={{ display: 'none' }}
+                        onChange={(e) => handleFileUpload(e.target.files)}
+                      />
                     </div>
+
+                    {/* Text area (expanded) */}
+                    {showTextArea && (
+                      <div className="text-source-area">
+                        <textarea
+                          placeholder="Paste your notes, text content, or describe a topic..."
+                          value={textAreaValue}
+                          onChange={(e) => setTextAreaValue(e.target.value)}
+                          className="text-source-textarea"
+                          rows={4}
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            className="btn-sm-primary"
+                            onClick={addTextSource}
+                            disabled={!textAreaValue.trim()}
+                          >
+                            Add Text
+                          </button>
+                          <button
+                            className="btn-sm-secondary"
+                            onClick={() => { setShowTextArea(false); setTextAreaValue('') }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Source roster */}
+                    {sources.length > 0 && (
+                      <div className="source-roster">
+                        <div className="source-roster-header">
+                          <span className="source-roster-title">Added Sources</span>
+                          <span className="source-count">{sources.length}</span>
+                        </div>
+                        {sources.map(source => {
+                          const isEditing = editingSourceId === source.id
+                          const href = !isEditing && (source.type === 'youtube' || source.type === 'url')
+                            ? source.label
+                            : undefined
+                          const saveEdit = () => {
+                            updateSource(source.id, editingValue)
+                            setEditingSourceId(null)
+                          }
+                          const cancelEdit = () => setEditingSourceId(null)
+                          return (
+                            <div key={source.id} className={`source-item${isEditing ? ' editing' : ''}`}>
+                              <div className="source-item-icon">{getSourceIcon(source.type)}</div>
+                              {isEditing ? (
+                                <input
+                                  className="source-item-edit-input"
+                                  value={editingValue}
+                                  onChange={e => setEditingValue(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                                  onBlur={saveEdit}
+                                  autoFocus
+                                />
+                              ) : href ? (
+                                <a href={href} target="_blank" rel="noopener noreferrer" className="source-item-label" style={{ color: 'var(--accent-primary)', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>{source.label}</a>
+                              ) : (
+                                <span className="source-item-label">{source.label}</span>
+                              )}
+                              {!isEditing && (
+                                <button
+                                  className="source-remove-btn"
+                                  onClick={() => { setEditingSourceId(source.id); setEditingValue(source.label) }}
+                                  title="Edit source"
+                                  style={{ marginRight: 2 }}
+                                >
+                                  <PencilIcon className="w-3 h-3" />
+                                </button>
+                              )}
+                              <button
+                                className="source-remove-btn"
+                                onClick={() => isEditing ? cancelEdit() : removeSource(source.id)}
+                                title={isEditing ? 'Cancel' : 'Remove source'}
+                              >
+                                <XIcon className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Clear all sources */}
+                    {sources.length > 0 && (
+                      <button
+                        onClick={() => { setSources([]); resetSession() }}
+                        className="w-full mt-2 py-1.5 text-xs text-slate-400 hover:text-red-400 border border-dashed border-slate-200 hover:border-red-200 rounded-lg transition-colors"
+                      >
+                        Clear All Sources
+                      </button>
+                    )}
+
+
+
+                    {/* Generate button */}
+                    {sources.length > 0 && sessionPhase === 'idle' && (
+                      <div className="button-group w-full mt-4">
+                        <button
+                          className="btn-primary w-full justify-center"
+                          onClick={startSession}
+                          disabled={isConnecting}
+                        >
+                          {isConnecting
+                            ? <span className="spinner"></span>
+                            : <><SparklesIcon className="w-5 h-5" /> Create Interactive Graphic</>
+                          }
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Empty state hint */}
+                    {sources.length === 0 && !showTextArea && (
+                      <div className="empty-state-hint">
+                        <DisplayIcon className="w-10 h-10 mb-3 opacity-20" />
+                        <p>Add sources to generate an interactive graphic</p>
+                        <p className="text-xs opacity-60 mt-1">URLs, YouTube videos, text, or files</p>
+                      </div>
+                    )}
+
+                    {error && <p className="text-red-500 mt-4 text-sm text-center">{error}</p>}
                   </div>
                 )}
-              </div>
-            ) : (
-              <button
-                onClick={async () => {
-                  try { await signInWithGoogle() } catch (e: any) { setError(e.message) }
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all text-sm font-medium text-slate-700"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                </svg>
-                Sign in with Google
-              </button>
-            )
-          )}
-        </div>
-      </header>
 
-      <main className="app-container">
-        <section className="dashboard-layout-nblm">
-          {/* LEFT PANEL: Sources */}
-          <div
-            className="nblm-card flex basis-[320px] max-w-[320px] shrink-0 relative overflow-hidden"
-            style={{ display: isSidebarOpen ? 'flex' : 'none' }}
-          >
-            <div className="nblm-header">
-              <span>Sources</span>
-            </div>
-            <button onClick={() => setIsSidebarOpen(false)} className="absolute top-[12px] right-[12px] w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors z-10" style={{ background: '#f1f5f9', color: '#475569' }} title="Collapse sidebar">
-              <ChevronLeftIcon className="w-5 h-5" />
-            </button>
-            <div className="flex-1 overflow-auto flex flex-col p-4 relative">
-
-              {/* Phase: idle or complete — show source manager */}
-              {(sessionPhase === 'idle' || sessionPhase === 'complete') && !isProcessing && (
-                <div className="sidebar-input-area">
-                  {/* Main input bar */}
-                  <form onSubmit={addSource} className="url-form">
-                    <div className="url-input-wrapper shadow-none">
-                      <input
-                        type="text"
-                        placeholder="Paste a URL or YouTube video link"
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        className="url-input"
-                        disabled={isConnecting}
-                      />
-                      {inputValue.trim() && (
-                        <button type="submit" className="enter-icon-btn" title="Add source">
-                          <PlusIcon className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </form>
-
-                  {/* Source type chips */}
-                  <div className="source-chips">
-                    <button
-                      className="source-chip"
-                      onClick={() => setShowTextArea(!showTextArea)}
-                      title="Add text/notes"
-                    >
-                      <TextIcon className="w-4 h-4" /> Text
-                    </button>
-                    <button
-                      className="source-chip"
-                      onClick={() => fileInputRef.current?.click()}
-                      title="Upload a file"
-                    >
-                      <FileUploadIcon className="w-4 h-4" /> Upload
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".txt,.md,.pdf"
-                      multiple
-                      style={{ display: 'none' }}
-                      onChange={(e) => handleFileUpload(e.target.files)}
-                    />
-                  </div>
-
-                  {/* Text area (expanded) */}
-                  {showTextArea && (
-                    <div className="text-source-area">
-                      <textarea
-                        placeholder="Paste your notes, text content, or describe a topic..."
-                        value={textAreaValue}
-                        onChange={(e) => setTextAreaValue(e.target.value)}
-                        className="text-source-textarea"
-                        rows={4}
-                      />
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          className="btn-sm-primary"
-                          onClick={addTextSource}
-                          disabled={!textAreaValue.trim()}
-                        >
-                          Add Text
-                        </button>
-                        <button
-                          className="btn-sm-secondary"
-                          onClick={() => { setShowTextArea(false); setTextAreaValue('') }}
-                        >
-                          Cancel
-                        </button>
+                {/* Phase: analyzing or designing — show progress */}
+                {isProcessing && (
+                  <div className="sidebar-status-area">
+                    <div className="status-indicator">
+                      <div className={getPhaseDotClass()}></div>
+                      <div className="status-text">
+                        <span className="status-phase-label">
+                          {sessionPhase === 'analyzing' ? 'Analyzing Sources' : 'Designing Interactive Graphic'}
+                        </span>
+                        <span className="status-detail">
+                          {sessionPhase === 'analyzing'
+                            ? `Processing ${sources.length} source${sources.length !== 1 ? 's' : ''}…`
+                            : 'Takes ~30–60 seconds'}
+                        </span>
                       </div>
                     </div>
-                  )}
 
-                  {/* Source roster */}
-                  {sources.length > 0 && (
-                    <div className="source-roster">
+                    {/* Source summary during processing */}
+                    <div className="source-roster mt-6">
                       <div className="source-roster-header">
-                        <span className="source-roster-title">Added Sources</span>
+                        <span className="source-roster-title">Sources</span>
                         <span className="source-count">{sources.length}</span>
                       </div>
                       {sources.map(source => (
-                        <div key={source.id} className="source-item">
+                        <div key={source.id} className="source-item processing">
                           <div className="source-item-icon">{getSourceIcon(source.type)}</div>
                           <span className="source-item-label">{source.label}</span>
-                          <button
-                            className="source-remove-btn"
-                            onClick={() => removeSource(source.id)}
-                            title="Remove source"
-                          >
-                            <XIcon className="w-3.5 h-3.5" />
-                          </button>
+                          {sessionPhase === 'designing' && (
+                            <CheckCircleIcon className="w-4 h-4 text-emerald-500 ml-auto shrink-0" />
+                          )}
                         </div>
                       ))}
                     </div>
-                  )}
 
-                  {/* Clear all sources */}
-                  {sources.length > 0 && (
                     <button
-                      onClick={() => { setSources([]); resetSession() }}
-                      className="w-full mt-2 py-1.5 text-xs text-slate-400 hover:text-red-400 border border-dashed border-slate-200 hover:border-red-200 rounded-lg transition-colors"
+                      onClick={() => { disconnect(); setSessionPhase('idle'); }}
+                      className="w-full mt-4 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all duration-200 text-sm font-medium"
                     >
-                      Clear All Sources
+                      Cancel Generation
                     </button>
-                  )}
-
-
-
-                  {/* Generate button */}
-                  {sources.length > 0 && sessionPhase === 'idle' && (
-                    <div className="button-group w-full mt-4">
-                      <button
-                        className="btn-primary w-full justify-center"
-                        onClick={startSession}
-                        disabled={isConnecting}
-                      >
-                        {isConnecting
-                          ? <span className="spinner"></span>
-                          : <><SparklesIcon className="w-5 h-5" /> Create Interactive Graphic</>
-                        }
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Empty state hint */}
-                  {sources.length === 0 && !showTextArea && (
-                    <div className="empty-state-hint">
-                      <DisplayIcon className="w-10 h-10 mb-3 opacity-20" />
-                      <p>Add sources to generate an interactive graphic</p>
-                      <p className="text-xs opacity-60 mt-1">URLs, YouTube videos, text, or files</p>
-                    </div>
-                  )}
-
-                  {error && <p className="text-red-500 mt-4 text-sm text-center">{error}</p>}
-                </div>
-              )}
-
-              {/* Phase: analyzing or designing — show progress */}
-              {isProcessing && (
-                <div className="sidebar-status-area">
-                  <div className="status-indicator">
-                    <div className={getPhaseDotClass()}></div>
-                    <div className="status-text">
-                      <span className="status-phase-label">
-                        {sessionPhase === 'analyzing' ? 'Analyzing Sources' : 'Designing Interactive Graphic'}
-                      </span>
-                      <span className="status-detail">
-                        {sessionPhase === 'analyzing'
-                          ? `Processing ${sources.length} source${sources.length !== 1 ? 's' : ''}…`
-                          : 'Takes ~30–60 seconds'}
-                      </span>
-                    </div>
                   </div>
+                )}
 
-                  {/* Source summary during processing */}
-                  <div className="source-roster mt-6">
-                    <div className="source-roster-header">
-                      <span className="source-roster-title">Sources</span>
-                      <span className="source-count">{sources.length}</span>
-                    </div>
-                    {sources.map(source => (
-                      <div key={source.id} className="source-item processing">
-                        <div className="source-item-icon">{getSourceIcon(source.type)}</div>
-                        <span className="source-item-label">{source.label}</span>
-                        {sessionPhase === 'designing' && (
-                          <CheckCircleIcon className="w-4 h-4 text-emerald-500 ml-auto shrink-0" />
-                        )}
+                {/* Phase: complete — show action buttons */}
+                {sessionPhase === 'complete' && (
+                  <div className="sidebar-actions-area">
+                    <div className="status-indicator mb-6">
+                      <div className={getPhaseDotClass()}></div>
+                      <div className="status-text">
+                        <span className="status-phase-label">Graphic Ready!</span>
+                        <span className="status-detail">Your interactive graphic is ready to explore</span>
                       </div>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => { disconnect(); setSessionPhase('idle'); }}
-                    className="w-full mt-4 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all duration-200 text-sm font-medium"
-                  >
-                    Cancel Generation
-                  </button>
-                </div>
-              )}
-
-              {/* Phase: complete — show action buttons */}
-              {sessionPhase === 'complete' && (
-                <div className="sidebar-actions-area">
-                  <div className="status-indicator mb-6">
-                    <div className={getPhaseDotClass()}></div>
-                    <div className="status-text">
-                      <span className="status-phase-label">Graphic Ready!</span>
-                      <span className="status-detail">Your interactive graphic is ready to explore</span>
                     </div>
-                  </div>
 
-                  {!hasStarted && (
+                    {!hasStarted && (
+                      <button
+                        onClick={startPresentation}
+                        className="w-full py-3 px-6 bg-[var(--accent-primary)] hover:bg-[#0a48ad] text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                      >
+                        <MicIcon className="w-5 h-5" /> Start Live Conversation
+                      </button>
+                    )}
+
                     <button
-                      onClick={startPresentation}
-                      className="w-full py-3 px-6 bg-[var(--accent-primary)] hover:bg-[#0a48ad] text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                      onClick={resetSession}
+                      className="w-full py-2.5 px-6 mt-3 bg-white border border-slate-200 text-slate-600 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300"
                     >
-                      <MicIcon className="w-5 h-5" /> Start Live Conversation
+                      <RefreshIcon className="w-4 h-4" /> New Graphic
                     </button>
-                  )}
 
-                  <button
-                    onClick={resetSession}
-                    className="w-full py-2.5 px-6 mt-3 bg-white border border-slate-200 text-slate-600 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300"
-                  >
-                    <RefreshIcon className="w-4 h-4" /> New Graphic
-                  </button>
+                  </div>
+                )}
 
-                </div>
-              )}
-
-              {/* Phase: conversation — show live indicator */}
-              {sessionPhase === 'conversation' && (
-                <div className="sidebar-actions-area">
-                  <div className="status-indicator mb-6">
-                    <div className={getPhaseDotClass()}></div>
-                    <div className="status-text">
-                      <span className="status-phase-label">Live Conversation</span>
-                      <span className="status-detail">Ask questions about the graphic</span>
+                {/* Phase: conversation — show live indicator */}
+                {sessionPhase === 'conversation' && (
+                  <div className="sidebar-actions-area">
+                    <div className="status-indicator mb-6">
+                      <div className={getPhaseDotClass()}></div>
+                      <div className="status-text">
+                        <span className="status-phase-label">Live Conversation</span>
+                        <span className="status-detail">Ask questions about the graphic</span>
+                      </div>
                     </div>
+
+                    <div className="conversation-hint">
+                      <MicIcon className="w-8 h-8 opacity-30 mb-3" />
+                      <p>Speak to ask questions about any part of the graphic</p>
+                      <p className="text-xs opacity-60 mt-1">Click on elements in the graphic to explore</p>
+                    </div>
+
+                    <button
+                      onClick={disconnect}
+                      className="w-full py-2.5 px-6 mt-3 bg-red-50 border border-red-200 text-red-500 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-red-100 hover:border-red-300"
+                    >
+                      <StopIcon className="w-4 h-4" /> End Conversation
+                    </button>
+
                   </div>
+                )}
+              </div>
+            </div>
 
-                  <div className="conversation-hint">
-                    <MicIcon className="w-8 h-8 opacity-30 mb-3" />
-                    <p>Speak to ask questions about any part of the graphic</p>
-                    <p className="text-xs opacity-60 mt-1">Click on elements in the graphic to explore</p>
+            {/* MIDDLE PANEL: Interactive Graphic */}
+            <div className="nblm-card flex-1 flex flex-col relative w-full h-full">
+              {!isSidebarOpen && (
+                <button onClick={() => setIsSidebarOpen(true)} className="absolute top-[12px] left-[12px] w-8 h-8 bg-slate-100 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-600 z-10" title="Expand sidebar">
+                  <ChevronRightIcon className="w-5 h-5" />
+                </button>
+              )}
+              <div className="nblm-header flex items-center">
+                <span className={`flex items-center gap-2 text-[var(--accent-primary)] transition-all ${!isSidebarOpen ? 'ml-8' : ''}`}>
+                  <SparklesIcon className="w-5 h-5" /> Interactive Graphic
+                </span>
+              </div>
+
+              {currentSvg ? (
+                <div className="flex-1 overflow-hidden bg-transparent relative w-full h-full">
+                  <iframe
+                    ref={iframeRef}
+                    srcDoc={iframeSrcDoc}
+                    title="Interactive Graphic"
+                    className="w-full h-full border-none"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 bg-transparent flex items-center justify-center">
+                  <div className="bg-white p-12 flex flex-col items-center justify-center text-center max-w-[400px]">
+                    {isProcessing ? (
+                      <>
+                        <div className="processing-spinner mb-6"></div>
+                        <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">
+                          {sessionPhase === 'analyzing' ? 'Analyzing Sources...' : 'Designing Interactive Graphic...'}
+                        </h3>
+                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                          {sessionPhase === 'analyzing'
+                            ? 'Reading and understanding your sources...'
+                            : 'This usually takes 30–60 seconds'}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <DisplayIcon className="w-16 h-16 mb-6 opacity-20 text-[var(--accent-primary)]" />
+                        <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">Interactive Graphic</h3>
+                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                          Add sources in the sidebar and click Generate. Interactive graphics will appear here.
+                        </p>
+                      </>
+                    )}
                   </div>
-
-                  <button
-                    onClick={disconnect}
-                    className="w-full py-2.5 px-6 mt-3 bg-red-50 border border-red-200 text-red-500 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-red-100 hover:border-red-300"
-                  >
-                    <StopIcon className="w-4 h-4" /> End Conversation
-                  </button>
-
                 </div>
               )}
             </div>
-          </div>
-
-          {/* MIDDLE PANEL: Interactive Graphic */}
-          <div className="nblm-card flex-1 flex flex-col relative w-full h-full">
-            {!isSidebarOpen && (
-              <button onClick={() => setIsSidebarOpen(true)} className="absolute top-[12px] left-[12px] w-8 h-8 bg-slate-100 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-600 z-10" title="Expand sidebar">
-                <ChevronRightIcon className="w-5 h-5" />
-              </button>
-            )}
-            <div className="nblm-header flex items-center">
-              <span className={`flex items-center gap-2 text-[var(--accent-primary)] transition-all ${!isSidebarOpen ? 'ml-8' : ''}`}>
-                <SparklesIcon className="w-5 h-5" /> Interactive Graphic
-              </span>
-            </div>
-
-            {currentSvg ? (
-              <div className="flex-1 overflow-hidden bg-transparent relative w-full h-full">
-                <iframe
-                  ref={iframeRef}
-                  srcDoc={iframeSrcDoc}
-                  title="Interactive Graphic"
-                  className="w-full h-full border-none"
-                  sandbox="allow-scripts allow-same-origin"
-                />
-              </div>
-            ) : (
-              <div className="flex-1 bg-transparent flex items-center justify-center">
-                <div className="bg-white p-12 flex flex-col items-center justify-center text-center max-w-[400px]">
-                  {isProcessing ? (
-                    <>
-                      <div className="processing-spinner mb-6"></div>
-                      <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">
-                        {sessionPhase === 'analyzing' ? 'Analyzing Sources...' : 'Designing Interactive Graphic...'}
-                      </h3>
-                      <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                        {sessionPhase === 'analyzing'
-                          ? 'Reading and understanding your sources...'
-                          : 'This usually takes 30–60 seconds'}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <DisplayIcon className="w-16 h-16 mb-6 opacity-20 text-[var(--accent-primary)]" />
-                      <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">Interactive Graphic</h3>
-                      <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                        Add sources in the sidebar and click Generate. Interactive graphics will appear here.
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
-    </div>
+          </section>
+        </main>
+      </div>
+    </>
   )
 }
 

@@ -661,13 +661,33 @@ body {
   opacity: 0;
 }
 
-.source-item:hover .source-remove-btn {
+.source-item:hover .source-remove-btn,
+.source-item.editing .source-remove-btn {
   opacity: 1;
 }
 
 .source-remove-btn:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
+}
+
+/* Pencil edit button — blue hover instead of red */
+.source-remove-btn:first-of-type:hover {
+  background: rgba(11, 87, 208, 0.08);
+  color: var(--accent-primary);
+}
+
+/* Inline edit input */
+.source-item-edit-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-system);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  padding: 0;
 }
 
 /* Text Source Area */
@@ -925,4 +945,236 @@ body {
 .account-dropdown-list::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.1);
   border-radius: 10px;
+}
+
+/* =========================================
+   MY GRAPHICS FULL PAGE
+   ========================================= */
+.graphics-page {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-canvas);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  animation: page-enter 0.18s ease-out;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.graphics-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  background: white;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.graphics-page-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.graphics-page-count {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 20px;
+}
+
+.graphics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.graphic-card {
+  background: white;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.graphic-card:hover {
+  border-color: var(--border-highlight);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+  transform: translateY(-2px);
+}
+
+.graphic-card-preview {
+  height: 140px;
+  background: linear-gradient(135deg, #f0f4f9 0%, #e8f0fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.graphic-card-info {
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.graphic-card-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.graphic-card-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.graphic-card-source-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-light);
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  max-width: 160px;
+  overflow: hidden;
+}
+
+/* Icon-only compact source badge */
+.graphic-card-source-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-light);
+  color: var(--text-tertiary);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+a.graphic-card-source-icon {
+  cursor: pointer;
+}
+
+a.graphic-card-source-icon:hover {
+  background: rgba(11, 87, 208, 0.06);
+  border-color: rgba(11, 87, 208, 0.2);
+  color: var(--accent-primary);
+}
+
+.source-icon-count {
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-tertiary);
+  margin-left: 1px;
+}
+
+a.graphic-card-source-chip:hover {
+  background: rgba(11, 87, 208, 0.06);
+  border-color: rgba(11, 87, 208, 0.2);
+  color: var(--accent-primary);
+}
+
+.graphic-card-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.graphic-card-action.open {
+  background: rgba(11, 87, 208, 0.06);
+  color: var(--accent-primary);
+  border-color: rgba(11, 87, 208, 0.1);
+}
+
+.graphic-card-action.open:hover {
+  background: rgba(11, 87, 208, 0.12);
+}
+
+.graphic-card-action.delete {
+  background: transparent;
+  color: var(--text-tertiary);
+  border-color: var(--border-light);
+}
+
+.graphic-card-action.delete:hover {
+  background: rgba(239, 68, 68, 0.06);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.graphic-card-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Scale the inner 600×400 SVG container to fit the card preview.
+   The outer wrapper is 100% wide; we want the 600px inner div to
+   shrink so its width matches 100% of the wrapper. We achieve this
+   by using transform: scale() anchored top-left, where the scale
+   factor gets overridden per-card via a CSS container query / the
+   known minimum card width. Using scale(0.467) maps 600px → 280px
+   which matches the grid min-width, and the extra space on wider
+   cards is clipped by overflow:hidden on the wrapper. */
+.svg-thumbnail-scaler {
+  transform-origin: top left;
+  /* scale = card_preview_height / SVG_natural_height = 140/400 = 0.35
+     but we want to fill WIDTH: 280/600 = 0.467
+     Use the larger of the two so the whole preview is covered.
+     0.467 means height shows 400*0.467 = 187px (clipped to 140px) — perfect. */
+  transform: scale(0.467);
+}
+
+/* Make sure the inner SVG fills its container */
+.svg-thumbnail-scaler svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
