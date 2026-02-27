@@ -42,6 +42,8 @@ function App() {
   const [error, setError] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [showAccountMenu, setShowAccountMenu] = useState(false)
+  const accountMenuRef = useRef<HTMLDivElement>(null)
 
   // Auth state
   const [user, setUser] = useState<User | null>(null)
@@ -790,6 +792,19 @@ function App() {
     }
   }, [sessionPhase, currentSvg])
 
+  // Close account dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) {
+        setShowAccountMenu(false)
+      }
+    }
+    if (showAccountMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showAccountMenu])
+
   // Listen for telemetry // Setup iframe listener for AI events & Hovers & Interactions
   useEffect(() => {
     const handleIframeMessage = (event: MessageEvent) => {
@@ -1040,9 +1055,13 @@ function App() {
       } else if (action === 'click_element') {
         const kw = (params.element_id || '').toLowerCase().trim();
         console.log("[IFRAME TOOL] click_element initiated with kw: '" + kw + "'");
-        if (!kw) return;
+        if (!kw) {
+          window.parent.postMessage({ type: 'CLICK_RESULT', success: false, keyword: '', clickedLabel: null }, '*');
+          return;
+        }
         const containers = document.querySelectorAll('.svg-area, .controls-area');
         let clicked = false;
+        let matchedLabel = null;
         containers.forEach(container => {
           if (clicked) return;
           container.querySelectorAll('button, input[type="button"], input[type="submit"], input[type="checkbox"], input[type="range"], a, [onclick], [role="button"]').forEach(el => {
@@ -1060,6 +1079,7 @@ function App() {
             console.log("  -> Checking element: <" + el.tagName + "> id='" + id + "' text='" + text + "'. Match? " + !!(matchText || matchId || matchTitle || matchAria));
             
             if (matchText || matchId || matchTitle || matchAria) {
+              matchedLabel = (el.textContent || el.id || '').trim();
               el.style.transition = 'all 0.2s ease';
               el.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.5)';
               
@@ -1096,6 +1116,16 @@ function App() {
             }
           });
         });
+        // Report click result back to parent
+        if (!clicked) {
+          console.warn("[IFRAME TOOL] click_element: NO match found for keyword '" + kw + "'");
+        }
+        window.parent.postMessage({
+          type: 'CLICK_RESULT',
+          success: clicked,
+          keyword: kw,
+          clickedLabel: matchedLabel
+        }, '*');
       }
     }
 
@@ -1295,21 +1325,104 @@ function App() {
           )}
           {isFirebaseConfigured && (
             user ? (
-              <div className="flex items-center gap-2">
-                {user.photoURL && (
-                  <img
-                    src={user.photoURL}
-                    alt=""
-                    className="w-8 h-8 rounded-full border border-slate-200"
-                  />
-                )}
-                <span className="text-sm text-slate-600 hidden sm:inline">{user.displayName?.split(' ')[0]}</span>
+              <div className="relative" ref={accountMenuRef}>
                 <button
-                  onClick={() => firebaseSignOut()}
-                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors px-2 py-1"
+                  onClick={() => setShowAccountMenu(!showAccountMenu)}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/60 transition-all cursor-pointer border border-transparent hover:border-slate-200"
                 >
-                  Sign out
+                  {user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt=""
+                      className="w-8 h-8 rounded-full border border-slate-200"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-[var(--accent-primary)] text-white flex items-center justify-center text-sm font-semibold">
+                      {(user.displayName || user.email || '?')[0].toUpperCase()}
+                    </div>
+                  )}
+                  <span className="text-sm text-slate-600 hidden sm:inline font-medium">{user.displayName?.split(' ')[0]}</span>
                 </button>
+
+                {/* Account Dropdown */}
+                {showAccountMenu && (
+                  <div className="account-dropdown">
+                    {/* User Info */}
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-sm font-semibold text-slate-800">{user.displayName}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{user.email}</p>
+                    </div>
+
+                    {/* My Graphics */}
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My Graphics</span>
+                        {galleryLoading
+                          ? <span className="text-xs text-slate-400">Loading...</span>
+                          : savedGraphics.length > 0 && <span className="source-count">{savedGraphics.length}</span>
+                        }
+                      </div>
+
+                      {!galleryLoading && savedGraphics.length === 0 && (
+                        <p className="text-xs text-slate-400 text-center py-3">
+                          Your generated graphics will appear here.
+                        </p>
+                      )}
+
+                      <div className="account-dropdown-list">
+                        {savedGraphics.map(g => (
+                          <div
+                            key={g.id}
+                            className="group relative rounded-lg border border-slate-100 bg-slate-50/80 hover:bg-white hover:border-slate-200 hover:shadow-sm transition-all p-2.5 cursor-pointer"
+                            onClick={() => {
+                              setCurrentSvg(g.svg_html)
+                              setCurrentControls(g.controls_html || null)
+                              setCurrentTitle(g.title)
+                              setCurrentSubtitle(g.subtitle || null)
+                              narrationContextRef.current = g.narration_context || ''
+                              sourceLabelsRef.current = g.source_labels || []
+                              setSessionPhase('complete')
+                              setShowAccountMenu(false)
+                            }}
+                          >
+                            <p className="text-xs font-semibold text-slate-700 truncate pr-5">{g.title}</p>
+                            {g.source_labels?.length > 0 && (
+                              <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                {g.source_labels.join(', ')}
+                              </p>
+                            )}
+                            {g.created_at && (
+                              <p className="text-[10px] text-slate-300 mt-0.5">
+                                {new Date((g.created_at as any).seconds * 1000).toLocaleDateString()}
+                              </p>
+                            )}
+                            <button
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all"
+                              title="Delete graphic"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                await deleteGraphic(user.uid, g.id)
+                                setSavedGraphics(prev => prev.filter(x => x.id !== g.id))
+                              }}
+                            >
+                              <XIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Sign Out */}
+                    <div className="border-t border-slate-100 px-4 py-2">
+                      <button
+                        onClick={() => { firebaseSignOut(); setShowAccountMenu(false) }}
+                        className="w-full text-left text-sm text-slate-500 hover:text-red-500 py-1.5 transition-colors"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <button
@@ -1455,72 +1568,7 @@ function App() {
                     </button>
                   )}
 
-                  {/* My Graphics Gallery */}
-                  {isFirebaseConfigured && user && (
-                    <div className="mt-6">
-                      <div className="source-roster-header mb-2">
-                        <span className="source-roster-title">My Graphics</span>
-                        {galleryLoading
-                          ? <span className="text-xs text-slate-400">Loading...</span>
-                          : <span className="source-count">{savedGraphics.length}</span>
-                        }
-                      </div>
 
-                      {!galleryLoading && savedGraphics.length === 0 && (
-                        <p className="text-xs text-slate-400 text-center py-3">
-                          Your generated graphics will appear here.
-                        </p>
-                      )}
-
-                      <div className="flex flex-col gap-2">
-                        {savedGraphics.map(g => (
-                          <div
-                            key={g.id}
-                            className="group relative rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-200 hover:shadow-sm transition-all p-3 cursor-pointer"
-                            onClick={() => {
-                              setCurrentSvg(g.svg_html)
-                              setCurrentControls(g.controls_html || null)
-                              setCurrentTitle(g.title)
-                              setCurrentSubtitle(g.subtitle || null)
-                              narrationContextRef.current = g.narration_context || ''
-                              sourceLabelsRef.current = g.source_labels || []
-                              setSessionPhase('complete')
-                            }}
-                          >
-                            {/* Title */}
-                            <p className="text-xs font-semibold text-slate-700 truncate pr-6">{g.title}</p>
-
-                            {/* Source labels */}
-                            {g.source_labels?.length > 0 && (
-                              <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                                {g.source_labels.join(', ')}
-                              </p>
-                            )}
-
-                            {/* Timestamp */}
-                            {g.created_at && (
-                              <p className="text-[10px] text-slate-300 mt-1">
-                                {new Date((g.created_at as any).seconds * 1000).toLocaleDateString()}
-                              </p>
-                            )}
-
-                            {/* Delete button */}
-                            <button
-                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all"
-                              title="Delete graphic"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                await deleteGraphic(user.uid, g.id)
-                                setSavedGraphics(prev => prev.filter(x => x.id !== g.id))
-                              }}
-                            >
-                              <XIcon className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Generate button */}
                   {sources.length > 0 && sessionPhase === 'idle' && (

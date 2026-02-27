@@ -964,11 +964,23 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                                     "action": tool_name,
                                                     "params": tool_args
                                                 })
+                                            # For click_element, provide richer feedback so AI can self-correct
+                                            if tool_name == "click_element":
+                                                kw = tool_args.get("element_id", "")
+                                                controls_inv = _extract_controls_inventory(svg_html, controls_html)
+                                                resp_msg = (
+                                                    f"click_element dispatched with keyword '{kw}'. "
+                                                    f"IMPORTANT: If the keyword does not exactly match a button below, the click will silently fail. "
+                                                    f"Available controls:\n{controls_inv}"
+                                                )
+                                                tool_response_body = {"result": "dispatched", "message": resp_msg}
+                                            else:
+                                                tool_response_body = {"result": "ok", "message": f"{tool_name} executed on the user's screen."}
                                             func_responses.append(
                                                 types.FunctionResponse(
                                                     name=func_call.name,
                                                     id=func_call.id,
-                                                    response={"result": "ok", "message": f"{tool_name} executed on the user's screen."}
+                                                    response=tool_response_body
                                                 )
                                             )
 

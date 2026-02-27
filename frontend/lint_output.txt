@@ -1,0 +1,27 @@
+
+> frontend@0.0.0 lint
+> eslint .
+
+
+/Users/jing/Gemini Live Agent Challenge/frontend/src/App.tsx
+   226:16  error    Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+   268:25  error    Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+   286:53  error    'e' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+   286:56  error    Empty block statement                                                                                           no-empty
+   322:16  error    'err' is defined but never used                                                                                 @typescript-eslint/no-unused-vars
+   322:21  error    Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+   329:62  error    Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+   345:54  error    'err' is defined but never used                                                                                 @typescript-eslint/no-unused-vars
+   345:59  error    Empty block statement                                                                                           no-empty
+   380:56  error    'err' is defined but never used                                                                                 @typescript-eslint/no-unused-vars
+   380:61  error    Empty block statement                                                                                           no-empty
+   396:42  error    'e' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+   396:45  error    Empty block statement                                                                                           no-empty
+   609:68  error    Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+   677:19  error    Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  1247:6   warning  React Hook useMemo has a missing dependency: 'isSidebarOpen'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  1317:62  error    Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  1503:60  error    Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+
+✖ 18 problems (17 errors, 1 warning)
+

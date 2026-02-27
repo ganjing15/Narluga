@@ -874,3 +874,55 @@ body {
     height: 50vh;
   }
 }
+
+/* =========================================
+   ACCOUNT DROPDOWN MENU
+   ========================================= */
+.account-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 300px;
+  background: white;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-highlight);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  z-index: 100;
+  animation: dropdown-enter 0.15s ease-out;
+  overflow: hidden;
+}
+
+@keyframes dropdown-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.account-dropdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+
+.account-dropdown-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.account-dropdown-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.account-dropdown-list::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
