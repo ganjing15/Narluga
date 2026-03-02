@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Mechanics of the Four Seasons</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <style>
+  @keyframes orbit-flow {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes sun-pulse {
+    0% { r: 28; opacity: 1; filter: drop-shadow(0px 0px 8px rgba(251,191,36,0.8)); }
+    50% { r: 32; opacity: 0.9; filter: drop-shadow(0px 0px 16px rgba(251,191,36,1)); }
+    100% { r: 28; opacity: 1; filter: drop-shadow(0px 0px 8px rgba(251,191,36,0.8)); }
+  }
+  @keyframes ray-flow {
+    from { stroke-dashoffset: 12; }
+    to { stroke-dashoffset: 0; }
+  }
+  .orbit-path {
+    stroke-dasharray: 6 6;
+    animation: orbit-flow 3s linear infinite;
+  }
+  .sun-core {
+    animation: sun-pulse 4s ease-in-out infinite;
+  }
+  .sun-ray {
+    stroke-dasharray: 4 4;
+    animation: ray-flow 1s linear infinite;
+  }
+  .node-transition {
+    transition: all 0.1s linear;
+  }
+</style>
+
+<svg viewBox="0 0 800 500" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <!-- Deep Space Background -->
+  <rect width="800" height="500" fill="#020617" />
+  
+  <defs>
+    <!-- Gradients -->
+    <radialGradient id="earth-grad" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </radialGradient>
+    <radialGradient id="sun-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="30%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </radialGradient>
+    
+    <!-- Clip Path for Close-up Continents -->
+    <clipPath id="earth-clip">
+      <circle cx="600" cy="270" r="120" />
+    </clipPath>
+    
+    <!-- Arrow Marker for Sun Rays -->
+    <marker id="sun-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M 0 0 L 6 3 L 0 6 Z" fill="#fbbf24" />
+    </marker>
+  </defs>
+
+  <!-- Title & Separator -->
+  <text x="200" y="40" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="700" letter-spacing="1.5" text-anchor="middle">TOP-DOWN ORBIT VIEW</text>
+  <text x="600" y="40" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="700" letter-spacing="1.5" text-anchor="middle">SUN-FACING EARTH CLOSE-UP</text>
+  <line x1="400" y1="20" x2="400" y2="480" stroke="#1e293b" stroke-width="2" stroke-dasharray="4 4" />
+
+  <!-- ==================== LEFT PANE: ORBIT VIEW ==================== -->
+  <g id="left-pane">
+    <!-- Orbit Ellipse -->
+    <ellipse cx="200" cy="270" rx="150" ry="70" fill="none" stroke="#334155" stroke-width="2" class="orbit-path" />
+    
+    <!-- Season Markers (Background Rects + Text + Ghost Circles) -->
+    <!-- Summer -->
+    <circle cx="350" cy="270" r="14" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="2 2" />
+    <rect x="365" y="260" width="50" height="20" fill="#020617" opacity="0.8" rx="4" />
+    <text x="390" y="274" fill="#cbd5e1" font-family="system-ui" font-size="12" font-weight="600" text-anchor="middle">Jun 21</text>
+    
+    <!-- Autumn -->
+    <circle cx="200" cy="200" r="14" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="2 2" />
+    <rect x="170" y="165" width="60" height="20" fill="#020617" opacity="0.8" rx="4" />
+    <text x="200" y="179" fill="#cbd5e1" font-family="system-ui" font-size="12" font-weight="600" text-anchor="middle">Sep 23</text>
+    
+    <!-- Winter -->
+    <circle cx="50" cy="270" r="14" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="2 2" />
+    <rect x="10" y="240" width="50" height="20" fill="#020617" opacity="0.8" rx="4" />
+    <text x="35" y="254" fill="#cbd5e1" font-family="system-ui" font-size="12" font-weight="600" text-anchor="middle">Dec 21</text>
+    
+    <!-- Spring -->
+    <circle cx="200" cy="340" r="14" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="2 2" />
+    <rect x="170" y="355" width="60" height="20" fill="#020617" opacity="0.8" rx="4" />
+    <text x="200" y="369" fill="#cbd5e1" font-family="system-ui" font-size="12" font-weight="600" text-anchor="middle">Mar 21</text>
+
+    <!-- The Sun -->
+    <circle cx="200" cy="270" r="28" fill="url(#sun-grad)" class="sun-core" />
+    
+    <!-- The Mini Earth (Dynamically Moves) -->
+    <g id="mini-earth-group" class="node-transition" transform="translate(350, 270)">
+      <!-- Earth Body -->
+      <circle cx="0" cy="0" r="14" fill="url(#earth-grad)" />
+      
+      <!-- Mini Shadow (Dynamically Rotates to point away from Sun) -->
+      <g id="mini-shadow-rotator" class="node-transition">
+        <path d="M 0 -14 A 14 14 0 0 1 0 14 Z" fill="rgba(2,6,23,0.8)" />
+      </g>
+      
+      <!-- Fixed Axis Tilt (-23.5° relative to vertical) -->
+      <g transform="rotate(-23.5)">
+        <line x1="0" y1="-20" x2="0" y2="20" stroke="#f8fafc" stroke-width="2" stroke-linecap="round" />
+        <circle cx="0" cy="-20" r="2.5" fill="#ef4444" />
+        <line x1="-14" y1="0" x2="14" y2="0" stroke="#f8fafc" stroke-width="1" stroke-dasharray="2 2" />
+      </g>
+    </g>
+  </g>
+
+  <!-- ==================== RIGHT PANE: CLOSE-UP VIEW ==================== -->
+  <g id="right-pane">
+    <!-- Incoming Sun Rays -->
+    <g stroke="#fbbf24" stroke-width="2" class="sun-ray">
+      <line x1="420" y1="170" x2="465" y2="170" marker-end="url(#sun-arrow)" />
+      <line x1="420" y1="220" x2="465" y2="220" marker-end="url(#sun-arrow)" />
+      <line x1="420" y1="270" x2="465" y2="270" marker-end="url(#sun-arrow)" />
+      <line x1="420" y1="320" x2="465" y2="320" marker-end="url(#sun-arrow)" />
+      <line x1="420" y1="370" x2="465" y2="370" marker-end="url(#sun-arrow)" />
+    </g>
+    
+    <rect x="420" y="240" width="80" height="20" fill="#020617" opacity="0.8" rx="4" />
+    <text x="422" y="254" fill="#fbbf24" font-family="system-ui" font-size="11" font-weight="700">SUN RAYS</text>
+
+    <!-- Rotating Earth Group (Tilts back and forth to simulate seasonal angle) -->
+    <g id="closeup-earth-group" class="node-transition" transform="rotate(-23.5, 600, 270)">
+      <!-- Ocean -->
+      <circle cx="600" cy="270" r="120" fill="url(#earth-grad)" />
+      
+      <!-- Stylized Continents -->
+      <g clip-path="url(#earth-clip)">
+        <circle cx="550" cy="190" r="45" fill="#10b981" />
+        <circle cx="680" cy="200" r="55" fill="#10b981" />
+        <circle cx="580" cy="340" r="40" fill="#10b981" />
+        <circle cx="660" cy="350" r="45" fill="#10b981" />
+      </g>
+      
+      <!-- Tropics and Equator Lines -->
+      <!-- Equator (y=270) -->
+      <line x1="480" y1="270" x2="720" y2="270" stroke="#f8fafc" stroke-width="2" stroke-dasharray="6 6" />
+      <!-- Tropic of Cancer (23.5° North -> dy = -48) -->
+      <line x1="492" y1="222" x2="708" y2="222" stroke="#fca5a5" stroke-width="1.5" stroke-dasharray="3 3" />
+      <!-- Tropic of Capricorn (23.5° South -> dy = +48) -->
+      <line x1="492" y1="318" x2="708" y2="318" stroke="#93c5fd" stroke-width="1.5" stroke-dasharray="3 3" />
+      
+      <!-- Axis Line and Pole Markers -->
+      <line x1="600" y1="120" x2="600" y2="420" stroke="#f8fafc" stroke-width="4" stroke-linecap="round" />
+      <polygon points="600,105 592,125 608,125" fill="#ef4444" />
+      
+      <text x="600" y="95" fill="#f8fafc" font-family="system-ui" font-size="18" font-weight="bold" text-anchor="middle">N</text>
+      <text x="600" y="445" fill="#f8fafc" font-family="system-ui" font-size="18" font-weight="bold" text-anchor="middle">S</text>
+      
+      <text x="730" y="274" fill="#f8fafc" font-family="system-ui" font-size="12" font-weight="600">Equator</text>
+    </g>
+
+    <!-- FIXED Shadow Terminator (Strictly covers the right half, NEVER rotates) -->
+    <!-- Represents the dark side of Earth facing away from the Sun -->
+    <path d="M 600 150 A 120 120 0 0 1 600 390 Z" fill="rgba(2, 6, 23, 0.75)" />
+    <line x1="600" y1="150" x2="600" y2="390" stroke="#475569" stroke-width="1" />
+  </g>
+
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Mechanics of the Four Seasons</h2>
+        <p style="color: #64748b;">Use the controls on the right to orbit the Earth and observe how a fixed axial tilt changes direct sunlight.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+  .ctrl-container {
+    font-family: system-ui, -apple-system, sans-serif;
+    padding: 20px;
+    background: #ffffff;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    color: #0f172a;
+  }
+  .ctrl-header {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #0f172a;
+  }
+  .ctrl-subtitle {
+    font-size: 0.875rem;
+    color: #475569;
+    margin-bottom: 20px;
+  }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .custom-slider {
+    flex-grow: 1;
+    accent-color: #2563eb;
+    height: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .play-btn {
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    min-width: 140px;
+    text-align: center;
+  }
+  .play-btn:hover {
+    background: #1d4ed8;
+  }
+  .info-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    flex-grow: 1;
+  }
+  .info-tag {
+    display: inline-block;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .info-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #0f172a;
+  }
+  .info-desc {
+    font-size: 0.95rem;
+    color: #334155;
+    line-height: 1.5;
+  }
+</style>
+
+<div class="ctrl-container">
+  <div class="ctrl-header">Earth's Seasonal Orbit Tracker</div>
+  <div class="ctrl-subtitle">Drag the slider to move Earth through a full year. Watch how the constant 23.5° axial tilt changes the direct sunlight hitting the hemispheres.</div>
+  
+  <div class="slider-row">
+    <input type="range" id="orbitSlider" class="custom-slider" min="0" max="360" value="0" oninput="updateEarthState(this.value)">
+    <button id="playBtn" class="play-btn" onclick="togglePlay()">▶ Auto-Play</button>
+  </div>
+  
+  <div class="info-box">
+    <div class="info-tag" id="date-tag">June 21</div>
+    <div class="info-title" id="info-title">Northern Summer Solstice</div>
+    <div class="info-desc" id="info-desc">The Northern Hemisphere is tilted a full 23.5° towards the Sun. Direct solar rays perfectly strike the Tropic of Cancer, causing the longest day of the year and Summer in the North.</div>
+  </div>
+</div>
+
+<script>
+  let isPlaying = false;
+  let playInterval;
+
+  function getSeasonData(theta) {
+    if (theta >= 345 || theta < 15) return { 
+      tag: `June 21`, 
+      t: `Northern Summer Solstice`, 
+      d: `The Northern Hemisphere is tilted a full 23.5° towards the Sun. Direct solar rays perfectly strike the Tropic of Cancer, causing the longest day of the year and Summer in the North.` 
+    };
+    if (theta >= 15 && theta < 75) return { 
+      tag: `Jul - Aug`, 
+      t: `Late Summer / Moving to Autumn`, 
+      d: `As Earth continues its orbit, the Northern Hemisphere slowly begins to lean less directly toward the Sun. Direct rays slowly migrate south toward the Equator.` 
+    };
+    if (theta >= 75 && theta < 105) return { 
+      tag: `September 23`, 
+      t: `Autumnal Equinox`, 
+      d: `Earth's axis tilts neither towards nor away from the Sun. Direct rays hit the Equator perfectly. Every location on Earth experiences roughly 12 hours of day and night.` 
+    };
+    if (theta >= 105 && theta < 165) return { 
+      tag: `Oct - Nov`, 
+      t: `Autumn / Moving to Winter`, 
+      d: `The Northern Hemisphere begins to actively lean away from the Sun. Days grow shorter and colder in the North, while the Southern Hemisphere warms up.` 
+    };
+    if (theta >= 165 && theta < 195) return { 
+      tag: `December 21`, 
+      t: `Northern Winter Solstice`, 
+      d: `The Northern Hemisphere is tilted a full 23.5° away from the Sun. Direct solar rays perfectly strike the Tropic of Capricorn in the South. It is Winter in the North and Summer in the South.` 
+    };
+    if (theta >= 195 && theta < 255) return { 
+      tag: `Jan - Feb`, 
+      t: `Late Winter / Moving to Spring`, 
+      d: `Earth pushes through its orbit. The Northern Hemisphere slowly leans back toward a neutral angle. Direct rays migrate north back toward the Equator.` 
+    };
+    if (theta >= 255 && theta < 285) return { 
+      tag: `March 21`, 
+      t: `Vernal Equinox`, 
+      d: `Earth's axis again tilts neither towards nor away from the Sun. Direct rays hit the Equator. Spring begins in the Northern Hemisphere.` 
+    };
+    if (theta >= 285 && theta < 345) return { 
+      tag: `Apr - May`, 
+      t: `Spring / Moving to Summer`, 
+      d: `The Northern Hemisphere begins to lean heavily towards the Sun again. Days grow longer and the weather warms as Summer approaches.` 
+    };
+    return { tag: ``, t: ``, d: `` };
+  }
+
+  function updateEarthState(val) {
+    const theta = Number(val);
+    
+    // LEFT PANE MATH (Orbit)
+    // Negative rad for counter-clockwise orbit in SVG coords
+    const rad = -theta * Math.PI / 180;
+    const cx = 200 + 150 * Math.cos(rad);
+    const cy = 270 + 70 * Math.sin(rad);
+    
+    const miniEarth = document.getElementById(`mini-earth-group`);
+    if (miniEarth) {
+      miniEarth.setAttribute(`transform`, `translate(${cx}, ${cy})`);
+    }
+
+    // Mini Shadow Rotation (Always points away from the Sun at center 200,270)
+    // When theta=0 (Right side), shadow is on Right (rot=0)
+    const miniShadow = document.getElementById(`mini-shadow-rotator`);
+    if (miniShadow) {
+      miniShadow.setAttribute(`transform`, `rotate(${theta})`);
+    }
+    
+    // RIGHT PANE MATH (Apparent Tilt from Sun's Perspective)
+    // Angle oscillates between -23.5 and +23.5
+    const tiltAngle = -23.5 * Math.cos(theta * Math.PI / 180);
+    const closeupEarth = document.getElementById(`closeup-earth-group`);
+    if (closeupEarth) {
+      closeupEarth.setAttribute(`transform`, `rotate(${tiltAngle}, 600, 270)`);
+    }
+    
+    // UPDATE HTML INFO PANEL
+    const info = getSeasonData(theta);
+    const tagEl = document.getElementById(`date-tag`);
+    const titleEl = document.getElementById(`info-title`);
+    const descEl = document.getElementById(`info-desc`);
+    
+    if (tagEl) tagEl.textContent = info.tag;
+    if (titleEl) titleEl.textContent = info.t;
+    if (descEl) descEl.textContent = info.d;
+    
+    // TELEMETRY
+    if (window.sendEventToAI && theta % 90 === 0 && theta > 0) { 
+      window.sendEventToAI(`User viewed orbit phase: ${info.t} (${theta} degrees)`); 
+    }
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    const btn = document.getElementById(`playBtn`);
+    if (isPlaying) {
+      if (btn) btn.innerHTML = `⏸ Pause Auto-Play`;
+      playInterval = setInterval(() => {
+        const slider = document.getElementById(`orbitSlider`);
+        if (slider) {
+          let nextVal = (Number(slider.value) + 1) % 360;
+          slider.value = nextVal;
+          updateEarthState(nextVal);
+        }
+      }, 40);
+    } else {
+      if (btn) btn.innerHTML = `▶ Auto-Play`;
+      clearInterval(playInterval);
+    }
+  }
+
+  // Initialize graphic
+  updateEarthState(0);
+</script>
+    </div>
+</body>
+</html>

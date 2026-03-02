@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
 from dotenv import load_dotenv
-from google_genai_service import handle_live_session, handle_live_restart
+from google_genai_service import handle_live_session, handle_live_restart, web_search_sources
 from auth import init_firebase, FirebaseAuthMiddleware, verify_ws_token
 
 load_dotenv()
@@ -71,19 +71,44 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+from pydantic import BaseModel
+
+class SearchRequest(BaseModel):
+    query: str
+    depth: str = "fast"   # "fast" | "deep"
+
+@app.post("/search")
+async def search_web(req: SearchRequest):
+    """Search the web for relevant sources using Gemini + Google Search grounding.
+    Returns a list of {title, url, snippet} result objects."""
+    try:
+        results = await web_search_sources(req.query, req.depth)
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
+    print("[WebSocket] Received connection request!")
     await websocket.accept()
+    print("[WebSocket] Connection accepted.")
 
-    # Verify Firebase token for WebSocket connections
-    if os.getenv("DISABLE_AUTH", "").lower() != "true":
-        user = await verify_ws_token(websocket)
-        if user is None:
-            return  # Connection was closed by verify_ws_token
-        print(f"[WebSocket] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
-    
-    print(f"[WebSocket] Connected. Waiting for sources...")
     try:
+        # Verify Firebase token for WebSocket connections
+        if os.getenv("DISABLE_AUTH", "").lower() != "true":
+            print("[WebSocket] Verifying Firebase token...")
+            user = await verify_ws_token(websocket)
+            if user is None:
+                print("[WebSocket] User is None, token verification failed. Returning.")
+                return  # Connection was closed by verify_ws_token
+            print(f"[WebSocket] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
+        else:
+            print("[WebSocket] Auth disabled.")
+
+        
+        print(f"[WebSocket] Connected. Waiting for sources...")
         # Wait for the init_sources message with the array of sources
         init_data = await websocket.receive_text()
         payload = json.loads(init_data)
@@ -94,17 +119,18 @@ async def websocket_endpoint(websocket: WebSocket):
             return
         
         sources = payload.get("sources", [])
+        research_mode = payload.get("research_mode", "fast")  # 'off' | 'fast' | 'deep'
         if not sources:
             await websocket.send_json({"type": "error", "message": "No sources provided"})
             await websocket.close()
             return
         
-        print(f"[WebSocket] Received {len(sources)} source(s)")
+        print(f"[WebSocket] Received {len(sources)} source(s) | research_mode={research_mode}")
         for s in sources:
             print(f"  - [{s.get('type', '?')}] {s.get('label', 'untitled')[:60]}")
         
         # Hand off to the Live Session Manager with sources array
-        await handle_live_session(websocket, sources)
+        await handle_live_session(websocket, sources, research_mode=research_mode)
         
     except WebSocketDisconnect:
         print("[WebSocket] Client disconnected")
@@ -121,15 +147,15 @@ async def websocket_restart_endpoint(websocket: WebSocket):
     """Restart a live conversation on an existing graphic (skip graphic generation)."""
     await websocket.accept()
 
-    # Verify Firebase token for WebSocket connections
-    if os.getenv("DISABLE_AUTH", "").lower() != "true":
-        user = await verify_ws_token(websocket)
-        if user is None:
-            return
-        print(f"[WebSocket Restart] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
-    
-    print(f"[WebSocket Restart] Connected. Waiting for restart context...")
     try:
+        # Verify Firebase token for WebSocket connections
+        if os.getenv("DISABLE_AUTH", "").lower() != "true":
+            user = await verify_ws_token(websocket)
+            if user is None:
+                return
+            print(f"[WebSocket Restart] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
+        
+        print(f"[WebSocket Restart] Connected. Waiting for restart context...")
         init_data = await websocket.receive_text()
         payload = json.loads(init_data)
         

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The 404 Error: Missing Pages</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg width="100%" height="100%" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Premium Gradients -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#f1f5f9" />
+    </linearGradient>
+    <linearGradient id="server-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <!-- Animations -->
+    <style>
+      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      @keyframes dashScroll { to { stroke-dashoffset: -20; } }
+      .server-light { animation: blink 1.5s infinite; }
+      #network-path { animation: dashScroll 1s linear infinite; }
+      .smooth-color { transition: stroke 0.3s ease, fill 0.3s ease; }
+    </style>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="500" fill="url(#bg-grad)" />
+  
+  <!-- The Internet (Network Path) -->
+  <line x1="150" y1="260" x2="620" y2="260" stroke="#cbd5e1" stroke-width="4" stroke-dasharray="10 10" id="network-path"/>
+  <rect x="330" y="248" width="140" height="24" rx="4" fill="#f8fafc" opacity="0.9" />
+  <text x="400" y="265" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#64748b" text-anchor="middle">The Internet</text>
+  
+  <!-- Server Node (Right) -->
+  <g id="server" transform="translate(620, 150)">
+     <rect width="120" height="180" rx="8" fill="url(#server-grad)" stroke="#0f172a" stroke-width="3"/>
+     <!-- Server Drive Bays -->
+     <g transform="translate(10, 20)">
+        <rect width="100" height="30" rx="4" fill="#1e293b"/>
+        <rect x="10" y="12" width="60" height="6" rx="3" fill="#475569"/>
+        <circle cx="85" cy="15" r="4" fill="#10b981" class="server-light" />
+     </g>
+     <g transform="translate(10, 60)">
+        <rect width="100" height="30" rx="4" fill="#1e293b"/>
+        <rect x="10" y="12" width="60" height="6" rx="3" fill="#475569"/>
+        <circle cx="85" cy="15" r="4" fill="#10b981" class="server-light" style="animation-delay: 0.4s;" />
+     </g>
+     <g transform="translate(10, 100)">
+        <rect width="100" height="30" rx="4" fill="#1e293b"/>
+        <rect x="10" y="12" width="60" height="6" rx="3" fill="#475569"/>
+        <circle cx="85" cy="15" r="4" fill="#ef4444" id="error-light" style="opacity: 0.2; transition: opacity 0.3s;" />
+     </g>
+     <text x="60" y="160" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#f1f5f9" text-anchor="middle">Web Server</text>
+  </g>
+  
+  <!-- Server Internal Search Bubble (Zoom-in visualization) -->
+  <g id="search-bubble" transform="translate(490, 30)" style="transition: opacity 0.3s ease; opacity: 0;">
+     <rect width="210" height="100" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+     <!-- Connector Tail -->
+     <polygon points="150,100 170,100 160,120" fill="#ffffff" />
+     <polyline points="150,100 160,120 170,100" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+     <!-- Cover the top line of the connector -->
+     <line x1="152" y1="100" x2="168" y2="100" stroke="#ffffff" stroke-width="4"/>
+     
+     <!-- File 1 -->
+     <g transform="translate(20, 25)">
+        <rect width="40" height="50" rx="4" fill="#f1f5f9"/>
+        <line x1="8" y1="15" x2="32" y2="15" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="8" y1="25" x2="32" y2="25" stroke="#94a3b8" stroke-width="2"/>
+     </g>
+     <!-- File 2 -->
+     <g transform="translate(85, 25)">
+        <rect width="40" height="50" rx="4" fill="#f1f5f9"/>
+        <line x1="8" y1="15" x2="32" y2="15" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="8" y1="25" x2="24" y2="25" stroke="#94a3b8" stroke-width="2"/>
+     </g>
+     <!-- Missing File (Empty Slot) -->
+     <g transform="translate(150, 25)">
+        <rect width="40" height="50" rx="4" fill="#fef2f2" stroke="#ef4444" stroke-width="2" stroke-dasharray="4 4"/>
+        <text x="20" y="32" font-family="system-ui, sans-serif" font-size="20" font-weight="bold" fill="#ef4444" text-anchor="middle">?</text>
+     </g>
+     
+     <!-- Magnifying Glass -->
+     <g id="mag-glass" transform="translate(20, 30)">
+        <circle cx="20" cy="20" r="14" fill="rgba(255,255,255,0.7)" stroke="#2563eb" stroke-width="4" id="mag-circle" class="smooth-color"/>
+        <line x1="30" y1="30" x2="45" y2="45" stroke="#2563eb" stroke-width="5" stroke-linecap="round" id="mag-line" class="smooth-color"/>
+     </g>
+  </g>
+  
+  <!-- Client Laptop Node (Left) -->
+  <g id="laptop" transform="translate(50, 180)">
+     <!-- Screen Lid -->
+     <rect x="25" y="0" width="100" height="70" rx="6" fill="#1e293b" />
+     <rect x="30" y="5" width="90" height="55" rx="2" fill="#ffffff" id="laptop-screen" class="smooth-color"/>
+     <!-- Dynamic Text -->
+     <text x="75" y="38" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" id="laptop-text" fill="#0f172a" class="smooth-color">Browser</text>
+     <!-- Base -->
+     <path d="M10,75 L140,75 L150,90 L0,90 Z" fill="#94a3b8" />
+     <rect x="60" y="78" width="30" height="4" rx="2" fill="#cbd5e1"/>
+  </g>
+
+  <!-- HTTP Request Packet -->
+  <g id="packet-req" transform="translate(150, 245)" style="transition: opacity 0.2s ease;">
+     <rect width="50" height="30" rx="4" fill="#2563eb" />
+     <polyline points="0,0 25,15 50,0" fill="none" stroke="#ffffff" stroke-width="2"/>
+     <rect x="10" y="40" width="30" height="14" rx="2" fill="#ffffff" opacity="0.9"/>
+     <text x="25" y="51" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#2563eb" text-anchor="middle">GET</text>
+  </g>
+
+  <!-- HTTP Response Packet (404) -->
+  <g id="packet-res" transform="translate(620, 245)" style="transition: opacity 0.2s ease;" opacity="0">
+     <rect width="50" height="30" rx="4" fill="#ef4444" />
+     <polyline points="0,0 25,15 50,0" fill="none" stroke="#ffffff" stroke-width="2"/>
+     <rect x="10" y="40" width="30" height="14" rx="2" fill="#ffffff" opacity="0.9"/>
+     <text x="25" y="51" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#ef4444" text-anchor="middle">404</text>
+  </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The 404 Error: Missing Pages</h2>
+        <p style="color: #64748b;">Use the controls on the right to trace the journey of an HTTP request and see exactly why a 404 error happens.</p>
+        <p style="font-size: 13px; margin-top: -8px;"><a href="https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHe_FOGxNXEh" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+    .dashboard {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      font-family: system-ui, -apple-system, sans-serif;
+      height: 100%;
+      justify-content: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .slider-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    input[type=range] {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #2563eb;
+      cursor: pointer;
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: background 0.2s, transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      background: #1d4ed8;
+      transform: scale(1.1);
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 14px 20px;
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+    }
+    .btn:hover {
+      background: #1d4ed8;
+      transform: translateY(-1px);
+    }
+    .btn.playing {
+      background: #ef4444;
+      box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2);
+    }
+    .btn.playing:hover {
+      background: #dc2626;
+    }
+    .info-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .info-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .info-desc {
+      font-size: 14px;
+      color: #475569;
+      line-height: 1.6;
+    }
+  </style>
+  
+  <div class="dashboard">
+    <div class="slider-group">
+      <div class="slider-label">Request Timeline</div>
+      <input type="range" id="timeSlider" min="0" max="100" value="0" step="0.5" oninput="updateState(this.value)">
+    </div>
+    
+    <button class="btn" id="playBtn" onclick="togglePlay()">▶ Auto-Play</button>
+    
+    <div class="info-card">
+      <div class="info-title" id="info-title">1. The Request</div>
+      <div class="info-desc" id="info-desc">You click a link or type a URL. Your browser prepares an HTTP Request asking the server for the web page.</div>
+    </div>
+  </div>
+
+  <script>
+    let isPlaying = false;
+    let playInterval;
+
+    function updateState(val) {
+      val = Number(val);
+      const reqPacket = document.getElementById(`packet-req`);
+      const resPacket = document.getElementById(`packet-res`);
+      const searchBubble = document.getElementById(`search-bubble`);
+      const magGlass = document.getElementById(`mag-glass`);
+      const magCircle = document.getElementById(`mag-circle`);
+      const magLine = document.getElementById(`mag-line`);
+      const laptopScreen = document.getElementById(`laptop-screen`);
+      const laptopText = document.getElementById(`laptop-text`);
+      const errorLight = document.getElementById(`error-light`);
+      
+      const infoTitle = document.getElementById(`info-title`);
+      const infoDesc = document.getElementById(`info-desc`);
+
+      // Reset base visual states
+      reqPacket.style.opacity = `0`;
+      resPacket.style.opacity = `0`;
+      searchBubble.style.opacity = `0`;
+      laptopScreen.setAttribute(`fill`, `#ffffff`);
+      laptopText.textContent = `Browser`;
+      laptopText.setAttribute(`fill`, `#0f172a`);
+      laptopText.setAttribute(`font-size`, `16`);
+      magCircle.setAttribute(`stroke`, `#2563eb`);
+      magLine.setAttribute(`stroke`, `#2563eb`);
+      errorLight.style.opacity = `0.2`;
+
+      if (val < 15) {
+        // Phase 1: Preparing Request
+        reqPacket.style.opacity = `1`;
+        reqPacket.setAttribute(`transform`, `translate(150, 245)`);
+        infoTitle.textContent = `1. The Request`;
+        infoDesc.textContent = `You click a link or type a URL. Your browser prepares an HTTP "GET" request asking the server for the page.`;
+      } 
+      else if (val >= 15 && val < 40) {
+        // Phase 2: Traveling across network
+        reqPacket.style.opacity = `1`;
+        let progress = (val - 15) / 25;
+        let currentX = 150 + progress * (620 - 150);
+        reqPacket.setAttribute(`transform`, `translate(${currentX}, 245)`);
+        infoTitle.textContent = `2. Across the Internet`;
+        infoDesc.textContent = `The request travels across the internet as a data packet, heading toward the specific website's server.`;
+      }
+      else if (val >= 40 && val < 70) {
+        // Phase 3 & 4: Server Searching
+        searchBubble.style.opacity = `1`;
+        let progress = (val - 40) / 30;
+        let magX = 20 + Math.min(progress * 1.3, 1) * 130; 
+        magGlass.setAttribute(`transform`, `translate(${magX}, 30)`);
+        
+        if (progress < 0.75) {
+            infoTitle.textContent = `3. Server Search`;
+            infoDesc.textContent = `The server receives the request and rapidly searches its hard drives for the specific page URL (/AUZIYQHe_FOGxNXEh).`;
+        } else {
+            // Target missing
+            magCircle.setAttribute(`stroke`, `#ef4444`);
+            magLine.setAttribute(`stroke`, `#ef4444`);
+            errorLight.style.opacity = `1`;
+            infoTitle.textContent = `4. File Not Found!`;
+            infoDesc.textContent = `Uh oh! The server checks the final slot but the file is missing. It generates a "404 Not Found" error response.`;
+        }
+      }
+      else if (val >= 70 && val < 90) {
+        // Phase 5: Returning 404
+        resPacket.style.opacity = `1`;
+        errorLight.style.opacity = `1`;
+        let progress = (val - 70) / 20;
+        let currentX = 620 - progress * (620 - 150);
+        resPacket.setAttribute(`transform`, `translate(${currentX}, 245)`);
+        infoTitle.textContent = `5. The Response`;
+        infoDesc.textContent = `The server sends the red 404 status code packet back across the internet to your browser.`;
+      }
+      else {
+        // Phase 6: Display 404
+        laptopScreen.setAttribute(`fill`, `#fee2e2`);
+        laptopText.textContent = `404 Error`;
+        laptopText.setAttribute(`fill`, `#ef4444`);
+        laptopText.setAttribute(`font-size`, `18`);
+        errorLight.style.opacity = `1`;
+        infoTitle.textContent = `6. Oops!`;
+        infoDesc.textContent = `Your browser receives the 404 response and displays the classic "Error 404: Not Found" page to you.`;
+      }
+
+      // Telemetry mapping
+      if (window.sendEventToAI && val % 25 === 0 && val !== 0) {
+        window.sendEventToAI(`User progressed graphic to phase ${val}%`);
+      }
+    }
+
+    function togglePlay() {
+      const btn = document.getElementById(`playBtn`);
+      isPlaying = !isPlaying;
+      
+      if (isPlaying) {
+        btn.innerHTML = `⏸ Pause Animation`;
+        btn.classList.add(`playing`);
+        if (window.sendEventToAI) window.sendEventToAI(`User clicked Play on 404 Animation`);
+        
+        playInterval = setInterval(() => {
+          let slider = document.getElementById(`timeSlider`);
+          let nextVal = Number(slider.value) + 0.5;
+          if (nextVal > 100) {
+              nextVal = 0; // Loop back naturally
+          }
+          slider.value = nextVal;
+          updateState(nextVal);
+        }, 40);
+      } else {
+        btn.innerHTML = `▶ Auto-Play`;
+        btn.classList.remove(`playing`);
+        if (window.sendEventToAI) window.sendEventToAI(`User clicked Pause on 404 Animation`);
+        clearInterval(playInterval);
+      }
+    }
+    
+    // Initialize initial state
+    document.addEventListener(`DOMContentLoaded`, () => updateState(0));
+  </script>
+    </div>
+</body>
+</html>

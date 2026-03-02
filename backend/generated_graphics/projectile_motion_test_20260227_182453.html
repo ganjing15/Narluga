@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Projectile Motion Test</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 500" width="100%" height="100%" style="display: block; max-width: 100%; background: #f8fafc;">
+    <defs>
+      <style>
+        @keyframes float1 {
+          0% { transform: translateX(0px); }
+          50% { transform: translateX(20px); }
+          100% { transform: translateX(0px); }
+        }
+        @keyframes float2 {
+          0% { transform: translateX(0px); }
+          50% { transform: translateX(-15px); }
+          100% { transform: translateX(0px); }
+        }
+        #cloud1 { animation: float1 10s ease-in-out infinite; }
+        #cloud2 { animation: float2 14s ease-in-out infinite; }
+        #impact-wave { transition: r 0.4s ease-out, opacity 0.4s ease-out; }
+      </style>
+      <pattern id="grid" x="50" y="40" width="100" height="100" patternUnits="userSpaceOnUse">
+        <line x1="100" y1="0" x2="100" y2="400" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
+        <line x1="0" y1="100" x2="800" y2="100" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
+      </pattern>
+      <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#e0f2fe"/>
+        <stop offset="100%" stop-color="#f8fafc"/>
+      </linearGradient>
+      <linearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#10b981"/>
+        <stop offset="10%" stop-color="#059669"/>
+        <stop offset="100%" stop-color="#064e3b"/>
+      </linearGradient>
+      <linearGradient id="cannonGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#64748b"/>
+        <stop offset="100%" stop-color="#334155"/>
+      </linearGradient>
+      <radialGradient id="ballGrad" cx="35%" cy="35%" r="65%">
+        <stop offset="0%" stop-color="#fca5a5"/>
+        <stop offset="40%" stop-color="#ef4444"/>
+        <stop offset="100%" stop-color="#991b1b"/>
+      </radialGradient>
+    </defs>
+
+    <!-- Sky and Grid -->
+    <rect width="800" height="440" fill="url(#skyGrad)" />
+    <rect width="800" height="440" fill="url(#grid)" />
+    
+    <!-- Clouds -->
+    <g id="cloud1" fill="#ffffff" opacity="0.8">
+      <path d="M 180 90 Q 200 70 230 90 Q 260 70 280 100 Q 300 120 260 130 L 200 130 Q 160 120 180 90 Z" />
+    </g>
+    <g id="cloud2" fill="#ffffff" opacity="0.7">
+      <path d="M 580 140 Q 600 120 630 140 Q 660 120 680 150 Q 700 170 660 180 L 600 180 Q 560 170 580 140 Z" />
+    </g>
+
+    <!-- Height Axis Labels -->
+    <g font-family="system-ui, sans-serif" font-size="12" font-weight="500" fill="#94a3b8" text-anchor="end">
+      <text x="40" y="344">100m</text>
+      <text x="40" y="244">200m</text>
+      <text x="40" y="144">300m</text>
+      <text x="40" y="44">400m</text>
+    </g>
+
+    <!-- Trajectory Preview Path -->
+    <path id="trajectory-line" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" d="" />
+    
+    <!-- Apex Marker -->
+    <circle id="apex-marker" cx="-100" cy="-100" r="5" fill="#2563eb" opacity="0" />
+    <text id="apex-text" x="-100" y="-110" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#2563eb" text-anchor="middle" paint-order="stroke" stroke="#f8fafc" stroke-width="4" opacity="0">Max H</text>
+
+    <!-- Ground -->
+    <rect x="0" y="440" width="800" height="60" fill="url(#groundGrad)" />
+    <line x1="0" y1="440" x2="800" y2="440" stroke="#047857" stroke-width="4" />
+    
+    <!-- Distance Markers -->
+    <g font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#d1fae5" text-anchor="middle">
+      <text x="150" y="460">100m</text>
+      <line x1="150" y1="440" x2="150" y2="446" stroke="#d1fae5" stroke-width="2"/>
+      <text x="250" y="460">200m</text>
+      <line x1="250" y1="440" x2="250" y2="446" stroke="#d1fae5" stroke-width="2"/>
+      <text x="350" y="460">300m</text>
+      <line x1="350" y1="440" x2="350" y2="446" stroke="#d1fae5" stroke-width="2"/>
+      <text x="450" y="460">400m</text>
+      <line x1="450" y1="440" x2="450" y2="446" stroke="#d1fae5" stroke-width="2"/>
+      <text x="550" y="460">500m</text>
+      <line x1="550" y1="440" x2="550" y2="446" stroke="#d1fae5" stroke-width="2"/>
+      <text x="650" y="460">600m</text>
+      <line x1="650" y1="440" x2="650" y2="446" stroke="#d1fae5" stroke-width="2"/>
+      <text x="750" y="460">700m</text>
+      <line x1="750" y1="440" x2="750" y2="446" stroke="#d1fae5" stroke-width="2"/>
+    </g>
+
+    <!-- Artillery Base / Chassis -->
+    <path d="M 20 440 L 35 385 L 65 385 L 80 440 Z" fill="#1e293b" />
+    <circle cx="35" cy="430" r="12" fill="#334155" stroke="#0f172a" stroke-width="3" />
+    <circle cx="65" cy="430" r="12" fill="#334155" stroke="#0f172a" stroke-width="3" />
+    
+    <!-- Artillery Barrel -->
+    <g id="cannon-barrel" transform="rotate(-45 50 400)">
+      <rect x="30" y="390" width="60" height="20" rx="4" fill="url(#cannonGrad)" />
+      <!-- Muzzle -->
+      <rect x="85" y="388" width="8" height="24" rx="2" fill="#0f172a" />
+      <line x1="40" y1="400" x2="80" y2="400" stroke="#1e293b" stroke-width="3" />
+    </g>
+    
+    <!-- Pivot Joint Cover -->
+    <circle cx="50" cy="400" r="14" fill="#475569" stroke="#1e293b" stroke-width="2" />
+    <circle cx="50" cy="400" r="5" fill="#cbd5e1" />
+
+    <!-- Impact Wave Effect -->
+    <circle id="impact-wave" cx="0" cy="0" r="0" fill="none" stroke="#ef4444" stroke-width="3" opacity="0" />
+
+    <!-- Projectile (Cannonball) -->
+    <circle id="projectile" cx="50" cy="400" r="7" fill="url(#ballGrad)" opacity="0" />
+
+  </svg>
+    </div>
+    <div class="controls-container">
+        <h2>Projectile Motion Test</h2>
+        <p style="color: #64748b;">Use the controls on the right to test physics hypotheses and calculate trajectories.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+    .ctrl-container { display: flex; flex-direction: column; gap: 24px; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 12px; box-sizing: border-box; }
+    .header h2 { margin: 0 0 8px 0; font-size: 22px; color: #0f172a; font-weight: 700; }
+    .header p { margin: 0; font-size: 14px; color: #475569; line-height: 1.5; }
+    
+    .slider-group { display: flex; flex-direction: column; gap: 10px; transition: opacity 0.3s; }
+    .slider-header { display: flex; justify-content: space-between; font-weight: 600; color: #1e293b; font-size: 14px; }
+    input[type=range] { width: 100%; accent-color: #2563eb; cursor: pointer; height: 6px; border-radius: 4px; background: #e2e8f0; outline: none; -webkit-appearance: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #2563eb; cursor: pointer; border: 2px solid #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .info-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 14px; border-radius: 10px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+    .info-label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .info-value { font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 6px; }
+    
+    .btn { padding: 16px; border: none; border-radius: 10px; background: #2563eb; color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
+    .btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+    .btn.reset { background: #ef4444; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2); }
+    .btn.reset:hover { background: #dc2626; }
+    .disabled { opacity: 0.4; pointer-events: none; }
+  </style>
+  
+  <div class="ctrl-container">
+    <div class="header">
+      <h2>System Diagnostics</h2>
+      <p>Adjust the physical properties to compute the exact theoretical flight path before initiating the live test.</p>
+    </div>
+    
+    <div class="slider-group" id="angle-group">
+      <div class="slider-header">
+        <span>Launch Angle (&theta;)</span>
+        <span id="angle-val">45&deg;</span>
+      </div>
+      <input type="range" id="angleSlider" min="0" max="90" value="45" oninput="updateState()">
+    </div>
+    
+    <div class="slider-group" id="vel-group">
+      <div class="slider-header">
+        <span>Initial Velocity (v&infin;)</span>
+        <span id="velocity-val">200 m/s</span>
+      </div>
+      <input type="range" id="velocitySlider" min="50" max="270" value="200" step="10" oninput="updateState()">
+    </div>
+    
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="info-label">Predicted Range</div>
+        <div class="info-value" id="info-range">0 m</div>
+      </div>
+      <div class="info-card">
+        <div class="info-label">Max Height Apex</div>
+        <div class="info-value" id="info-height">0 m</div>
+      </div>
+    </div>
+    
+    <button id="playBtn" class="btn" onclick="togglePlay()">&#9654; Fire Cannon</button>
+  </div>
+
+  <script>
+    let isPlaying = false;
+    let animFrame;
+    let startTime;
+    let trajectoryProps = {};
+    
+    const pivotX = 50;
+    const pivotY = 400;
+    const groundY = 440;
+    const tipDist = 42;
+    const gravity = 120; // Simulated gravity pixel multiplier
+    
+    function updateState() {
+      if (isPlaying) return;
+      
+      let angleDeg = parseFloat(document.getElementById(`angleSlider`).value);
+      let velocity = parseFloat(document.getElementById(`velocitySlider`).value);
+      
+      document.getElementById(`angle-val`).innerHTML = `${angleDeg}&deg;`;
+      document.getElementById(`velocity-val`).textContent = `${velocity} m/s`;
+      
+      // Update visual barrel rotation
+      document.getElementById(`cannon-barrel`).setAttribute(`transform`, `rotate(${-angleDeg} ${pivotX} ${pivotY})`);
+      
+      let angleRad = angleDeg * Math.PI / 180;
+      let vx = velocity * Math.cos(angleRad);
+      let vy = velocity * Math.sin(angleRad);
+      
+      // Starting coordinates at the tip of the muzzle
+      let x0 = pivotX + tipDist * Math.cos(angleRad);
+      let y0 = pivotY - tipDist * Math.sin(angleRad);
+      
+      // Math to find time of flight: solving for y(t) = groundY
+      // y(t) = y0 - vy*t + 0.5*g*t^2
+      // 0.5*g*t^2 - vy*t + (y0 - groundY) = 0
+      // using quadratic formula for precise physics intersection
+      let tFlight = (vy + Math.sqrt(vy * vy + 2 * gravity * (groundY - y0))) / gravity;
+      
+      // Draw Trajectory Path
+      let pathData = `M ${x0} ${y0}`;
+      let steps = 40;
+      let maxX = x0;
+      let apexX = x0;
+      let apexY = y0;
+      
+      for (let i = 1; i <= steps; i++) {
+        let t = (i / steps) * tFlight;
+        let x = x0 + vx * t;
+        let y = y0 - (vy * t - 0.5 * gravity * t * t);
+        pathData += ` L ${x} ${y}`;
+        
+        if (y < apexY) {
+          apexY = y;
+          apexX = x;
+        }
+        if (i === steps) maxX = x;
+      }
+      
+      document.getElementById(`trajectory-line`).setAttribute(`d`, pathData);
+      
+      // Position Apex Marker
+      let tApex = vy / gravity;
+      let apexMarker = document.getElementById(`apex-marker`);
+      let apexText = document.getElementById(`apex-text`);
+      
+      if (tApex > 0 && tApex < tFlight) {
+        apexX = x0 + vx * tApex;
+        apexY = y0 - (vy * tApex - 0.5 * gravity * tApex * tApex);
+        apexMarker.setAttribute(`cx`, `${apexX}`);
+        apexMarker.setAttribute(`cy`, `${apexY}`);
+        apexText.setAttribute(`x`, `${apexX}`);
+        apexText.setAttribute(`y`, `${apexY - 14}`);
+        apexMarker.setAttribute(`opacity`, `1`);
+        apexText.setAttribute(`opacity`, `1`);
+      } else {
+        apexMarker.setAttribute(`opacity`, `0`);
+        apexText.setAttribute(`opacity`, `0`);
+        apexY = y0;
+      }
+      
+      // Update Info Panel (subtract 50 to align with the 0m grid line)
+      let rangePx = maxX - 50;
+      let maxHeightPx = groundY - apexY;
+      
+      document.getElementById(`info-range`).textContent = `${Math.round(rangePx)} m`;
+      document.getElementById(`info-height`).textContent = `${Math.round(maxHeightPx)} m`;
+      
+      // Store globals for animation loop
+      trajectoryProps = { vx, vy, g: gravity, x0, y0, tFlight };
+    }
+    
+    function togglePlay() {
+      let btn = document.getElementById(`playBtn`);
+      if (!isPlaying) {
+        // Start Test
+        isPlaying = true;
+        btn.textContent = `\u23F9 Reset`;
+        btn.classList.add(`reset`);
+        document.getElementById(`angle-group`).classList.add(`disabled`);
+        document.getElementById(`vel-group`).classList.add(`disabled`);
+        
+        let ball = document.getElementById(`projectile`);
+        ball.setAttribute(`opacity`, `1`);
+        
+        startTime = performance.now();
+        animFrame = requestAnimationFrame(animateProjectile);
+        
+        if (window.sendEventToAI) { 
+          window.sendEventToAI(`User fired the cannon at ${document.getElementById('angleSlider').value} degrees`); 
+        }
+      } else {
+        // Reset Test
+        isPlaying = false;
+        btn.textContent = `\u25B6 Fire Cannon`;
+        btn.classList.remove(`reset`);
+        document.getElementById(`angle-group`).classList.remove(`disabled`);
+        document.getElementById(`vel-group`).classList.remove(`disabled`);
+        
+        cancelAnimationFrame(animFrame);
+        document.getElementById(`projectile`).setAttribute(`opacity`, `0`);
+        
+        // Reset impact wave instantly without transition
+        let impact = document.getElementById(`impact-wave`);
+        impact.style.transition = `none`;
+        impact.setAttribute(`opacity`, `0`);
+        impact.setAttribute(`r`, `0`);
+        setTimeout(() => { 
+          impact.style.transition = `r 0.4s ease-out, opacity 0.4s ease-out`; 
+        }, 50);
+        
+        updateState();
+        
+        if (window.sendEventToAI) { 
+          window.sendEventToAI(`User reset the cannon environment`); 
+        }
+      }
+    }
+    
+    function animateProjectile(timestamp) {
+      if (!isPlaying) return;
+      let t = (timestamp - startTime) / 1000;
+      t = t * 1.6; // Time scaling for visual comfort
+      
+      let { vx, vy, g, x0, y0, tFlight } = trajectoryProps;
+      
+      if (t > tFlight) {
+        t = tFlight;
+      }
+      
+      let x = x0 + vx * t;
+      let y = y0 - (vy * t - 0.5 * g * t * t);
+      
+      let ball = document.getElementById(`projectile`);
+      ball.setAttribute(`cx`, `${x}`);
+      ball.setAttribute(`cy`, `${y}`);
+      
+      if (t < tFlight) {
+        animFrame = requestAnimationFrame(animateProjectile);
+      } else {
+        // Impact Logic
+        let impact = document.getElementById(`impact-wave`);
+        impact.setAttribute(`cx`, `${x}`);
+        impact.setAttribute(`cy`, `${y}`);
+        impact.setAttribute(`opacity`, `1`);
+        impact.setAttribute(`r`, `4`);
+        
+        setTimeout(() => {
+          impact.setAttribute(`r`, `36`);
+          impact.setAttribute(`opacity`, `0`);
+        }, 10);
+        
+        if (window.sendEventToAI) { 
+          window.sendEventToAI(`Cannonball landed safely at range ${Math.round(x - 50)} meters`); 
+        }
+      }
+    }
+    
+    // Initialize initial values
+    setTimeout(updateState, 50);
+  </script>
+    </div>
+</body>
+</html>

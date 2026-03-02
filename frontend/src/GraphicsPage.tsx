@@ -68,13 +68,30 @@ const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
 
 export function GraphicsPage({ savedGraphics, galleryLoading, user, onOpenGraphic, onDeleteGraphic, onBack }: GraphicsPageProps) {
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [graphicToDelete, setGraphicToDelete] = useState<SavedGraphic | null>(null)
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
+    const handleDeleteClick = (e: React.MouseEvent, g: SavedGraphic) => {
         e.stopPropagation()
-        setDeletingId(id)
-        await deleteGraphic(user.uid, id)
-        onDeleteGraphic(id)
-        setDeletingId(null)
+        setGraphicToDelete(g)
+    }
+
+    const confirmDelete = async () => {
+        if (!graphicToDelete) return
+        setDeletingId(graphicToDelete.id)
+
+        try {
+            await deleteGraphic(user.uid, graphicToDelete.id)
+            onDeleteGraphic(graphicToDelete.id)
+        } catch (err) {
+            console.error('Failed to delete graphic:', err)
+        } finally {
+            setDeletingId(null)
+            setGraphicToDelete(null)
+        }
+    }
+
+    const cancelDelete = () => {
+        setGraphicToDelete(null)
     }
 
     return (
@@ -198,7 +215,7 @@ export function GraphicsPage({ savedGraphics, galleryLoading, user, onOpenGraphi
                                             <div className="flex items-center gap-2 ml-auto">
                                                 <button
                                                     className="graphic-card-action delete"
-                                                    onClick={(e) => handleDelete(e, g.id)}
+                                                    onClick={(e) => handleDeleteClick(e, g)}
                                                     title="Delete"
                                                     disabled={deletingId === g.id}
                                                 >
@@ -217,6 +234,44 @@ export function GraphicsPage({ savedGraphics, galleryLoading, user, onOpenGraphi
                     </>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {graphicToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <h3 className="text-lg font-semibold text-slate-800 mb-2">Delete Graphic</h3>
+                            <p className="text-sm text-slate-500 mb-6">
+                                Are you sure you want to delete <span className="font-semibold text-slate-700">"{graphicToDelete.title}"</span>? This action cannot be undone.
+                            </p>
+
+                            <div className="flex items-center justify-end gap-3">
+                                <button
+                                    onClick={cancelDelete}
+                                    disabled={deletingId !== null}
+                                    className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    disabled={deletingId !== null}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                                >
+                                    {deletingId ? (
+                                        <>
+                                            <RefreshIcon className="w-4 h-4 animate-spin" />
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        'Delete'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

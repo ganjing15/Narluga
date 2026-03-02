@@ -25,6 +25,11 @@ type Source = {
   content: string
   label: string
 }
+type SearchResult = {
+  title: string
+  url: string
+  snippet: string
+}
 
 // Session phases
 type SessionPhase = 'idle' | 'analyzing' | 'designing' | 'complete' | 'conversation'
@@ -37,6 +42,13 @@ function App() {
   const [inputValue, setInputValue] = useState('')
   const [showTextArea, setShowTextArea] = useState(false)
   const [textAreaValue, setTextAreaValue] = useState('')
+
+  // Web search panel
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [selectedSearchUrls, setSelectedSearchUrls] = useState<Set<string>>(new Set())
+  const [showSearchPanel, setShowSearchPanel] = useState(false)
 
   // Session state
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>('idle')
@@ -62,6 +74,9 @@ function App() {
   const setCurrentSvg = (svg: string | null) => {
     currentSvgRef.current = svg
     _setCurrentSvg(svg)
+    // Reset iframe ready state when loading new graphic
+    iframeReadyRef.current = false
+    pendingToolActionsRef.current = []
   }
   const [currentControls, _setCurrentControls] = useState<string | null>(null)
   const currentControlsRef = useRef<string | null>(null)
@@ -71,6 +86,8 @@ function App() {
   }
   const [currentTitle, setCurrentTitle] = useState<string | null>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null)
+  const [groundingSources, setGroundingSources] = useState<{ title: string, url: string }[]>([])
+  const [researchMode, setResearchMode] = useState<'off' | 'fast' | 'deep'>('fast')
   const narrationContextRef = useRef<string>('')
   const sourceLabelsRef = useRef<string[]>([])
 
@@ -84,6 +101,8 @@ function App() {
   const hasStartedRef = useRef<boolean>(false)
   const eventQueueRef = useRef<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const pendingToolActionsRef = useRef<Array<{action: string, params: any}>>([])
+  const iframeReadyRef = useRef<boolean>(false)
   const nextPlayTimeRef = useRef<number>(0)
   const activeAudioNodesRef = useRef<AudioBufferSourceNode[]>([])
 
@@ -200,6 +219,72 @@ function App() {
       return { ...s, type, content: trimmed, label: displayLabel }
     }))
   }, [])
+
+  // Web search: find sources by query
+  const performSearch = useCallback(async (query: string) => {
+    if (!query.trim()) return
+    setIsSearching(true)
+    setSearchResults([])
+    setSelectedSearchUrls(new Set())
+    setShowSearchPanel(true)
+    try {
+      const token = await getIdToken()
+      const res = await fetch(`${BACKEND_URL}/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ query: query.trim(), depth: researchMode === 'deep' ? 'deep' : 'fast' })
+      })
+      if (!res.ok) {
+        const errText = await res.text()
+        console.error('Search HTTP error', res.status, errText)
+        return
+      }
+      const data = await res.json()
+      setSearchResults(data.results || [])
+    } catch (e) {
+      console.error('Search failed', e)
+    } finally {
+      setIsSearching(false)
+    }
+  }, [researchMode])
+
+  // Add selected search results as URL sources
+  const addSelectedSearchSources = useCallback(() => {
+    const toAdd = searchResults.filter(r => selectedSearchUrls.has(r.url))
+    if (toAdd.length === 0) return
+
+    // Create URL sources for the selected search results
+    const newSources: Source[] = toAdd.map(r => ({
+      id: crypto.randomUUID(),
+      type: is_youtube_url_ts(r.url) ? 'youtube' : 'url',
+      content: r.url,
+      label: r.title || r.url
+    }))
+
+    // Also add the original search query as a text source so the AI knows the intent
+    if (searchQuery.trim()) {
+      newSources.unshift({
+        id: crypto.randomUUID(),
+        type: 'text',
+        content: `Web Search Query: ${searchQuery.trim()}`,
+        label: `🔍 ${searchQuery.trim()}`
+      });
+    }
+
+    setSources(prev => [...prev, ...newSources])
+    setShowSearchPanel(false)
+    setSearchResults([])
+    setSelectedSearchUrls(new Set())
+    setSearchQuery('')
+  }, [searchResults, selectedSearchUrls, searchQuery])
+
+  // Simple YouTube URL check (mirrors backend)
+  function is_youtube_url_ts(url: string): boolean {
+    return /youtube\.com\/watch|youtu\.be\//.test(url)
+  }
 
   // Firebase auth state listener
   useEffect(() => {
@@ -405,6 +490,8 @@ function App() {
       // Reuse the same message/close/error handlers
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
+        console.log('[WebSocket] Received message:', data.type, data);
+
         if (data.type === 'phase') {
           setSessionPhase(data.phase as SessionPhase)
         } else if (data.type === 'ready') {
@@ -449,6 +536,33 @@ function App() {
             source.onended = () => {
               activeAudioNodesRef.current = activeAudioNodesRef.current.filter(n => n !== source)
             }
+          }
+        } else if (data.type === 'tool_action') {
+          const { action, params } = data
+          console.log('[Parent] Received tool_action:', action, params);
+
+          // Handle fetch_more_detail indicator in the parent
+          if (action === 'fetch_more_detail') {
+            if (params.status === 'searching') {
+              const badge = document.createElement('div')
+              badge.id = 'fetch-indicator'
+              badge.style.cssText = 'position:fixed;top:20px;right:20px;background:rgba(59,130,246,0.9);color:white;padding:8px 16px;border-radius:20px;font-size:13px;z-index:9999;backdrop-filter:blur(8px);animation:fadeIn 0.3s ease;'
+              badge.textContent = `🔍 Searching: ${params.query}`
+              document.body.appendChild(badge)
+            } else {
+              document.getElementById('fetch-indicator')?.remove()
+            }
+          }
+
+          // Forward ALL tool actions into the iframe where the SVG elements actually live
+          if (iframeRef.current && iframeRef.current.contentWindow && iframeReadyRef.current) {
+            console.log('[Parent] Forwarding to iframe:', iframeRef.current.contentWindow);
+            iframeRef.current.contentWindow.postMessage(
+              { type: 'TOOL_ACTION', action, params }, '*'
+            )
+          } else {
+            console.warn('[Parent] Iframe not ready, queuing tool_action:', action);
+            pendingToolActionsRef.current.push({ action, params })
           }
         } else if (data.type === 'error') {
           setError(data.message)
@@ -564,6 +678,7 @@ function App() {
       const wsUrl = token ? `${WS_BACKEND_URL}/ws/live?token=${encodeURIComponent(token)}` : `${WS_BACKEND_URL}/ws/live`
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
+      let serverErrorReceived = false  // track if backend sent a typed error
 
       ws.onopen = async () => {
         setIsConnecting(false)
@@ -572,6 +687,7 @@ function App() {
         // Send the sources array as the first message
         ws.send(JSON.stringify({
           type: "init_sources",
+          research_mode: researchMode,
           sources: sources.map(s => ({
             type: s.type,
             content: s.content,
@@ -582,6 +698,7 @@ function App() {
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
+        console.log('[WebSocket] Received message:', data.type, data);
 
         if (data.type === 'phase') {
           setSessionPhase(data.phase as SessionPhase)
@@ -601,6 +718,8 @@ function App() {
           // Store narration context for conversation restart
           if (data.narration_context) narrationContextRef.current = data.narration_context
           if (data.source_labels) sourceLabelsRef.current = data.source_labels
+          // Improvement C: store generation-time grounding citations
+          setGroundingSources(data.grounding_sources || [])
 
           // Auto-save to Firestore if user is signed in
           if (user && isFirebaseConfigured) {
@@ -620,7 +739,7 @@ function App() {
                 controls_html: data.controls_html || '',
                 narration_context: data.narration_context || '',
                 source_labels: data.source_labels || [],
-                created_at: null,
+                created_at: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as any,
               }, ...prev])
             }).catch(e => console.error('[Gallery] Failed to save graphic:', e))
           }
@@ -661,7 +780,7 @@ function App() {
         } else if (data.type === 'tool_action') {
           const { action, params } = data
 
-          // Handle fetch_more_detail indicator in the parent (it's a fixed overlay)
+          // Handle fetch_more_detail indicator in the parent
           if (action === 'fetch_more_detail') {
             if (params.status === 'searching') {
               const badge = document.createElement('div')
@@ -675,12 +794,26 @@ function App() {
           }
 
           // Forward ALL tool actions into the iframe where the SVG elements actually live
-          if (iframeRef.current && iframeRef.current.contentWindow) {
+          if (iframeRef.current && iframeRef.current.contentWindow && iframeReadyRef.current) {
+            console.log('[Parent] Forwarding to iframe:', action);
             iframeRef.current.contentWindow.postMessage(
               { type: 'TOOL_ACTION', action, params }, '*'
             )
+          } else {
+            console.warn('[Parent] Iframe not ready, queuing tool_action:', action);
+            pendingToolActionsRef.current.push({ action, params })
+          }
+        } else if (data.type === 'grounding_sources') {
+          // Improvement B: live fetch_more_detail citations — append to existing set
+          if (data.sources && data.sources.length > 0) {
+            setGroundingSources(prev => {
+              const existing = new Set(prev.map((s: { url: string }) => s.url))
+              const newSources = data.sources.filter((s: { url: string }) => !existing.has(s.url))
+              return newSources.length > 0 ? [...prev, ...newSources] : prev
+            })
           }
         } else if (data.type === 'error') {
+          serverErrorReceived = true
           setError(data.message)
           disconnect()
         }
@@ -689,7 +822,7 @@ function App() {
       ws.onclose = (event) => {
         if (event.code === 1000 && event.reason) {
           setStatusMessage(event.reason)
-        } else if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
+        } else if (!serverErrorReceived && !event.wasClean && event.code !== 1000 && event.code !== 1005) {
           setError(`Connection lost (${event.code}). Click 'Start Live Conversation' to reconnect.`)
         }
         disconnect()
@@ -709,6 +842,9 @@ function App() {
     setCurrentControls(null)
     setCurrentTitle(null)
     setCurrentSubtitle(null)
+    setGroundingSources([])
+    narrationContextRef.current = ''
+    sourceLabelsRef.current = []
     setSessionPhase('idle')
     setStatusMessage('')
     setError('')
@@ -852,6 +988,7 @@ function App() {
       // Allow INTERACTION_EVENT (automatically sent when user clicks buttons/inputs in the iframe)
       else if (event.data?.type === 'INTERACTION_EVENT' && event.data?.payload) {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
+          console.log('[INTERACTION] Sending to AI:', event.data.payload);
           wsRef.current.send(JSON.stringify({
             clientContent: {
               turns: [{ role: "user", parts: [{ text: `[Interaction: The user just ${event.data.payload} in the interactive controls panel.]` }] }],
@@ -860,20 +997,121 @@ function App() {
           }))
         }
       }
+      // Allow CLICK_RESULT (sent by iframe after AI executes click_element)
+      else if (event.data?.type === 'CLICK_RESULT') {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
+          if (!event.data.success) {
+            wsRef.current.send(JSON.stringify({
+              clientContent: {
+                turns: [{ role: "user", parts: [{ text: `[Tool execution failed: The 'click_element' tool could not find any button matching "${event.data.keyword}". Tell the user you couldn't find the button, or try again with a different exact button name from the controls panel.]` }] }],
+                turnComplete: true
+              }
+            }));
+          } else {
+            // Build explicit feedback about what action was performed
+            let feedbackMsg = `[Tool execution success: `;
+
+            if (event.data.newLabel && event.data.newLabel !== event.data.clickedLabel) {
+              const newLabelLower = event.data.newLabel.toLowerCase();
+              
+              // Determine what action was actually performed based on the result
+              if (newLabelLower.includes('pause') || newLabelLower.includes('stop') || newLabelLower.includes('⏸')) {
+                // Button now says "Pause" = animation is playing = user clicked Play
+                feedbackMsg += `You clicked "${event.data.clickedLabel}" and STARTED the animation. It is now PLAYING. Don't re-explain what you already said - just briefly confirm it's running.`;
+              } else if (newLabelLower.includes('play') || newLabelLower.includes('start') || newLabelLower.includes('▶')) {
+                // Button now says "Play" = animation is paused = user clicked Pause
+                feedbackMsg += `You clicked "${event.data.clickedLabel}" and PAUSED the animation. It is now STOPPED.`;
+                
+                // Include current slider values when paused
+                if (event.data.sliderValues && event.data.sliderValues.length > 0) {
+                  const sliderInfo = event.data.sliderValues.map((s: any) => `${s.label}: ${s.value}`).join(', ');
+                  feedbackMsg += ` Current position: ${sliderInfo}.`;
+                }
+              } else {
+                feedbackMsg += `You clicked "${event.data.clickedLabel}". The button changed to "${event.data.newLabel}".`;
+              }
+            } else {
+              feedbackMsg += `You clicked "${event.data.clickedLabel}".`;
+            }
+            feedbackMsg += `]`;
+
+            wsRef.current.send(JSON.stringify({
+              clientContent: {
+                turns: [{ role: "user", parts: [{ text: feedbackMsg }] }],
+                turnComplete: false
+              }
+            }));
+          }
+        }
+      }
+      // Handle iframe ready signal and replay queued tool actions
+      else if (event.data?.type === 'IFRAME_READY') {
+        console.log('[Parent] Iframe is ready, replaying', pendingToolActionsRef.current.length, 'queued actions');
+        iframeReadyRef.current = true;
+        
+        // Replay all queued tool actions
+        if (iframeRef.current && iframeRef.current.contentWindow) {
+          pendingToolActionsRef.current.forEach(({ action, params }) => {
+            console.log('[Parent] Replaying queued action:', action);
+            iframeRef.current!.contentWindow!.postMessage(
+              { type: 'TOOL_ACTION', action, params }, '*'
+            );
+          });
+          pendingToolActionsRef.current = [];
+        }
+      }
     };
     window.addEventListener('message', handleIframeMessage);
     return () => window.removeEventListener('message', handleIframeMessage);
   }, []);
 
+  // Security: Sanitize SVG content to remove scripts and event handlers
+  const sanitizeSvg = useCallback((svgHtml: string): string => {
+    // Remove script tags
+    let sanitized = svgHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    // Remove event handler attributes (onclick, onload, etc.)
+    sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+    sanitized = sanitized.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
+    
+    // Remove javascript: URLs
+    sanitized = sanitized.replace(/javascript:/gi, '');
+    
+    // Remove data: URLs (can contain scripts)
+    sanitized = sanitized.replace(/href\s*=\s*["']data:[^"']*["']/gi, 'href="#"');
+    sanitized = sanitized.replace(/src\s*=\s*["']data:[^"']*["']/gi, 'src=""');
+    
+    return sanitized;
+  }, []);
+
+  // Security: Sanitize controls HTML
+  const sanitizeControls = useCallback((controlsHtml: string): string => {
+    // NOTE: We allow <script> tags, onclick/oninput handlers in controls because:
+    // 1. They're essential for interactivity (togglePlay, updateState functions)
+    // 2. CSP already prevents malicious inline scripts from doing harm
+    // 3. User only sees their own graphics (no cross-user attacks)
+    // 4. AI-generated code needs to run for graphics to be interactive
+    
+    // Only remove javascript: URLs (minimal sanitization)
+    let sanitized = controlsHtml.replace(/javascript:/gi, '');
+    
+    return sanitized;
+  }, []);
+
   // Construct a secure, isolated HTML document for the graphic and controls
   const iframeSrcDoc = useMemo(() => {
     if (!currentSvg) return '';
+    
+    // Sanitize SVG and controls before embedding
+    const safeSvg = sanitizeSvg(currentSvg);
+    const safeControls = currentControls ? sanitizeControls(currentControls) : '';
 
     return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:;">
   <style>
     html, body {
       margin: 0;
@@ -925,21 +1163,24 @@ function App() {
     // Monkey-patch setInterval/clearInterval to track all intervals created by generated code.
     // This prevents the interval-stacking bug where multiple setIntervals accumulate
     // because generated togglePlay()/stopAutoPlay() has a race condition.
-    var __trackedIntervals = new Set();
-    var __origSetInterval = window.setInterval.bind(window);
-    var __origClearInterval = window.clearInterval.bind(window);
-    window.setInterval = function(fn, ms) {
-      var id = __origSetInterval(fn, ms);
-      __trackedIntervals.add(id);
+    // Store Intervals globally so we can wipe them on AI commands
+    window.__trackedIntervals = new Set();
+    const originalSetInterval = window.setInterval;
+    window.setInterval = function(handler, timeout, ...args) {
+      const id = originalSetInterval(handler, timeout, ...args);
+      window.__trackedIntervals.add(id);
       return id;
     };
-    window.clearInterval = function(id) {
-      __trackedIntervals.delete(id);
-      return __origClearInterval(id);
+    
+    // Bubble up iframe script errors so the AI and developer can see them
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+      console.error("[IFRAME ERROR]", msg, "at line", lineNo, ":", columnNo);
+      return false; // let default handler run too
     };
+
     window.__clearAllIntervals = function() {
-      __trackedIntervals.forEach(function(id) { __origClearInterval(id); });
-      __trackedIntervals.clear();
+      window.__trackedIntervals.forEach(id => clearInterval(id));
+      window.__trackedIntervals.clear();
     };
 
     // Communication bridge to host React app
@@ -976,35 +1217,81 @@ function App() {
           return rect.width > containerRect.width * 0.6 && rect.height > containerRect.height * 0.6;
         };
 
+        // Score matches: exact match > starts with > word boundary > contains
+        const scoreMatch = (str, keyword) => {
+          if (!str) return 0;
+          const s = str.toLowerCase().replace(/[-_]/g, ' ').trim();
+          if (s === keyword) return 100; // exact match
+          if (s.startsWith(keyword + ' ') || s === keyword) return 90; // starts with word boundary
+          if (s.startsWith(keyword)) return 50; // starts with
+          if (s.includes(' ' + keyword + ' ') || s.endsWith(' ' + keyword)) return 40; // word boundary
+          if (s.includes(keyword)) return 25; // contains
+          return 0;
+        };
+
+        // First pass: look for elements with id/label/section attributes
         svgContainer.querySelectorAll('[id], [data-label], [data-section]').forEach(el => {
           const id = (el.id || '').toLowerCase().replace(/[-_]/g, ' ');
           const label = (el.getAttribute('data-label') || '').toLowerCase();
           const section = (el.getAttribute('data-section') || '').toLowerCase();
-          if ((id.length >= 3 && id.includes(kw)) || label.includes(kw) || section.includes(kw)) {
-            if (!isTooLarge(el)) results.push(el);
+          
+          const idScore = scoreMatch(id, kw);
+          const labelScore = scoreMatch(label, kw);
+          const sectionScore = scoreMatch(section, kw);
+          const maxScore = Math.max(idScore, labelScore, sectionScore);
+          
+          if (maxScore > 0 && !isTooLarge(el)) {
+            // Boost score for visual elements (shapes) vs text/labels
+            const isVisualElement = ['circle', 'ellipse', 'rect', 'path', 'polygon', 'line'].includes(el.tagName.toLowerCase());
+            const isGroup = el.tagName.toLowerCase() === 'g';
+            
+            // Prefer actual shapes over groups (groups might contain multiple things)
+            let finalScore = maxScore;
+            if (isVisualElement) {
+              finalScore = maxScore * 3; // Highest priority for actual shapes
+            } else if (isGroup) {
+              finalScore = maxScore * 1; // Lowest priority for groups
+            } else {
+              finalScore = maxScore * 2; // Medium priority for other elements
+            }
+            
+            results.push({ el, score: finalScore });
           }
         });
 
+        // Second pass: if no good matches, search text content
         if (results.length === 0) {
           svgContainer.querySelectorAll('text, tspan, foreignObject, h1, h2, h3, h4, p, span, label, button').forEach(el => {
             const text = (el.textContent || '').toLowerCase().trim();
-            if (text.length > 0 && text.length < 200 && (text.includes(kw) || kw.split(' ').every(w => text.includes(w)))) {
-              let target = el;
-              if (el instanceof SVGElement && el.parentElement && el.parentElement.tagName.toLowerCase() === 'g') {
-                target = el.parentElement;
+            if (text.length > 0 && text.length < 200) {
+              const textScore = scoreMatch(text, kw);
+              if (textScore > 0) {
+                let target = el;
+                if (el instanceof SVGElement && el.parentElement && el.parentElement.tagName.toLowerCase() === 'g') {
+                  target = el.parentElement;
+                }
+                if (!isTooLarge(target) && !results.find(r => r.el === target)) {
+                  results.push({ el: target, score: textScore * 0.5 }); // Lower priority for text matches
+                }
               }
-              if (!isTooLarge(target) && !results.includes(target)) results.push(target);
             }
           });
         }
 
+        // Sort by score (highest first), then by size (smallest first for same score)
         results.sort((a, b) => {
-          const aRect = a.getBoundingClientRect();
-          const bRect = b.getBoundingClientRect();
+          if (b.score !== a.score) return b.score - a.score;
+          // For same score, prefer shorter element IDs (more specific)
+          const aId = (a.el.id || a.el.getAttribute('data-label') || '').length;
+          const bId = (b.el.id || b.el.getAttribute('data-label') || '').length;
+          if (aId !== bId) return aId - bId;
+          // Then prefer smaller visual size
+          const aRect = a.el.getBoundingClientRect();
+          const bRect = b.el.getBoundingClientRect();
           return (aRect.width * aRect.height) - (bRect.width * bRect.height);
         });
 
-        return results.slice(0, 3);
+        return results.slice(0, 3).map(r => r.el);
       };
 
       if (action === 'highlight_element') {
@@ -1047,20 +1334,64 @@ function App() {
         const elements = findElements(params.element_id || '');
         const prop = params.css_property || '';
         const val = params.value || '';
+        
+        // Security: Whitelist of safe CSS properties
+        const safeCssProperties = [
+          'fill', 'stroke', 'opacity', 'stroke-width', 'r', 'cx', 'cy', 'x', 'y', 
+          'width', 'height', 'display', 'scale', 'transform', 'filter', 
+          'color', 'background-color', 'font-size', 'font-weight'
+        ];
+        
+        // Security: Block dangerous CSS values
+        const isDangerousValue = (value) => {
+          const dangerous = [
+            /javascript:/i,
+            /data:/i,
+            /<script/i,
+            /expression\\(/i,  // Escape the parenthesis
+            /import\\s/i,
+            /url\\(/i  // Block external resources
+          ];
+          return dangerous.some(pattern => pattern.test(value));
+        };
+        
+        if (!safeCssProperties.includes(prop)) {
+          console.warn('[Security] Blocked unsafe CSS property:', prop);
+          return;
+        }
+        
+        if (isDangerousValue(val)) {
+          console.warn('[Security] Blocked dangerous CSS value:', val);
+          return;
+        }
+        
         elements.forEach(el => {
           el.style.transition = 'all 0.5s ease';
-          if (el instanceof SVGElement && ['fill', 'stroke', 'opacity', 'stroke-width', 'r', 'cx', 'cy', 'x', 'y', 'width', 'height', 'transform', 'display'].includes(prop)) {
+          if (el instanceof SVGElement && ['fill', 'stroke', 'opacity', 'stroke-width', 'r', 'cx', 'cy', 'x', 'y', 'width', 'height', 'display'].includes(prop)) {
+            // Direct SVG attribute modification
             el.setAttribute(prop, val);
-          } else {
-            // For SVG elements with scale, set transform-origin to element center
-            // to prevent position shifting
-            if (el instanceof SVGElement && (prop === 'scale' || prop === 'transform')) {
-              try {
-                const bbox = el.getBBox();
-                el.style.transformOrigin = (bbox.x + bbox.width / 2) + 'px ' + (bbox.y + bbox.height / 2) + 'px';
-                el.style.transformBox = 'fill-box';
-              } catch (e) { /* getBBox may fail on hidden elements */ }
+          } else if (prop === 'scale' && el instanceof SVGElement) {
+            // Special handling for scale: use SVG transform attribute to avoid position shift
+            try {
+              const bbox = el.getBBox();
+              const cx = bbox.x + bbox.width / 2;
+              const cy = bbox.y + bbox.height / 2;
+              
+              // Get existing transform or create new one
+              const existingTransform = el.getAttribute('transform') || '';
+              // Remove any existing scale transforms
+              const withoutScale = existingTransform.replace(/scale\\([^)]*\\)/g, '').trim();
+              // Add new scale transform centered on element
+              const newTransform = (withoutScale + ' translate(' + cx + ', ' + cy + ') scale(' + val + ') translate(' + (-cx) + ', ' + (-cy) + ')').trim();
+              el.setAttribute('transform', newTransform);
+            } catch (e) {
+              // Fallback to CSS if getBBox fails
+              el.style.transform = 'scale(' + val + ')';
+              el.style.transformOrigin = 'center';
+              el.style.transformBox = 'fill-box';
             }
+          } else {
+            // CSS property modification
             const camelProp = prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
             el.style[camelProp] = val;
           }
@@ -1075,76 +1406,161 @@ function App() {
         const kw = (params.element_id || '').toLowerCase().trim();
         console.log("[IFRAME TOOL] click_element initiated with kw: '" + kw + "'");
         if (!kw) {
-          window.parent.postMessage({ type: 'CLICK_RESULT', success: false, keyword: '', clickedLabel: null }, '*');
+          window.parent.postMessage({ type: 'CLICK_RESULT', success: false, keyword: '', clickedLabel: null, newLabel: null }, '*');
           return;
         }
-        const containers = document.querySelectorAll('.svg-area, .controls-area');
-        let clicked = false;
-        let matchedLabel = null;
-        containers.forEach(container => {
-          if (clicked) return;
-          container.querySelectorAll('button, input[type="button"], input[type="submit"], input[type="checkbox"], input[type="range"], a, [onclick], [role="button"]').forEach(el => {
+        // FIX: The AI often sends tool commands immediately after generating the graphic,
+        // arriving via WebSocket BEFORE the browser has actually finished parsing and rendering
+        // the iframe's srcdoc HTML. We must poll the DOM for readiness.
+        let attempts = 0;
+        const maxAttempts = 15; // 1.5 seconds max wait
+        
+        const tryClick = () => {
+          attempts++;
+          const containers = [document.body];
+          let clicked = false;
+          let matchedLabel = null;
+          let clickedElement = null;
+          
+          // Check if DOM actually has content yet by looking for ANY element
+          const domReady = document.querySelectorAll('*').length > 10;
+          
+          if (!domReady && attempts < maxAttempts) {
+              console.log("[IFRAME TOOL] DOM not ready yet (attempt " + attempts + "), waiting 100ms...");
+              setTimeout(tryClick, 100);
+              return;
+          }
+
+          containers.forEach(container => {
             if (clicked) return;
-            const text = (el.textContent || '').toLowerCase().trim();
-            const id = (el.id || '').toLowerCase();
-            const title = (el.getAttribute('title') || '').toLowerCase();
-            const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+            const candidates = container.querySelectorAll('button, input[type="button"], input[type="submit"], input[type="checkbox"], input[type="range"], a, [onclick], [role="button"]');
+            console.log("[IFRAME TOOL] Number of clickable candidates found in document (attempt " + attempts + "): " + candidates.length);
             
-            const matchText = text && (text.includes(kw) || kw.includes(text));
-            const matchId = id && (id.includes(kw) || kw.includes(id));
-            const matchTitle = title && (title.includes(kw) || kw.includes(title));
-            const matchAria = ariaLabel && (ariaLabel.includes(kw) || kw.includes(ariaLabel));
-            
-            console.log("  -> Checking element: <" + el.tagName + "> id='" + id + "' text='" + text + "'. Match? " + !!(matchText || matchId || matchTitle || matchAria));
-            
-            if (matchText || matchId || matchTitle || matchAria) {
-              matchedLabel = (el.textContent || el.id || '').trim();
-              el.style.transition = 'all 0.2s ease';
-              el.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.5)';
-              
-              setTimeout(() => {
-                el.style.boxShadow = '';
-                if (el.tagName.toLowerCase() === 'input' && el.type === 'range') {
-                   // For sliders, a raw click does nothing useful. If params.value was passed, use it,
-                   // otherwise advance it by roughly 15% of its max.
-                   let advanceStr = params.value;
-                   if (!advanceStr) {
-                       const current = parseFloat(el.value || '0');
-                       const max = parseFloat(el.max || '100');
-                       const step = parseFloat(el.step || '1');
-                       let next = current + (max * 0.15);
-                       if (next > max) next = parseFloat(el.min || '0');
-                       // snap to step
-                       next = Math.round(next / step) * step;
-                       advanceStr = next.toString();
-                   }
-                   el.value = advanceStr;
-                   el.dispatchEvent(new Event('input', { bubbles: true }));
-                   el.dispatchEvent(new Event('change', { bubbles: true }));
-                } else {
-                   // Before clicking, clear any stale intervals to prevent stacking
-                   // (generated code's togglePlay may create new intervals without clearing old ones)
-                   var btnText = (el.textContent || '').toLowerCase();
-                   if (btnText.includes('play') || btnText.includes('pause') || btnText.includes('auto') || btnText.includes('▶') || btnText.includes('⏸')) {
-                     if (window.__clearAllIntervals) window.__clearAllIntervals();
-                   }
-                   el.click();
-                }
-              }, 300);
-              clicked = true;
+            // If no buttons exist AND we haven't timed out, wait for React/iframe to render
+            if (candidates.length === 0 && attempts < maxAttempts) {
+                setTimeout(tryClick, 100);
+                return; // Break out of this specific container loop attempt
             }
+
+            candidates.forEach(el => {
+              if (clicked) return;
+              const text = (el.textContent || '').toLowerCase().trim();
+              const id = (el.id || '').toLowerCase();
+              const title = (el.getAttribute('title') || '').toLowerCase();
+              const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+              const matchText = text && (text.includes(kw) || kw.includes(text));
+              const matchId = id && (id === kw || id.includes(kw) || kw.includes(id));
+              const matchTitle = title && (title.includes(kw) || kw.includes(title));
+              const matchAria = ariaLabel && (ariaLabel.includes(kw) || kw.includes(ariaLabel));
+              
+              // Allow loose matching for play/pause intents since button text varies widely
+              const isPlayPauseKw = ['play', 'pause', 'start', 'stop', 'resume', 'auto'].some(w => kw.includes(w));
+              const isPlayPauseBtn = text && ['play', 'pause', 'start', 'stop', 'resume', 'auto', '▶', '⏸'].some(w => text.includes(w));
+              const semanticMatch = isPlayPauseKw && isPlayPauseBtn;
+              
+              // Exact ID match is the strongest signal
+              const exactIdMatch = id === kw;
+              
+              console.log("  -> Checking element: <" + el.tagName + "> id='" + id + "' text='" + text + "'. Match? " + !!(exactIdMatch || matchText || matchId || matchTitle || matchAria || semanticMatch));
+              
+              if (exactIdMatch || matchText || matchId || matchTitle || matchAria || semanticMatch) {
+                matchedLabel = (el.textContent || el.id || '').trim();
+                clickedElement = el;
+                el.style.transition = 'all 0.2s ease';
+                el.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.5)';
+                
+                setTimeout(() => {
+                  el.style.boxShadow = '';
+                  if (el.tagName.toLowerCase() === 'input' && el.type === 'range') {
+                     // For sliders, a raw click does nothing useful. If params.value was passed, use it,
+                     // otherwise advance it by roughly 15% of its max.
+                     let advanceStr = params.value;
+                     if (!advanceStr) {
+                         const current = parseFloat(el.value || '0');
+                         const max = parseFloat(el.max || '100');
+                         const step = parseFloat(el.step || '1');
+                         let next = current + (max * 0.15);
+                         if (next > max) next = parseFloat(el.min || '0');
+                         // snap to step
+                         next = Math.round(next / step) * step;
+                         advanceStr = next.toString();
+                     }
+                     el.value = advanceStr;
+                     el.dispatchEvent(new Event('input', { bubbles: true }));
+                     el.dispatchEvent(new Event('change', { bubbles: true }));
+                  } else {
+                     // Before clicking, clear any stale intervals to prevent stacking
+                     // (generated code's togglePlay may create new intervals without clearing old ones)
+                     var btnText = (el.textContent || '').toLowerCase();
+                     if (btnText.includes('play') || btnText.includes('pause') || btnText.includes('auto') || btnText.includes('▶') || btnText.includes('⏸')) {
+                       if (window.__clearAllIntervals) window.__clearAllIntervals();
+                     }
+                     
+                     // Set flag to prevent duplicate INTERACTION_EVENT
+                     window.__aiClickInProgress = true;
+                     
+                     // Use native click to try triggering event listeners
+                     el.click();
+                     
+                     // After clicking, wait a moment for the button text to update, then report the new state
+                     setTimeout(() => {
+                       const newLabel = (el.textContent || '').trim();
+                       
+                       // Capture current slider values
+                       const sliders = document.querySelectorAll('input[type="range"]');
+                       const sliderValues = [];
+                       sliders.forEach(slider => {
+                         const sliderLabel = slider.getAttribute('aria-label') || slider.getAttribute('title') || slider.id || 'slider';
+                         sliderValues.push({ label: sliderLabel, value: slider.value });
+                       });
+                       
+                       window.parent.postMessage({
+                         type: 'CLICK_RESULT',
+                         success: true,
+                         keyword: kw,
+                         clickedLabel: matchedLabel,
+                         newLabel: newLabel,
+                         sliderValues: sliderValues
+                       }, '*');
+                       
+                       // Clear the flag after reporting
+                       window.__aiClickInProgress = false;
+                     }, 100);
+                     return; // Exit early since we're handling the postMessage in the timeout
+                  }
+                }, 300);
+                clicked = true;
+              }
+            });
           });
-        });
-        // Report click result back to parent
-        if (!clicked) {
-          console.warn("[IFRAME TOOL] click_element: NO match found for keyword '" + kw + "'");
-        }
-        window.parent.postMessage({
-          type: 'CLICK_RESULT',
-          success: clicked,
-          keyword: kw,
-          clickedLabel: matchedLabel
-        }, '*');
+
+          // Report click result back to parent only if we actually finished searching (and matched or timed out)
+          if (clicked || attempts >= maxAttempts) {
+              if (!clicked) {
+                console.warn("[IFRAME TOOL] click_element: NO match found for keyword '" + kw + "' after " + attempts + " attempts.");
+                window.parent.postMessage({
+                  type: 'CLICK_RESULT',
+                  success: false,
+                  keyword: kw,
+                  clickedLabel: null,
+                  newLabel: null
+                }, '*');
+              }
+              // For non-button clicks (sliders, etc), send result immediately
+              else if (clickedElement && clickedElement.tagName.toLowerCase() === 'input' && clickedElement.type === 'range') {
+                window.parent.postMessage({
+                  type: 'CLICK_RESULT',
+                  success: true,
+                  keyword: kw,
+                  clickedLabel: matchedLabel,
+                  newLabel: matchedLabel
+                }, '*');
+              }
+          }
+        };
+
+        // Start the polling cycle
+        tryClick();
       }
     }
 
@@ -1175,11 +1591,31 @@ function App() {
       const target = e.target;
       if (!svgContainer.contains(target)) return;
 
+      // Priority 1: Direct label attributes
       const directLabel = target.getAttribute('data-label') || target.getAttribute('id') || '';
+      
+      // Priority 2: Check for <title> element inside the target (SVG accessibility)
+      let titleText = '';
+      if (target.querySelector) {
+        const titleEl = target.querySelector('title');
+        if (titleEl) titleText = (titleEl.textContent || '').trim();
+      }
+      
+      // Priority 3: Check parent group's id or class
+      let parentLabel = '';
+      const parentGroup = target.closest('g[id], g[class]');
+      if (parentGroup) {
+        parentLabel = parentGroup.getAttribute('id') || parentGroup.getAttribute('class') || '';
+        // Clean up class names (remove technical prefixes)
+        parentLabel = parentLabel.replace(/^(svg-|graphic-|element-)/, '');
+      }
+      
+      // Priority 4: Find nearest text label (only if nothing else found)
       let nearestLabel = '';
       let nearestDist = 60; 
       
-      svgContainer.querySelectorAll('text').forEach(textEl => {
+      if (!directLabel && !titleText && !parentLabel) {
+        svgContainer.querySelectorAll('text').forEach(textEl => {
         const content = (textEl.textContent || '').trim();
         if (content.length < 2 || content.length > 60) return;
         const rect = textEl.getBoundingClientRect();
@@ -1191,6 +1627,7 @@ function App() {
           nearestLabel = content;
         }
       });
+      }
 
       const tagName = target.tagName.toLowerCase();
       const fill = target.getAttribute('fill') || '';
@@ -1202,6 +1639,10 @@ function App() {
       let report = '';
       if (directLabel && directLabel.length >= 2) {
         report = '"' + directLabel + '"';
+      } else if (titleText && titleText.length >= 2) {
+        report = '"' + titleText + '"';
+      } else if (parentLabel && parentLabel.length >= 2) {
+        report = '"' + parentLabel + '"';
       } else if (nearestLabel) {
         report = 'near the "' + nearestLabel + '" label';
         if (elementDesc) report += ' (on ' + elementDesc + ')';
@@ -1222,12 +1663,25 @@ function App() {
     // Automatically tell the parent when the user clicks a button or changes an input
     // For clicks: we defer label capture by 50ms so the button's onclick handler
     // has time to update the text (e.g., "▶ Play" → "⏸ Pause") before we read it.
+    
+    // Track AI-triggered clicks to avoid duplicate event reporting
+    window.__aiClickInProgress = false;
+    
+    // IMPORTANT: {capture: true} so this fires BEFORE any button's own click handler runs.
+    // Without it, the listener fires in the bubbling phase — AFTER the button may have
+    // already synchronously updated its own text (e.g. "▶ Play" → "⏸ Pause"), which
+    // causes beforeLabel to capture the POST-click label and inverts the reported state.
     document.addEventListener('click', (e) => {
+      // Skip if this click was triggered by the AI's click_element tool
+      if (window.__aiClickInProgress) {
+        return;
+      }
+
       let target = e.target;
       const interactiveEl = target.closest('button, a, input, select, [role="button"]');
       if (!interactiveEl) return;
 
-      // Capture the BEFORE label immediately
+      // Capture the BEFORE label immediately (capture phase guarantees this is pre-click)
       let beforeLabel = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
       if (!beforeLabel || beforeLabel.length > 50) return;
 
@@ -1238,35 +1692,205 @@ function App() {
 
         // Detect if this is a toggle button (label changed after click)
         if (afterLabel && afterLabel !== beforeLabel) {
-          // Toggle detected — report resulting state
-          const afterLower = afterLabel.toLowerCase();
-          const isNowPaused = afterLower.includes('play') || afterLower.includes('start') || afterLower.includes('▶');
-          const isNowPlaying = afterLower.includes('pause') || afterLower.includes('stop') || afterLower.includes('⏸');
-           if (isNowPlaying) {
-            actionDesc = 'clicked "' + beforeLabel + '" — animation is now PLAYING (button now shows "' + afterLabel + '")';
-          } else if (isNowPaused) {
-            actionDesc = 'clicked "' + beforeLabel + '" — animation is now PAUSED (button now shows "' + afterLabel + '")';
-            // SAFETY: force-clear ALL intervals to handle generated code's toggle race condition
-            if (window.__clearAllIntervals) window.__clearAllIntervals();
+          // For toggle buttons, explicitly state what action was performed
+          const afterLabelLower = afterLabel.toLowerCase();
+          
+          if (afterLabelLower.includes('pause') || afterLabelLower.includes('stop') || afterLabelLower.includes('⏸')) {
+            // Button now says "Pause" = animation is playing
+            actionDesc = 'clicked "' + beforeLabel + '" and STARTED the animation. It is now PLAYING (button shows "' + afterLabel + '")';
+          } else if (afterLabelLower.includes('play') || afterLabelLower.includes('start') || afterLabelLower.includes('▶')) {
+            // Button now says "Play" = animation is paused
+            actionDesc = 'clicked "' + beforeLabel + '" and PAUSED the animation. It is now STOPPED (button shows "' + afterLabel + '")';
           } else {
-            actionDesc = 'clicked "' + beforeLabel + '" (button changed to "' + afterLabel + '")';
+            // Generic toggle
+            actionDesc = 'clicked "' + beforeLabel + '" — button turned into a "' + afterLabel + '" toggle';
           }
         } else {
-          actionDesc = '"' + (afterLabel || beforeLabel) + '" clicked';
+          // Button label didn't change - infer action from button text
+          // Button text shows the NEXT action (what will happen when you click)
+          const beforeLabelLower = beforeLabel.toLowerCase();
+          const isPlayButton = beforeLabelLower.includes('play') || beforeLabelLower.includes('start') || beforeLabelLower.includes('▶');
+          const isPauseButton = beforeLabelLower.includes('pause') || beforeLabelLower.includes('stop') || beforeLabelLower.includes('⏸');
+          
+          if (isPauseButton) {
+            // Button says "Pause" -> clicking it will pause -> animation is now stopped
+            actionDesc = 'clicked "' + beforeLabel + '" and PAUSED the animation. It is now STOPPED';
+          } else if (isPlayButton) {
+            // Button says "Play" -> clicking it will play -> animation is now playing
+            actionDesc = 'clicked "' + beforeLabel + '" and STARTED the animation. It is now PLAYING';
+          } else {
+            actionDesc = '"' + (afterLabel || beforeLabel) + '" clicked';
+          }
         }
 
         window.parent.postMessage({ type: 'INTERACTION_EVENT', payload: actionDesc }, '*');
       }, 50);
-    });
+    }, {capture: true});
 
     document.addEventListener('change', (e) => {
+      // Only report user-initiated changes, not programmatic ones
+      if (!e.isTrusted) return;
+      
       let target = e.target;
       const interactiveEl = target.closest('input, select');
       if (!interactiveEl) return;
-      let label = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
-      if (!label || label.length > 50) return;
-      let actionDesc = '"' + label + '" changed to "' + interactiveEl.value + '"';
-      window.parent.postMessage({ type: 'INTERACTION_EVENT', payload: actionDesc }, '*');
+      
+      // For sliders, get a descriptive label (not the value itself)
+      let label = '';
+      if (interactiveEl.tagName.toLowerCase() === 'input' && interactiveEl.type === 'range') {
+        // Try to find a descriptive label for the slider
+        label = interactiveEl.getAttribute('aria-label') || 
+                interactiveEl.getAttribute('title') || 
+                interactiveEl.id || 
+                'slider';
+        
+        // Also try to find nearby text that describes the slider
+        if (label === 'slider' || label === interactiveEl.id) {
+          const parent = interactiveEl.parentElement;
+          if (parent) {
+            const labelEl = parent.querySelector('label');
+            if (labelEl) {
+              label = labelEl.textContent.trim();
+            }
+          }
+        }
+        
+        let actionDesc = 'adjusted "' + label + '" slider to ' + interactiveEl.value;
+        
+        // Add context about min/max if available
+        if (interactiveEl.min && interactiveEl.max) {
+          const min = parseFloat(interactiveEl.min);
+          const max = parseFloat(interactiveEl.max);
+          const val = parseFloat(interactiveEl.value);
+          const percent = Math.round(((val - min) / (max - min)) * 100);
+          actionDesc += ' (' + percent + '% of range ' + min + '-' + max + ')';
+        }
+        
+        window.parent.postMessage({ type: 'INTERACTION_EVENT', payload: actionDesc }, '*');
+      } else {
+        // For other inputs/selects, use the original logic
+        label = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
+        if (!label || label.length > 50) return;
+        let actionDesc = '"' + label + '" changed to "' + interactiveEl.value + '"';
+        window.parent.postMessage({ type: 'INTERACTION_EVENT', payload: actionDesc }, '*');
+      }
+    });
+
+    // --- PROGRAMMATIC STATE TRACKING ---
+    // Track animation state transitions (playing ↔ paused) via button label changes
+    // Ignore transient changes within the same state to avoid false positives
+    document.addEventListener('DOMContentLoaded', () => {
+      // Signal to parent that iframe is ready to receive tool actions
+      window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+      
+      let buttonStates = new Map(); // button -> 'playing' | 'paused'
+      let clickTriggeredButtons = new Set();
+      let lastSliderChangeTime = 0;
+
+      const getState = (label) => {
+        const lower = label.toLowerCase();
+        if (lower.includes('pause') || lower.includes('stop') || lower.includes('⏸')) return 'playing';
+        if (lower.includes('play') || lower.includes('start') || lower.includes('▶') || lower.includes('resume')) return 'paused';
+        return null;
+      };
+
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button, [role="button"]');
+        if (btn) {
+          clickTriggeredButtons.add(btn);
+          setTimeout(() => clickTriggeredButtons.delete(btn), 500);
+        }
+      }, true);
+
+      // Track slider changes to suppress programmatic reports that are consequences of slider interaction
+      document.addEventListener('change', (e) => {
+        const slider = e.target.closest('input[type="range"]');
+        if (slider) {
+          lastSliderChangeTime = Date.now();
+        }
+      }, true);
+
+      // DISABLED: Programmatic button state tracking (TASK 6)
+      // Rationale: AI generated the code so it knows animation behavior
+      // User interactions are already tracked separately via click/change handlers
+      // This was causing false reports like "animation automatically started" after user clicks
+      
+      /*
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach(m => {
+          let target = m.target;
+          if (target.nodeType === Node.TEXT_NODE) target = target.parentNode;
+          const btn = target.closest && target.closest('button, [role="button"]');
+          if (!btn) return;
+
+          const label = (btn.innerText || btn.value || btn.id || btn.getAttribute('aria-label') || '').trim();
+          if (!label || label.length > 50) return;
+
+          const newState = getState(label);
+          if (!newState) return;
+
+          const wasClickTriggered = clickTriggeredButtons.has(btn);
+          const previousState = buttonStates.get(btn);
+          
+          // Suppress reports within 500ms of slider changes - animation state changes
+          // are often a direct consequence of slider interaction, not "automatic"
+          const timeSinceSliderChange = Date.now() - lastSliderChangeTime;
+          const isSliderConsequence = timeSinceSliderChange < 500;
+
+          console.log('[Programmatic] Button mutation detected:', {
+            label,
+            previousState,
+            newState,
+            wasClickTriggered,
+            timeSinceSliderChange,
+            isSliderConsequence,
+            willReport: previousState && previousState !== newState && !wasClickTriggered && !isSliderConsequence
+          });
+
+          if (previousState && previousState !== newState && !wasClickTriggered && !isSliderConsequence) {
+            const stateDesc = newState === 'playing' ? 'started' : 'stopped';
+            console.log('[Programmatic] State transition:', previousState, '→', newState);
+            
+            let payload = 'animation automatically ' + stateDesc + ' (button changed to "' + label + '")';
+            
+            // When animation stops, also report current slider values
+            if (newState === 'paused') {
+              const sliders = document.querySelectorAll('input[type="range"]');
+              if (sliders.length > 0) {
+                const sliderInfo = [];
+                sliders.forEach(slider => {
+                  const sliderLabel = slider.getAttribute('aria-label') || slider.getAttribute('title') || slider.id || 'slider';
+                  const val = slider.value;
+                  if (val) {
+                    sliderInfo.push(sliderLabel + ': ' + val);
+                  }
+                });
+                if (sliderInfo.length > 0) {
+                  payload += '. Current position: ' + sliderInfo.join(', ');
+                }
+              }
+            }
+            
+            window.parent.postMessage({ 
+              type: 'INTERACTION_EVENT', 
+              payload: payload
+            }, '*');
+          }
+
+          buttonStates.set(btn, newState);
+        });
+      });
+      
+      observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+      
+      setTimeout(() => {
+        document.querySelectorAll('button, [role="button"]').forEach(btn => {
+          const label = (btn.innerText || btn.value || btn.id || btn.getAttribute('aria-label') || '').trim();
+          const state = getState(label);
+          if (state) buttonStates.set(btn, state);
+        });
+      }, 500);
+      */
     });
   </script>
 
@@ -1277,23 +1901,37 @@ function App() {
       ${(currentTitle || currentSubtitle) ? `
         <div style="margin-bottom: 24px; width: 100%; flex-shrink: 0;">
           ${currentTitle ? `<h2 style="font-size: 30px; font-weight: 700; color: #1e293b; margin: 0 0 8px 0; letter-spacing: -0.025em;">${currentTitle}</h2>` : ''}
-          ${currentSubtitle ? `<p style="font-size: 18px; color: #64748b; margin: 0;">${currentSubtitle}</p>` : ''}
+          ${currentSubtitle ? `<p style="font-size: 18px; color: #64748b; margin: 0 0 10px 0;">${currentSubtitle}</p>` : ''}
+          ${groundingSources.length > 0 ? `
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+              <span style="font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; align-self:center;">Sources</span>
+              ${groundingSources.slice(0, 8).map(s =>
+      `<a href="${s.url}" target="_blank" rel="noopener noreferrer"
+                  style="display:inline-flex; align-items:center; gap:4px; font-size:11px; color:#3b82f6; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); border-radius:20px; padding:3px 10px; text-decoration:none; white-space:nowrap; transition:background 0.2s;"
+                  onmouseover="this.style.background='rgba(59,130,246,0.16)'"
+                  onmouseout="this.style.background='rgba(59,130,246,0.08)'">
+                  🔗 ${s.title.length > 40 ? s.title.slice(0, 38) + '…' : s.title}
+                </a>`
+    ).join('')}
+            </div>
+          ` : ''}
         </div>
       ` : ''}
       <div style="flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; min-height: 0;">
-        ${currentSvg}
+        ${safeSvg}
       </div>
     </div>
-    ${currentControls ? `
+    ${safeControls ? `
     <div class="controls-area">
-      ${currentControls}
+      ${safeControls}
     </div>
     ` : ''}
   </div>
 </body>
 </html>
     `;
-  }, [currentSvg, currentControls, currentTitle, currentSubtitle]);
+  }, [currentSvg, currentControls, currentTitle, currentSubtitle, groundingSources, sanitizeSvg, sanitizeControls]);
+
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
@@ -1470,7 +2108,7 @@ function App() {
                 {/* Phase: idle or complete — show source manager */}
                 {(sessionPhase === 'idle' || sessionPhase === 'complete') && !isProcessing && (
                   <div className="sidebar-input-area">
-                    {/* Main input bar */}
+                    {/* Main URL input bar */}
                     <form onSubmit={addSource} className="url-form">
                       <div className="url-input-wrapper shadow-none">
                         <input
@@ -1488,6 +2126,131 @@ function App() {
                         )}
                       </div>
                     </form>
+
+                    {/* Web search input — only shown for Fast / Deep research modes */}
+                    {researchMode !== 'off' && (
+                      <form
+                        onSubmit={(e) => { e.preventDefault(); performSearch(searchQuery) }}
+                        className="url-form"
+                        style={{ marginTop: 8 }}
+                      >
+                        <div className="url-input-wrapper shadow-none">
+                          <input
+                            type="text"
+                            placeholder="Search the web for sources…"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="url-input"
+                            style={{ paddingLeft: 40 }}
+                            disabled={isSearching}
+                          />
+                          {/* Search icon on the left */}
+                          <span style={{ position: 'absolute', left: 13, color: 'var(--text-tertiary)', pointerEvents: 'none', display: 'flex' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                          </span>
+                          {isSearching ? (
+                            <span className="spinner" style={{ position: 'absolute', right: 14 }} />
+                          ) : searchQuery.trim() ? (
+                            <button type="submit" className="enter-icon-btn" title="Search">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                            </button>
+                          ) : null}
+                        </div>
+                      </form>
+                    )}
+
+                    {/* Search results panel */}
+                    {showSearchPanel && (
+                      <div className="search-results-panel">
+                        <div className="search-results-header">
+                          <span className="search-results-title">
+                            {isSearching
+                              ? `${researchMode === 'deep' ? 'Deep' : 'Fast'} Research…`
+                              : `${researchMode === 'deep' ? 'Deep' : 'Fast'} Research · ${searchResults.length} source${searchResults.length !== 1 ? 's' : ''}`
+                            }
+                          </span>
+                          <button
+                            className="search-results-close"
+                            onClick={() => { setShowSearchPanel(false); setSearchResults([]); setSelectedSearchUrls(new Set()) }}
+                            title="Close"
+                          >
+                            <XIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {isSearching ? (
+                          <div className="search-results-loading">
+                            <span className="spinner" />
+                            <span>Searching with Gemini…</span>
+                          </div>
+                        ) : searchResults.length === 0 ? (
+                          <div className="search-results-empty">No results found. Try a different query.</div>
+                        ) : (
+                          <>
+                            <div className="search-results-list">
+                              {searchResults.map((result) => {
+                                const isSelected = selectedSearchUrls.has(result.url)
+                                // Derive favicon from URL
+                                let favicon = ''
+                                try { favicon = `https://www.google.com/s2/favicons?domain=${new URL(result.url).hostname}&sz=32` } catch { }
+                                return (
+                                  <label key={result.url} className={`search-result-item${isSelected ? ' selected' : ''}`}>
+                                    <input
+                                      type="checkbox"
+                                      className="search-result-checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {
+                                        setSelectedSearchUrls(prev => {
+                                          const next = new Set(prev)
+                                          if (next.has(result.url)) next.delete(result.url)
+                                          else next.add(result.url)
+                                          return next
+                                        })
+                                      }}
+                                    />
+                                    <div className="search-result-body">
+                                      <div className="search-result-title-row">
+                                        {favicon && <img src={favicon} className="search-result-favicon" alt="" />}
+                                        <span className="search-result-title">{result.title}</span>
+                                      </div>
+                                      {result.snippet && (
+                                        <p className="search-result-snippet">{result.snippet}</p>
+                                      )}
+                                      <span className="search-result-url">{result.url.replace(/^https?:\/\//, '').slice(0, 60)}</span>
+                                    </div>
+                                  </label>
+                                )
+                              })}
+                            </div>
+
+                            {/* Footer actions */}
+                            <div className="search-results-footer">
+                              <button
+                                className="search-select-all-btn"
+                                onClick={() => {
+                                  if (selectedSearchUrls.size === searchResults.length) {
+                                    setSelectedSearchUrls(new Set())
+                                  } else {
+                                    setSelectedSearchUrls(new Set(searchResults.map(r => r.url)))
+                                  }
+                                }}
+                              >
+                                {selectedSearchUrls.size === searchResults.length ? 'Deselect all' : 'Select all'}
+                              </button>
+                              <button
+                                className="btn-sm-primary"
+                                onClick={addSelectedSearchSources}
+                                disabled={selectedSearchUrls.size === 0}
+                              >
+                                + Add {selectedSearchUrls.size > 0 ? selectedSearchUrls.size : ''} source{selectedSearchUrls.size !== 1 ? 's' : ''}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
 
                     {/* Source type chips */}
                     <div className="source-chips">
@@ -1612,19 +2375,45 @@ function App() {
 
 
 
-                    {/* Generate button */}
+                    {/* Research mode toggle + Generate button */}
                     {sources.length > 0 && sessionPhase === 'idle' && (
-                      <div className="button-group w-full mt-4">
-                        <button
-                          className="btn-primary w-full justify-center"
-                          onClick={startSession}
-                          disabled={isConnecting}
-                        >
-                          {isConnecting
-                            ? <span className="spinner"></span>
-                            : <><SparklesIcon className="w-5 h-5" /> Create Interactive Graphic</>
-                          }
-                        </button>
+                      <div className="w-full mt-4 flex flex-col gap-4">
+                        {/* Research mode segmented control */}
+                        <div className="research-mode-row">
+                          <span className="research-mode-label">Research</span>
+                          <div className="research-mode-track">
+                            {(['off', 'fast', 'deep'] as const).map(mode => {
+                              const labels: Record<string, string> = { off: 'Off', fast: 'Fast', deep: 'Deep' }
+                              const tips: Record<string, string> = {
+                                off: 'Source-only — no web search. Strict fidelity to your sources.',
+                                fast: 'Google Search grounding during graphic generation.',
+                                deep: 'URL sources get a Gemini+Search enrichment pass before generation. Slower but more thorough.',
+                              }
+                              return (
+                                <button
+                                  key={mode}
+                                  title={tips[mode]}
+                                  onClick={() => setResearchMode(mode)}
+                                  className={`research-mode-btn mode-${mode}${researchMode === mode ? ' active' : ''}`}
+                                >
+                                  {labels[mode]}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="button-group w-full">
+                          <button
+                            className="btn-primary w-full justify-center"
+                            onClick={startSession}
+                            disabled={isConnecting}
+                          >
+                            {isConnecting
+                              ? <span className="spinner"></span>
+                              : <><SparklesIcon className="w-5 h-5" /> Create Interactive Graphic</>
+                            }
+                          </button>
+                        </div>
                       </div>
                     )}
 

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Earth's Tilt and the Seasons</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 850 500" width="100%" height="100%" style="background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif;">
+  <defs>
+    <!-- Arrowhead markers for sun rays -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+    </marker>
+    
+    <!-- Sun gradients -->
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="0.8" />
+      <stop offset="60%" stop-color="#facc15" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#eab308" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Divider Line -->
+  <line x1="415" y1="40" x2="415" y2="460" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="8,8" />
+
+  <!-- ================= PANEL 1: TOP-DOWN ORBIT ================= -->
+  <g id="orbit-panel">
+    <!-- Title -->
+    <text x="200" y="40" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a" letter-spacing="0.5">TOP-DOWN ORBIT VIEW</text>
+    
+    <!-- Orbit Path -->
+    <circle cx="200" cy="270" r="120" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4,4" fill="none" />
+    
+    <!-- Orbit Labels -->
+    <rect x="330" y="260" width="75" height="20" fill="#f8fafc" opacity="0.8" rx="4" />
+    <text x="335" y="274" font-size="11" font-weight="600" fill="#475569">Winter</text>
+    
+    <rect x="40" y="260" width="75" height="20" fill="#f8fafc" opacity="0.8" rx="4" />
+    <text x="45" y="274" font-size="11" font-weight="600" fill="#475569">Summer</text>
+    
+    <rect x="160" y="405" width="80" height="20" fill="#f8fafc" opacity="0.8" rx="4" />
+    <text x="200" y="419" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">Spring</text>
+    
+    <rect x="160" y="125" width="80" height="20" fill="#f8fafc" opacity="0.8" rx="4" />
+    <text x="200" y="139" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">Autumn</text>
+
+    <!-- Sun -->
+    <circle cx="200" cy="270" r="35" fill="url(#sunGlow)" />
+    <circle cx="200" cy="270" r="14" fill="#eab308" />
+
+    <!-- Moving Earth in Orbit -->
+    <g id="moving-earth" transform="translate(320, 270)" style="transition: transform 0.1s linear;">
+      <!-- Earth Base -->
+      <circle cx="0" cy="0" r="16" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5" />
+      <!-- Fixed North Pole Dot (Always tilted to the right in absolute space) -->
+      <circle cx="4.5" cy="0" r="2.5" fill="#ef4444" />
+      <!-- Shadow Mask (Rotates dynamically to face away from Sun) -->
+      <path id="orbit-earth-shadow" d="M 0 -16 A 16 16 0 0 1 0 16 Z" fill="#0f172a" opacity="0.65" transform="rotate(0)" />
+    </g>
+  </g>
+
+  <!-- ================= PANEL 2: SOLAR INCIDENCE CROSS-SECTION ================= -->
+  <g id="profile-panel">
+    <!-- Title -->
+    <text x="630" y="40" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a" letter-spacing="0.5">SOLAR ANGLE OF INCIDENCE</text>
+
+    <!-- Horizontal Sun Rays -->
+    <g id="sun-rays">
+      <line x1="440" y1="170" x2="550" y2="170" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow)" />
+      <line x1="440" y1="220" x2="520" y2="220" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow)" />
+      <!-- Direct Highlight Ray -->
+      <line x1="440" y1="270" x2="505" y2="270" stroke="#ef4444" stroke-width="4" marker-end="url(#arrow-red)" />
+      <line x1="440" y1="320" x2="520" y2="320" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow)" />
+      <line x1="440" y1="370" x2="550" y2="370" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrow)" />
+      
+      <rect x="440" y="253" width="55" height="16" fill="#f8fafc" opacity="0.8" rx="2" />
+      <text x="442" y="265" font-size="10" font-weight="700" fill="#ef4444">DIRECT RAY</text>
+    </g>
+
+    <!-- Fixed Day/Night Shadow for Profile (Always Right Half) -->
+    <!-- Drawn BEFORE the Earth to act as a background, or overlayed AFTER. We will overlay it AFTER. -->
+    
+    <!-- Rotating Earth Cross-Section -->
+    <g id="profile-earth-group" transform="translate(630, 270) rotate(23.5)" style="transition: transform 0.1s linear;">
+      <!-- Base Globe -->
+      <circle cx="0" cy="0" r="120" fill="#e0f2fe" stroke="#3b82f6" stroke-width="2" />
+      
+      <!-- Axis -->
+      <line x1="0" y1="-145" x2="0" y2="145" stroke="#0f172a" stroke-width="3" stroke-dasharray="6,6" />
+      <rect x="-8" y="-165" width="16" height="16" fill="#f8fafc" rx="2" />
+      <text x="0" y="-153" text-anchor="middle" font-size="13" font-weight="800" fill="#ef4444">N</text>
+      <rect x="-8" y="150" width="16" height="16" fill="#f8fafc" rx="2" />
+      <text x="0" y="162" text-anchor="middle" font-size="13" font-weight="800" fill="#2563eb">S</text>
+
+      <!-- Equator -->
+      <line x1="-120" y1="0" x2="120" y2="0" stroke="#2563eb" stroke-width="2.5" />
+      <text x="60" y="-6" font-size="12" font-weight="700" fill="#1d4ed8">Equator (0°)</text>
+
+      <!-- Tropic of Cancer (23.5° N) -> y = -120 * sin(23.5) = -47.8 -->
+      <line x1="-110" y1="-47.8" x2="110" y2="-47.8" stroke="#1d4ed8" stroke-width="1.5" stroke-dasharray="4,4" />
+      <text x="10" y="-53" font-size="11" font-weight="600" fill="#1d4ed8">Tropic of Cancer (23.5° N)</text>
+
+      <!-- Tropic of Capricorn (23.5° S) -> y = 47.8 -->
+      <line x1="-110" y1="47.8" x2="110" y2="47.8" stroke="#1d4ed8" stroke-width="1.5" stroke-dasharray="4,4" />
+      <text x="0" y="42" font-size="11" font-weight="600" fill="#1d4ed8">Tropic of Capricorn (23.5° S)</text>
+
+      <!-- Arctic Circle (66.5° N) -> y = -120 * sin(66.5) = -110 -->
+      <line x1="-48" y1="-110" x2="48" y2="-110" stroke="#64748b" stroke-width="1.5" stroke-dasharray="2,2" />
+      
+      <!-- Antarctic Circle (66.5° S) -> y = 110 -->
+      <line x1="-48" y1="110" x2="48" y2="110" stroke="#64748b" stroke-width="1.5" stroke-dasharray="2,2" />
+    </g>
+
+    <!-- Overlay Shadow Mask (Fixed to right half) -->
+    <!-- Center is 630, 270. Right half is from 630 to 750 -->
+    <path d="M 630 150 A 120 120 0 0 1 630 390 Z" fill="#0f172a" opacity="0.45" />
+
+    <!-- Direct Ray Impact Dot (Fixed at intersection point: x=630-120=510, y=270) -->
+    <circle cx="510" cy="270" r="5" fill="#ef4444" stroke="#f8fafc" stroke-width="1.5" />
+  </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>Earth's Tilt and the Seasons</h2>
+        <p style="color: #64748b;">Use the controls on the right to orbit the Earth and observe the changing angle of sunlight.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="padding: 24px; background: #ffffff; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; font-family: system-ui, -apple-system, sans-serif;">
+  <h2 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 700; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px;">Orbital Mechanics</h2>
+
+  <div style="margin-bottom: 24px;">
+    <label style="display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px;">Earth's Orbital Position</label>
+    <input type="range" id="orbitSlider" min="0" max="360" value="0" step="1" 
+           style="width: 100%; cursor: pointer; accent-color: #2563eb;" 
+           oninput="updateState(this.value)">
+    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-top: 6px; font-weight: 500;">
+      <span>Winter (0°)</span>
+      <span>Spring (90°)</span>
+      <span>Summer (180°)</span>
+      <span>Autumn (270°)</span>
+    </div>
+  </div>
+
+  <button id="playBtn" onclick="togglePlay()" 
+          style="width: 100%; padding: 12px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+    ▶ Auto-Play
+  </button>
+
+  <div id="info-panel" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; flex-grow: 1;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <h3 id="info-title" style="margin: 0; font-size: 15px; font-weight: 700; color: #0f172a;">Winter Solstice</h3>
+      <span id="info-date" style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">Dec 21</span>
+    </div>
+    <p id="info-desc" style="margin: 0; font-size: 13px; color: #475569; line-height: 1.6;">
+      The Northern Hemisphere is tilted <strong style="color: #0f172a;">AWAY</strong> from the Sun. The direct solar ray strikes the Tropic of Capricorn (Southern Hemisphere). This causes winter in the North and summer in the South.
+    </p>
+  </div>
+</div>
+
+<script>
+  let isPlaying = false;
+  let animationFrameId;
+  let currentSeason = `Winter Solstice`;
+
+  function updateState(val) {
+    let theta = parseFloat(val);
+    let rad = theta * Math.PI / 180;
+    
+    // Update Top-Down Orbit Position
+    let orbitX = 200 + 120 * Math.cos(rad);
+    let orbitY = 270 + 120 * Math.sin(rad);
+    document.getElementById(`moving-earth`).setAttribute(`transform`, `translate(${orbitX}, ${orbitY})`);
+    
+    // Rotate shadow to always face away from Sun
+    document.getElementById(`orbit-earth-shadow`).setAttribute(`transform`, `rotate(${theta})`);
+    
+    // Update Profile View (Apparent Tilt Angle in Cross-Section)
+    let apparentTilt = 23.5 * Math.cos(rad);
+    document.getElementById(`profile-earth-group`).setAttribute(`transform`, `translate(630, 270) rotate(${apparentTilt})`);
+    
+    // Update Info Panel
+    let seasonIndex = Math.floor(((theta + 45) % 360) / 90);
+    let seasons = [
+      { 
+        name: `Winter Solstice`, 
+        date: `Dec 21`,
+        desc: `The Northern Hemisphere is tilted AWAY from the Sun. The direct solar ray strikes the Tropic of Capricorn (Southern Hemisphere). This causes winter in the North and summer in the South.` 
+      },
+      { 
+        name: `Vernal Equinox`, 
+        date: `Mar 21`,
+        desc: `Earth's axis tilts neither toward nor away from the Sun from this perspective. Direct rays hit the Equator perfectly. All latitudes experience roughly 12 hours of daylight and night.` 
+      },
+      { 
+        name: `Summer Solstice`, 
+        date: `Jun 21`,
+        desc: `The Northern Hemisphere is tilted TOWARD the Sun. The direct solar ray strikes the Tropic of Cancer (Northern Hemisphere). This causes summer in the North and winter in the South.` 
+      },
+      { 
+        name: `Autumnal Equinox`, 
+        date: `Sep 23`,
+        desc: `Earth's axis tilts neither toward nor away from the Sun from this perspective. Direct rays hit the Equator perfectly. All latitudes experience roughly 12 hours of daylight and night.` 
+      }
+    ];
+    
+    let seasonInfo = seasons[seasonIndex];
+    document.getElementById(`info-title`).textContent = seasonInfo.name;
+    document.getElementById(`info-date`).textContent = seasonInfo.date;
+    document.getElementById(`info-desc`).innerHTML = seasonInfo.desc;
+    
+    if (seasonInfo.name !== currentSeason) {
+      currentSeason = seasonInfo.name;
+      if (window.sendEventToAI) {
+        window.sendEventToAI(`User navigated graphic to ${currentSeason}`);
+      }
+    }
+  }
+
+  function loop() {
+    if (!isPlaying) return;
+    let slider = document.getElementById(`orbitSlider`);
+    let nextVal = (Number(slider.value) + 0.5) % 360;
+    slider.value = nextVal;
+    updateState(nextVal);
+    animationFrameId = requestAnimationFrame(loop);
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    let btn = document.getElementById(`playBtn`);
+    if (isPlaying) {
+      btn.innerHTML = `⏸ Pause Auto-Play`;
+      btn.style.background = `#0f172a`;
+      loop();
+    } else {
+      btn.innerHTML = `▶ Auto-Play`;
+      btn.style.background = `#2563eb`;
+      cancelAnimationFrame(animationFrameId);
+    }
+  }
+  
+  // Initialize state
+  updateState(0);
+</script>
+    </div>
+</body>
+</html>

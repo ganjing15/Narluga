@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Mechanics of the Seasons</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 600" width="100%" height="100%" style="background:#f8fafc; font-family:system-ui, -apple-system, sans-serif; display:block;">
+  <defs>
+    <!-- CSS Animations -->
+    <style>
+      @keyframes pulseGlow {
+        0% { transform: scale(1); opacity: 0.2; }
+        50% { transform: scale(1.08); opacity: 0.4; }
+        100% { transform: scale(1); opacity: 0.2; }
+      }
+      .sun-glow {
+        transform-origin: 400px 300px;
+        animation: pulseGlow 4s ease-in-out infinite;
+      }
+      .orbit-line {
+        stroke-dasharray: 6 6;
+        animation: dashMove 20s linear infinite;
+      }
+      @keyframes dashMove {
+        to { stroke-dashoffset: -100; }
+      }
+    </style>
+
+    <!-- Earth Clipping Path for Oceans/Land/Shadow -->
+    <clipPath id="earth-clip">
+      <circle cx="0" cy="0" r="28" />
+    </clipPath>
+
+    <!-- Shadow Clipping Path (covers the right half) -->
+    <clipPath id="shadow-clip">
+      <rect x="0" y="-35" width="35" height="70" />
+    </clipPath>
+
+    <!-- Sun Gradients -->
+    <radialGradient id="sun-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="60%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </radialGradient>
+  </defs>
+
+  <!-- Explanatory ForeignObject (Top Left) -->
+  <foreignObject x="24" y="24" width="220" height="100">
+    <div style="font-family:system-ui; font-size:14px; color:#475569; overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:8px; background:rgba(255,255,255,0.7); border-radius:8px; border:1px solid #e2e8f0;">
+      <strong>Earth's 23.5° Tilt</strong><br/>
+      Notice how the axis angle never changes as the Earth orbits the Sun, creating the cycle of the seasons.
+    </div>
+  </foreignObject>
+
+  <!-- Orbit Path -->
+  <ellipse cx="400" cy="300" rx="280" ry="140" fill="none" stroke="#cbd5e1" stroke-width="2" class="orbit-line" />
+
+  <!-- Season Labels with paint-order for readability -->
+  <text x="680" y="475" paint-order="stroke" stroke="#f8fafc" stroke-width="6" fill="#334155" font-weight="700" font-size="15" text-anchor="middle">Summer Solstice</text>
+  <text x="680" y="495" paint-order="stroke" stroke="#f8fafc" stroke-width="4" fill="#64748b" font-weight="500" font-size="13" text-anchor="middle">(Northern Hemisphere)</text>
+
+  <text x="120" y="475" paint-order="stroke" stroke="#f8fafc" stroke-width="6" fill="#334155" font-weight="700" font-size="15" text-anchor="middle">Winter Solstice</text>
+  <text x="120" y="495" paint-order="stroke" stroke="#f8fafc" stroke-width="4" fill="#64748b" font-weight="500" font-size="13" text-anchor="middle">(Northern Hemisphere)</text>
+
+  <text x="400" y="465" paint-order="stroke" stroke="#f8fafc" stroke-width="6" fill="#334155" font-weight="700" font-size="15" text-anchor="middle">Autumnal Equinox</text>
+
+  <text x="400" y="140" paint-order="stroke" stroke="#f8fafc" stroke-width="6" fill="#334155" font-weight="700" font-size="15" text-anchor="middle">Vernal Equinox</text>
+
+  <!-- Central Sun -->
+  <circle cx="400" cy="300" r="65" fill="#fcd34d" class="sun-glow" />
+  <circle cx="400" cy="300" r="45" fill="url(#sun-grad)" />
+  <text x="400" y="305" font-weight="700" font-size="14" fill="#ffffff" text-anchor="middle" style="text-shadow: 0px 1px 2px rgba(0,0,0,0.5);">SUN</text>
+
+  <!-- Dynamic Earth Group -->
+  <g id="earth-wrapper" transform="translate(680, 300)" style="transition: transform 0.1s linear;">
+    
+    <!-- Axial Tilt Rotated Group -->
+    <g transform="rotate(-23.5)">
+      <!-- Axis Line extending outwards -->
+      <line x1="0" y1="-50" x2="0" y2="50" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2" />
+      <text x="0" y="-55" paint-order="stroke" stroke="#f8fafc" stroke-width="4" fill="#64748b" font-weight="600" font-size="12" text-anchor="middle">N</text>
+      <text x="0" y="65" paint-order="stroke" stroke="#f8fafc" stroke-width="4" fill="#64748b" font-weight="600" font-size="12" text-anchor="middle">S</text>
+
+      <!-- Physical Earth Box -->
+      <g clip-path="url(#earth-clip)">
+        <!-- Ocean Base -->
+        <circle cx="0" cy="0" r="28" fill="#0ea5e9" />
+        <!-- Stylized Continents -->
+        <circle cx="-10" cy="-12" r="16" fill="#10b981" />
+        <circle cx="15" cy="8" r="18" fill="#10b981" />
+        <circle cx="-5" cy="20" r="12" fill="#10b981" />
+        <!-- Equator Line -->
+        <line x1="-30" y1="0" x2="30" y2="0" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.9" />
+      </g>
+    </g>
+
+    <!-- Day/Night Shadow (Strictly decoupled from Earth's axis rotation) -->
+    <!-- The script will independently rotate this to always face away from the Sun -->
+    <g id="shadow-rotator">
+      <circle cx="0" cy="0" r="28.5" fill="#0f172a" opacity="0.65" clip-path="url(#shadow-clip)" />
+    </g>
+  </g>
+
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Mechanics of the Seasons</h2>
+        <p style="color: #64748b;">Use the timeline slider on the right to orbit the Earth and observe how its constant tilt creates the seasons.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="display:flex; flex-direction:column; justify-content:center; height:100%; padding:24px; box-sizing:border-box; background:#ffffff; font-family:system-ui, -apple-system, sans-serif;">
+  
+  <h2 style="margin:0 0 16px 0; font-size:22px; font-weight:700; color:#0f172a;">Orbital Mechanics</h2>
+  
+  <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:24px;">
+    <label for="timeSlider" style="font-size:14px; font-weight:600; color:#475569; display:flex; justify-content:space-between;">
+      <span>Time of Year</span>
+      <span id="day-counter" style="color:#2563eb;">Day 0</span>
+    </label>
+    <input type="range" id="timeSlider" min="0" max="365" value="0" style="width:100%; cursor:pointer; accent-color:#2563eb;">
+  </div>
+
+  <button id="playBtn" style="background:#2563eb; color:#ffffff; border:none; border-radius:8px; padding:12px 20px; font-size:16px; font-weight:600; cursor:pointer; box-shadow:0 4px 6px -1px rgba(37,99,235,0.2); transition:all 0.2s ease;">
+    ▶ Start Orbit
+  </button>
+
+  <div style="margin-top:24px; padding:20px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; border-left:4px solid #2563eb;">
+    <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#64748b; margin-bottom:4px;">Current Phase</div>
+    <div id="info-title" style="font-weight:700; font-size:18px; color:#0f172a; margin-bottom:8px;">Summer Solstice</div>
+    <div id="info-desc" style="font-size:14px; color:#475569; line-height:1.6;">
+      The Northern Hemisphere tilts toward the Sun, receiving direct sunlight. This causes warmer temperatures and longer days.
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const slider = document.getElementById(`timeSlider`);
+  const earthWrapper = document.getElementById(`earth-wrapper`);
+  const shadowRotator = document.getElementById(`shadow-rotator`);
+  const infoTitle = document.getElementById(`info-title`);
+  const infoDesc = document.getElementById(`info-desc`);
+  const dayCounter = document.getElementById(`day-counter`);
+  const playBtn = document.getElementById(`playBtn`);
+
+  let isPlaying = false;
+  let playInterval;
+  let currentSeasonKey = `summer`; // Track to prevent spamming telemetry
+
+  // Central Sun Coordinates
+  const sunX = 400;
+  const sunY = 300;
+  // Orbit Radius
+  const rx = 280;
+  const ry = 140;
+
+  function updateState(dayValue) {
+    const days = Number(dayValue);
+    dayCounter.textContent = `Day ${days}`;
+    
+    // Calculate orbital angle (theta)
+    // 0 days = angle 0 (Right side). 365 days = full rotation.
+    const angle = (days / 365) * 2 * Math.PI;
+
+    // Calculate Earth's physical X and Y using ellipse formula
+    const cx = sunX + rx * Math.cos(angle);
+    const cy = sunY + ry * Math.sin(angle);
+    
+    // 1. Move the Earth physically
+    earthWrapper.setAttribute(`transform`, `translate(${cx}, ${cy})`);
+
+    // 2. Rotate the astronomical shadow correctly
+    // The vector pointing from the Sun TO the Earth determines light direction.
+    // The shadow must point in the exact opposite direction.
+    // Math.atan2 gets the angle from Sun to Earth.
+    // Since our base shadow clip-mask covers the RIGHT half of the local coordinate system (angle 0),
+    // rotating it directly by the sun-to-earth vector angle aligns it perfectly!
+    const shadowAngle = Math.atan2(cy - sunY, cx - sunX) * (180 / Math.PI);
+    shadowRotator.setAttribute(`transform`, `rotate(${shadowAngle})`);
+
+    // 3. Update the info panel text based on the orbital quadrant
+    let title = ``;
+    let desc = ``;
+    let newSeasonKey = ``;
+
+    // Divide 365 days into 4 quadrants
+    if (days < 45 || days >= 320) {
+      newSeasonKey = `summer`;
+      title = `Summer Solstice`;
+      desc = `The Earth's North Pole is tilted towards the Sun. The Northern Hemisphere receives highly concentrated, direct sunlight, creating Summer.`;
+    } else if (days >= 45 && days < 135) {
+      newSeasonKey = `autumn`;
+      title = `Autumnal Equinox`;
+      desc = `The Earth is "sideways" to the Sun. The tilt points neither toward nor away from the Sun, resulting in equal day and night across the globe.`;
+    } else if (days >= 135 && days < 225) {
+      newSeasonKey = `winter`;
+      title = `Winter Solstice`;
+      desc = `The Earth's North Pole is tilted away from the Sun. The Northern Hemisphere receives sunlight at a shallow, scattered angle, creating Winter.`;
+    } else {
+      newSeasonKey = `spring`;
+      title = `Vernal (Spring) Equinox`;
+      desc = `The Earth is again sideways to the Sun. Temperatures begin to moderate as the Northern Hemisphere transitions from Winter back to Summer.`;
+    }
+
+    infoTitle.textContent = title;
+    infoDesc.textContent = desc;
+
+    // 4. Send Telemetry ONLY when the season changes
+    if (window.sendEventToAI && newSeasonKey !== currentSeasonKey) {
+      window.sendEventToAI(`User observed season transition to: ${title}`);
+      currentSeasonKey = newSeasonKey;
+    }
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+      playBtn.innerHTML = `⏸ Pause Orbit`;
+      playBtn.style.background = `#ef4444`;
+      playBtn.style.boxShadow = `0 4px 6px -1px rgba(239, 68, 68, 0.2)`;
+      
+      playInterval = setInterval(() => {
+        let nextVal = (Number(slider.value) + 1) % 365;
+        slider.value = nextVal;
+        updateState(nextVal);
+      }, 40); // Fast but smooth
+    } else {
+      playBtn.innerHTML = `▶ Start Orbit`;
+      playBtn.style.background = `#2563eb`;
+      playBtn.style.boxShadow = `0 4px 6px -1px rgba(37, 99, 235, 0.2)`;
+      clearInterval(playInterval);
+    }
+  }
+
+  // Event Listeners
+  slider.addEventListener(`input`, (e) => updateState(e.target.value));
+  playBtn.addEventListener(`click`, togglePlay);
+
+  // Initialize
+  updateState(0);
+</script>
+    </div>
+</body>
+</html>

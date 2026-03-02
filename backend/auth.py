@@ -21,12 +21,14 @@ def init_firebase():
         return
 
     sa_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
+    project_id = os.getenv("FIREBASE_PROJECT_ID", "gen-lang-client-0129909190")
+    
     if sa_path:
         cred = credentials.Certificate(sa_path)
-        _firebase_app = firebase_admin.initialize_app(cred)
+        _firebase_app = firebase_admin.initialize_app(cred, options={'projectId': project_id})
     else:
         # Application Default Credentials (works on Cloud Run automatically)
-        _firebase_app = firebase_admin.initialize_app()
+        _firebase_app = firebase_admin.initialize_app(options={'projectId': project_id})
 
 
 async def verify_firebase_token(token: str) -> dict:
@@ -35,11 +37,23 @@ async def verify_firebase_token(token: str) -> dict:
         decoded = auth.verify_id_token(token)
         return decoded
     except Exception as e:
+        # Check both ValueError and DefaultCredentialsError cases
+        if "default credentials" in str(e).lower() or "project id" in str(e).lower():
+            # Fallback for local testing without ADC: use google.oauth2
+            from google.oauth2 import id_token
+            from google.auth.transport import requests
+            try:
+                project_id = os.getenv("FIREBASE_PROJECT_ID", "gen-lang-client-0129909190")
+                request = requests.Request()
+                decoded = id_token.verify_firebase_token(token, request, audience=project_id)
+                return decoded
+            except Exception as inner_e:
+                raise ValueError(f"Invalid Firebase token (local fallback): {inner_e}")
         raise ValueError(f"Invalid Firebase token: {e}")
 
 
 # Paths that don't require authentication
-PUBLIC_PATHS = {"/", "/health"}
+PUBLIC_PATHS = {"/", "/health", "/search"}
 
 
 class FirebaseAuthMiddleware(BaseHTTPMiddleware):
@@ -52,6 +66,10 @@ class FirebaseAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Skip public paths
         if request.url.path in PUBLIC_PATHS:
+            return await call_next(request)
+
+        # Skip OPTIONS preflight requests (handled by CORSMiddleware)
+        if request.method == "OPTIONS":
             return await call_next(request)
 
         # Skip WebSocket upgrade requests (handled in the endpoint)
@@ -91,6 +109,7 @@ async def verify_ws_token(websocket: WebSocket) -> dict | None:
     # Check for token in query params: ws://host/ws/live?token=xxx
     token = websocket.query_params.get("token")
     if not token:
+        print("[Auth] No Firebase token provided in query params 'token'. Rejecting WebSocket connection.")
         # No token provided — reject connection
         await websocket.close(code=4001, reason="Authentication required")
         return None
@@ -99,5 +118,9 @@ async def verify_ws_token(websocket: WebSocket) -> dict | None:
         decoded = await verify_firebase_token(token)
         return decoded
     except ValueError as e:
-        await websocket.close(code=4001, reason=str(e))
+        print(f"[Auth] Firebase WebSocket token validation failed: {str(e)}")
+        reason_str = str(e)
+        if len(reason_str) > 120:
+            reason_str = reason_str[:117] + "..."
+        await websocket.close(code=4001, reason=reason_str)
         return None

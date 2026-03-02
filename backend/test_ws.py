@@ -1,24 +1,18 @@
 import asyncio
 import websockets
-import json
+import sys
 
-async def test_ws():
-    uri = "ws://localhost:8000/ws/live"
-    async with websockets.connect(uri) as websocket:
-        # Send initial source
-        source_msg = {
-            "type": "init_sources",
-            "sources": [{"type": "text", "content": "Test text"}]
-        }
-        await websocket.send(json.dumps(source_msg))
+async def test():
+    uri = "ws://localhost:8000/ws/live?token=dummy"
+    print(f"Connecting to {uri}...")
+    try:
+        async with websockets.connect(uri) as ws:
+            print("Connected!")
+            await ws.send('{"type":"init_sources", "sources": [], "research_mode": "fast"}')
+            print("Sent init.")
+            msg = await ws.recv()
+            print(f"Received: {msg}")
+    except Exception as e:
+        print(f"Error: {e}")
 
-        # Wait for messages
-        while True:
-            try:
-                response = await websocket.recv()
-                print(f"Received: {response[:100]}")
-            except websockets.exceptions.ConnectionClosed as e:
-                print(f"Connection closed: {e}")
-                break
-
-asyncio.run(test_ws())
+asyncio.run(test())

@@ -150,15 +150,115 @@ async def fetch_website_content(url: str) -> str:
         return f"Error fetching content: {e}"
 
 
+async def fetch_website_content_grounded(url: str) -> str:
+    """[Improvement E] Scrape a URL then use Gemini Flash + Google Search to produce
+    a grounded, fact-enriched content digest. Falls back to raw scrape on error."""
+    raw = await fetch_website_content(url)
+    print(f"[Scraper] Creating grounded digest for: {url}")
+    try:
+        response = await asyncio.to_thread(
+            pro_client.models.generate_content,
+            model='gemini-2.5-flash',
+            contents=(
+                f"You are a research assistant. Summarize and fact-check the following web page content. "
+                f"Use Google Search to supplement any information that seems incomplete, outdated, or missing. "
+                f"Output a well-structured, comprehensive summary (aim for ~1500 words) suitable for use as "
+                f"source material for an educational diagram.\n\nSource URL: {url}\n\nPage content:\n{raw[:20000]}"
+            ),
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())]
+            )
+        )
+        digest = response.text or raw
+        print(f"[Scraper] Grounded digest ready ({len(digest)} chars) for: {url}")
+        return digest
+    except Exception as e:
+        print(f"[Scraper] Grounded digest failed for {url}: {e} — using raw scrape")
+        return raw
+
+
 def is_youtube_url(url: str) -> bool:
     """Check if a URL is a YouTube video URL."""
     return bool(extract_youtube_video_id(url))
 
 
-async def gather_source_content(sources: list, send_status) -> tuple[str, list[str]]:
+async def web_search_sources(query: str, depth: str = "fast") -> list[dict]:
+    """Search the web and return a list of {title, url, snippet} source candidates.
+    
+    Uses Gemini + Google Search grounding to find authoritative sources.
+    depth='fast' → quick summary; depth='deep' → richer research prompt.
+    """
+    print(f"[Search] query='{query}' depth={depth}")
+    
+    if depth == "deep":
+        prompt = (
+            f"You are a research librarian. Find the most authoritative, diverse, and relevant web sources about: {query}. "
+            f"Include primary sources, academic papers, encyclopaedias, and reputable news outlets. "
+            f"Write a brief 1-2 sentence overview of the topic."
+        )
+    else:
+        prompt = (
+            f"Find the most relevant and reliable web sources about: {query}. "
+            f"Write a brief 1-sentence summary."
+        )
+    
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                pro_client.models.generate_content,
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())]
+                )
+            ),
+            timeout=20.0
+        )
+        
+        results: list[dict] = []
+        seen_urls: set[str] = set()
+        seen_titles: set[str] = set()
+        
+        gm = response.candidates[0].grounding_metadata if response.candidates else None
+        if gm:
+            # Build index→snippet map from grounding_supports
+            support_snippets: dict[int, str] = {}
+            for support in (getattr(gm, "grounding_supports", []) or []):
+                segment = getattr(support, "segment", None)
+                if segment:
+                    text = (getattr(segment, "text", "") or "").replace("**", "").strip()
+                    chunk_indices = getattr(support, "grounding_chunk_indices", []) or []
+                    for idx in chunk_indices:
+                        if idx not in support_snippets:  # keep first snippet for each index
+                            support_snippets[idx] = text[:200]
+            
+            chunks = getattr(gm, "grounding_chunks", []) or []
+            for i, chunk in enumerate(chunks):
+                web = getattr(chunk, "web", None)
+                if not web:
+                    continue
+                url = getattr(web, "uri", None) or ""
+                title = getattr(web, "title", None) or url
+                # Deduplicate by both redirect URL and domain title
+                if not url or url in seen_urls or title in seen_titles:
+                    continue
+                seen_urls.add(url)
+                seen_titles.add(title)
+                snippet = support_snippets.get(i, "")
+                results.append({"title": title, "url": url, "snippet": snippet})
+        
+        print(f"[Search] Returning {len(results)} result(s)")
+        return results
+    except Exception as e:
+        print(f"[Search] Error: {e}")
+        return []
+
+
+async def gather_source_content(sources: list, send_status, use_deep_digest: bool = False) -> tuple[str, list[str]]:
     """
     Process all sources and return combined content + list of source labels.
     sources: [{ type: 'url'|'youtube'|'text'|'file', content: str, label: str }]
+    use_deep_digest: if True, URL sources are processed via Gemini+Search grounded digest (Improvement E).
     """
     combined_parts = []
     source_labels = []
@@ -172,7 +272,12 @@ async def gather_source_content(sources: list, send_status) -> tuple[str, list[s
         await send_status(f"Reading source {i+1}/{len(sources)}: {label[:50]}...")
         
         if src_type == "url":
-            text = await fetch_website_content(content)
+            if "vertexaisearch.cloud.google.com" in content:
+                text = f"[Web Source: {label} - Detailed content requires browser access. AI must leverage internal knowledge or Google Search tool.]"
+            elif use_deep_digest:
+                text = await fetch_website_content_grounded(content)  # Improvement E (deep only)
+            else:
+                text = await fetch_website_content(content)
             combined_parts.append(f"=== SOURCE: {label} (Web Page) ===\n{text}")
         elif src_type == "youtube":
             text = await fetch_youtube_transcript(content)
@@ -190,21 +295,32 @@ async def gather_source_content(sources: list, send_status) -> tuple[str, list[s
 
 
 def should_use_web_search(sources: list) -> bool:
-    """Determine if web search grounding should be used (short text input only)."""
-    if len(sources) != 1:
-        return False
-    source = sources[0]
-    if source.get("type") != "text":
-        return False
-    content = source.get("content", "")
-    word_count = len(content.split())
-    return word_count < 100
-
-
-async def generate_presentation_plan(combined_content: str, source_labels: list, use_web_search: bool = False) -> str:
-    """Uses Gemini to digest the sources and output an Interactive Graphic."""
-    sources_summary = ", ".join(source_labels) if source_labels else "provided content"
+    """Determine if web search grounding should be used.
     
+    Triggers for:
+    - A single short text input (<100 words) — original behaviour
+    - A single URL or YouTube source — scraped content may be stale/incomplete
+    - Up to 2 sources where at least one is a URL/YouTube
+    """
+    if len(sources) > 2:
+        return False
+    for source in sources:
+        src_type = source.get("type", "")
+        if src_type in ("url", "youtube"):
+            return True
+        if src_type == "text" and len(source.get("content", "").split()) < 100:
+            return True
+    return False
+
+
+async def generate_presentation_plan(combined_content: str, source_labels: list, use_web_search: bool = False) -> tuple[str, list[dict]]:
+    """Uses Gemini to digest the sources and output an Interactive Graphic.
+    
+    Returns:
+        (response_text, grounding_sources) where grounding_sources is a list of
+        {"title": str, "url": str} dicts from Google Search grounding metadata.
+    """
+    sources_summary = ", ".join(source_labels) if source_labels else "provided content"
     prompt = f"""
     #Role: Children's Education SVG Animation Engineer
     ##Profile
@@ -232,16 +348,17 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
     5. A short subtitle instructing the user how to interact with the graphic. It MUST mention that the interactive controls are on the right panel. Wrap in `<nblm-subtitle>...</nblm-subtitle>` tags. Example: "Use the controls on the right to explore the concept."
     
     CRITICAL RULES FOR THE INTERACTIVE GRAPHIC:
-    1. SCIENTIFIC & PHYSICAL ACCURACY: Your diagrams must be strictly logically, geometrically, and physically correct!
+    1. ELEMENT IDS: ALL major visual elements in your SVG MUST have descriptive `id` attributes (e.g., `id="sun"`, `id="earth"`, `id="orbit-path"`). This allows the voice assistant to highlight and modify specific elements when the user asks. Group related elements in `<g id="...">` tags.
+    2. SCIENTIFIC & PHYSICAL ACCURACY: Your diagrams must be strictly logically, geometrically, and physically correct!
        - If drawing astronomical/physical shadows (like the Earth's terminator), remember that the shadow is cast from an external light source. Only rotate the physical object, NOT the shadow.
        - If drawing mechanical gears or chemical bonds, the sizes, ratios, and angles must be mathematically plausible. Do not place elements haphazardly.
-    2. VISUAL STYLE: You MUST use a **world-class, premium, modern UI aesthetic**! It must look professionally designed.
+    3. VISUAL STYLE: You MUST use a **world-class, premium, modern UI aesthetic**! It must look professionally designed.
        - Use a sophisticated, modern color palette: Slate grays for text (#0f172a, #334155), crisp white or very soft slate (#f8fafc) backgrounds, and a single elegant primary accent color (e.g., Royal Blue #2563eb or Emerald #059669).
        - Typography is critical: Use standard sans-serif system fonts (e.g. system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto) with proper hierarchy.
        - Use **generous whitespace/padding** everywhere.
        - The SVG vectors themselves should be elegantly simple, thick, perfectly symmetric, and use soft refined gradients or solid clean colors. Limit the number of visual elements to 5-10 maximum.
-    3. FORMAT & SEPARATION: DO NOT output an outer flexbox wrapper. We are injecting your `<svg-panel>` and `<controls-panel>` blocks directly into our own layout. The `<svg-panel>` should contain your visual SVG. The `<controls-panel>` should contain your HTML controls. Each should use width/height `100%`. DO NOT ADD white backgrounds, borders, or box-shadows to these core containers, as our parent React cards handle the styling.
-    3. ADVANCED INTERACTIVITY & STATE: You must generate deeply interactive graphics, not just static diagrams with click-to-highlight buttons.
+    4. FORMAT & SEPARATION: DO NOT output an outer flexbox wrapper. We are injecting your `<svg-panel>` and `<controls-panel>` blocks directly into our own layout. The `<svg-panel>` should contain your visual SVG. The `<controls-panel>` should contain your HTML controls. Each should use width/height `100%`. DO NOT ADD white backgrounds, borders, or box-shadows to these core containers, as our parent React cards handle the styling.
+    5. ADVANCED INTERACTIVITY & STATE: You must generate deeply interactive graphics, not just static diagrams with click-to-highlight buttons.
        - Use vanilla Javascript to maintain dynamic state (e.g., current step, slider values, play/pause timers).
        - Create controls like `<input type="range">` (sliders), standard buttons, or Play/Pause toggles in the `<controls-panel>`.
        - Write bespoke Javascript functions that directly mutate the SVG DOM elements (e.g., changing `transform="rotate(...)"`, `x`, `y`, `fill`, `opacity`, `stroke-dashoffset`, or text content) based on the user's input.
@@ -254,7 +371,7 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
        <div id="controls-panel">
          <h2>System Control</h2>
          <input type="range" id="timeSlider" min="0" max="100" value="0" oninput="updateState(this.value)">
-         <button class="ctrl-btn" onclick="togglePlay()">▶ Auto-Play</button>
+         <button id="playBtn" class="ctrl-btn" onclick="togglePlay()">▶ Auto-Play</button>
          <div id="info-panel" style="margin-top:16px; padding:16px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0;">
            <div id="info-title" style="font-weight:600; font-size:15px; color:#0f172a; margin-bottom:6px;">Phase 0</div>
            <div id="info-desc" style="font-size:13px; color:#475569; line-height:1.5;">Drag the slider to begin.</div>
@@ -280,26 +397,40 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
        
        function togglePlay() {{
          isPlaying = !isPlaying;
+         let btn = document.getElementById('playBtn');
          if (isPlaying) {{
+           if (btn) btn.innerHTML = "⏸ Pause Auto-Play";
            playInterval = setInterval(() => {{
              let slider = document.getElementById('timeSlider');
-             let nextVal = (Number(slider.value) + 1) % 100;
+             let nextVal = (Number(slider.value) + 1) % 101;  // Loop back to 0 after 100
+             if (nextVal > 100) nextVal = 0;
              slider.value = nextVal;
              updateState(nextVal);
            }}, 50);
          }} else {{
+           if (btn) btn.innerHTML = "▶ Auto-Play";
            clearInterval(playInterval);
          }}
        }}
        </script>
        ```
+       
+       CRITICAL AUTO-PLAY DEBUGGING CHECKLIST:
+       - ALWAYS declare `let isPlaying = false;` and `let playInterval;` at the top of your script
+       - ALWAYS use `clearInterval(playInterval)` before starting a new interval to prevent multiple intervals stacking
+       - ALWAYS update button text immediately when toggling: "▶ Auto-Play" when paused, "⏸ Pause" when playing
+       - ALWAYS ensure your slider has proper min/max attributes and your loop respects them
+       - TEST your modulo arithmetic: if max is 100, use `(val + 1) % 101` not `% 100`
 
        CRITICAL: You are NOT limited to highlight colors. Build physical interactivity tailored to the concept—sliders that orbit, buttons that pump data flows, switches that change day/night, etc. You must still include `<g id="node-XXX">` and use `transform-box: fill-box;` for any nodes you animate via CSS.
 
     4. ANIMATION: The SVG must have animated elements. Use CSS @keyframes for idle animations (pulsing, rotating, dashed line flow). All node groups need `transition: all 0.3s ease` for smooth highlight effects.
     5. NO BORDER RADIUS ON SVG: Keep `<svg>` elements square/rectangular. Do not use `border-radius` on `<svg>`.
-    6. ANIMATION STATE TEXT: If you add play/pause buttons, the active/playing state button MUST contain the text "Pause" or "Stop" (e.g., "⏸ Pause Orbit"). The inactive/paused state MUST contain "Play" or "Start" (e.g., "▶ Auto-Grow"). 
-       - CRUCIAL FOR LIVE AI: When you receive an interaction event saying the user clicked a button labeled "Pause" or "Stop", it means the animation is NOW PLAYING (because the button offers the option to pause it). When you receive an event that they clicked "Play" or "Start", it means the animation is NOW PAUSED. Always narrate the state it transitioned INTO, not the label of the button.
+    6. ANIMATION STATE TEXT & INTERVAL MANAGEMENT: If you add play/pause buttons:
+       - The button text MUST ALWAYS show the action that will happen when clicked. If paused: "▶ Auto-Play". If playing: "⏸ Pause".
+       - ALWAYS call `clearInterval(playInterval)` before starting a new interval to prevent multiple intervals stacking
+       - ALWAYS declare interval variables at the top of your script scope: `let playInterval;`
+       - The frontend relies on button text changes to track play state
     7. TEXT WRAPPING: SVG text elements do not auto-wrap. Use foreignObject with explicit width/height for any text longer than 3 words. Inner div must use `overflow:hidden; word-wrap:break-word; box-sizing:border-box; padding:4px;`.
     8. NARRATION: Write a concise 1-paragraph summary in `<narration>...</narration>` tags describing the diagram for a voice assistant.
     9. SVG CLEANLINESS: The svg-panel must contain ONLY the visual diagram — NO paragraphs of text. Short labels (1-3 words) are OK. All explanations go in controls-panel.
@@ -310,6 +441,7 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
     """
     
     print("[Planner] Generating presentation plan using Gemini 3.1 Pro Preview...")
+    grounding_sources: list[dict] = []
     try:
         # Build generation config
         gen_kwargs = {
@@ -317,9 +449,9 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
             "contents": prompt,
         }
         
-        # Add web search grounding for short text inputs
+        # Add web search grounding (Improvement A: trigger for URL/YouTube too)
         if use_web_search:
-            print("[Planner] Using Google Search grounding for short text input")
+            print("[Planner] Using Google Search grounding for source content enrichment")
             gen_kwargs["config"] = types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())]
             )
@@ -329,15 +461,34 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
             **gen_kwargs
         )
         print(f"[Planner] Plan generated successfully. Raw Output Length: {len(response.text)}\n")
-        return response.text
+
+        # Improvement C: extract grounding citations from response metadata
+        if use_web_search:
+            try:
+                gm = response.candidates[0].grounding_metadata if response.candidates else None
+                if gm:
+                    search_queries = list(getattr(gm, "web_search_queries", []) or [])
+                    for chunk in (getattr(gm, "grounding_chunks", []) or []):
+                        web = getattr(chunk, "web", None)
+                        if web:
+                            uri = getattr(web, "uri", None)
+                            title = getattr(web, "title", None) or uri
+                            if uri and not any(s["url"] == uri for s in grounding_sources):
+                                grounding_sources.append({"title": title, "url": uri})
+                    print(f"[Grounding] {len(grounding_sources)} citation(s) extracted. Queries: {search_queries}")
+            except Exception as meta_err:
+                print(f"[Grounding] Could not extract metadata: {meta_err}")
+
+        return response.text, grounding_sources
     except Exception as e:
         print(f"[Planner] Error: {e}")
-        return ""
+        return "", []
 
-async def handle_live_session(websocket: WebSocket, sources: list):
+async def handle_live_session(websocket: WebSocket, sources: list, research_mode: str = "fast"):
     """
     Manages the realtime WebSocket connection bridging the frontend and Gemini Live API.
-    Now accepts a list of sources instead of a single URL.
+    research_mode: 'off' = no web search; 'fast' = grounding on generation only;
+                   'deep' = grounded URL digest + generation grounding.
     """
     
     # Helper to send status updates
@@ -347,79 +498,103 @@ async def handle_live_session(websocket: WebSocket, sources: list):
         except:
             pass
     
-    # 1. Phase 1: Source Gathering & Planning
-    await send_status("Analyzing sources...")
-    await websocket.send_json({"type": "phase", "phase": "analyzing"})
-    
-    combined_content, source_labels = await gather_source_content(sources, send_status)
-    
-    use_search = should_use_web_search(sources)
-    
-    await send_status("Designing interactive animated graphic...")
-    await websocket.send_json({"type": "phase", "phase": "designing"})
-    
-    interactive_graphic_plan_raw = await generate_presentation_plan(combined_content, source_labels, use_search)
-    
-    # Extract the SVG and Controls from the raw text safely
-    svg_html = ""
-    controls_html = ""
-    
-    match_svg_panel = re.search(r'<svg-panel>(.*?)</svg-panel>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
-    if match_svg_panel:
-        svg_html = match_svg_panel.group(1).strip()
-    else:
-        # fallback
-        match_svg = re.search(r'(<svg.*?</svg>)', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
-        if match_svg:
-            svg_html = match_svg.group(1)
-
-    match_controls_panel = re.search(r'<controls-panel>(.*?)</controls-panel>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
-    if match_controls_panel:
-        controls_html = match_controls_panel.group(1).strip()
-    else:
-        # fallback
-        controls_html = "<div style='padding: 24px;'>No controls generated.</div>"
-
+    try:
+        # Map research_mode to feature flags
+        use_deep_digest = (research_mode == "deep")   # Improvement E: Gemini+Search URL pre-processing
+        use_search = (research_mode != "off") and should_use_web_search(sources)  # Improvement A: gen-time grounding
         
-    # FORCE CLEAN: Remove literal backslash escapes for quotes, backticks, and dollar signs just in case the model hallucinates them
-    svg_html = svg_html.replace('\\"', '"').replace("\\'", "'").replace('\\`', '`').replace('\\$', '$')
-    controls_html = controls_html.replace('\\"', '"').replace("\\'", "'").replace('\\`', '`').replace('\\$', '$')
-    
-    # Extract Narration
-    narration_context = "No specific narration context provided."
-    match_narration = re.search(r'<narration>(.*?)</narration>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
-    if match_narration:
-        narration_context = match_narration.group(1).strip()
-    
-    # Extract Title and Subtitle
-    title = "Interactive Presentation"
-    match_title = re.search(r'<nblm-title>(.*?)</nblm-title>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
-    if match_title:
-        title = match_title.group(1).strip()
+        print(f"[Session] research_mode={research_mode} | use_deep_digest={use_deep_digest} | use_search={use_search}")
         
-    subtitle = "Explore the concepts using the controls on the right."
-    match_subtitle = re.search(r'<nblm-subtitle>(.*?)</nblm-subtitle>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
-    if match_subtitle:
-        subtitle = match_subtitle.group(1).strip()
-    
-    import os
-    import datetime
-    import re as regex_fallback
-    
-    os.makedirs("generated_graphics", exist_ok=True)
-    safe_title = regex_fallback.sub(r'[^a-zA-Z0-9_\-]', '_', title).strip('_').lower()
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"generated_graphics/{safe_title}_{timestamp}.html"
-    
-    # Build source URL reference for saved file
-    source_urls = [s.get("content", "")[:200] for s in sources if s.get("type") in ("url", "youtube")]
-    source_ref_html = ""
-    for surl in source_urls:
-        source_ref_html += f'<p style="font-size: 13px; margin-top: -8px;"><a href="{surl}" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p>'
-    
-    with open(filename, "w") as f:
-        # Wrap the SVG and Controls in a basic HTML structure so it's viewable independently
-        full_html = f"""<!DOCTYPE html>
+        # 1. Phase 1: Source Gathering & Planning
+        await send_status("Analyzing sources...")
+        await websocket.send_json({"type": "phase", "phase": "analyzing"})
+        
+        combined_content, source_labels = await gather_source_content(sources, send_status, use_deep_digest=use_deep_digest)
+        
+        await send_status("Designing interactive animated graphic...")
+        await websocket.send_json({"type": "phase", "phase": "designing"})
+        
+        # Start a background task to keep the websocket alive periodically (avoiding Vite proxy 1006 drop)
+        keep_alive_task = None
+        async def keep_alive():
+            try:
+                dots = 1
+                while True:
+                    await asyncio.sleep(15)
+                    await websocket.send_json({"type": "status", "message": f"Designing interactive animated graphic{'.' * dots}"})
+                    dots = (dots % 3) + 1
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+
+        try:
+            keep_alive_task = asyncio.create_task(keep_alive())
+            interactive_graphic_plan_raw, grounding_sources = await generate_presentation_plan(combined_content, source_labels, use_search)
+        finally:
+            if keep_alive_task:
+                keep_alive_task.cancel()
+        
+        # Extract the SVG and Controls from the raw text safely
+        svg_html = ""
+        controls_html = ""
+        
+        match_svg_panel = re.search(r'<svg-panel>(.*?)</svg-panel>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
+        if match_svg_panel:
+            svg_html = match_svg_panel.group(1).strip()
+        else:
+            # fallback
+            match_svg = re.search(r'(<svg.*?</svg>)', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
+            if match_svg:
+                svg_html = match_svg.group(1)
+
+        match_controls_panel = re.search(r'<controls-panel>(.*?)</controls-panel>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
+        if match_controls_panel:
+            controls_html = match_controls_panel.group(1).strip()
+        else:
+            # fallback
+            controls_html = "<div style='padding: 24px;'>No controls generated.</div>"
+
+            
+        # FORCE CLEAN: Remove literal backslash escapes for quotes, backticks, and dollar signs just in case the model hallucinates them
+        svg_html = svg_html.replace('\\"', '"').replace("\\'", "'").replace('\\`', '`').replace('\\$', '$')
+        controls_html = controls_html.replace('\\"', '"').replace("\\'", "'").replace('\\`', '`').replace('\\$', '$')
+        
+        # Extract Narration
+        narration_context = "No specific narration context provided."
+        match_narration = re.search(r'<narration>(.*?)</narration>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
+        if match_narration:
+            narration_context = match_narration.group(1).strip()
+        
+        # Extract Title and Subtitle
+        title = "Interactive Presentation"
+        match_title = re.search(r'<nblm-title>(.*?)</nblm-title>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
+        if match_title:
+            title = match_title.group(1).strip()
+            
+        subtitle = "Explore the concepts using the controls on the right."
+        match_subtitle = re.search(r'<nblm-subtitle>(.*?)</nblm-subtitle>', interactive_graphic_plan_raw, re.DOTALL | re.IGNORECASE)
+        if match_subtitle:
+            subtitle = match_subtitle.group(1).strip()
+        
+        import os
+        import datetime
+        import re as regex_fallback
+        
+        os.makedirs("generated_graphics", exist_ok=True)
+        safe_title = regex_fallback.sub(r'[^a-zA-Z0-9_\-]', '_', title).strip('_').lower()
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"generated_graphics/{safe_title}_{timestamp}.html"
+        
+        # Build source URL reference for saved file
+        source_urls = [s.get("content", "")[:200] for s in sources if s.get("type") in ("url", "youtube")]
+        source_ref_html = ""
+        for surl in source_urls:
+            source_ref_html += f'<p style="font-size: 13px; margin-top: -8px;"><a href="{surl}" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p>'
+        
+        with open(filename, "w") as f:
+            # Wrap the SVG and Controls in a basic HTML structure so it's viewable independently
+            full_html = f"""<!DOCTYPE html>
 <html>
 <head>
     <title>{title}</title>
@@ -442,30 +617,42 @@ async def handle_live_session(websocket: WebSocket, sources: list):
     </div>
 </body>
 </html>"""
-        f.write(full_html)
+            f.write(full_html)
+            
+        # Also remove stale debug copy
+        try:
+            os.remove("debug_svg.xml")
+        except FileNotFoundError:
+            pass
+            
+        # Send the SVG and Controls directly to the frontend
+        await websocket.send_json({
+            "type": "interactive_svg",
+            "svg_html": svg_html,
+            "controls_html": controls_html,
+            "title": title,
+            "subtitle": subtitle,
+            "narration_context": narration_context,
+            "source_labels": source_labels,
+            "grounding_sources": grounding_sources,  # Improvement C: citation URLs for the UI
+        })
         
-    # Also remove stale debug copy
-    try:
-        os.remove("debug_svg.xml")
-    except FileNotFoundError:
-        pass
+        # Signal graphic is complete
+        await websocket.send_json({"type": "phase", "phase": "complete"})
         
-    # Send the SVG and Controls directly to the frontend
-    await websocket.send_json({
-        "type": "interactive_svg",
-        "svg_html": svg_html,
-        "controls_html": controls_html,
-        "title": title,
-        "subtitle": subtitle,
-        "narration_context": narration_context,
-        "source_labels": source_labels
-    })
-    
-    # Signal graphic is complete
-    await websocket.send_json({"type": "phase", "phase": "complete"})
-    
-    # 2. Phase 2: Live Presenter — delegate to shared helper
-    await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html)
+        # 2. Phase 2: Live Presenter — delegate to shared helper
+        # Improvement D: pass grounding context into live session so AI can reference sources
+        await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, grounding_sources)
+
+    except Exception as e:
+        print(f"[Session] UNHANDLED EXCEPTION in handle_live_session: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        try:
+            await websocket.send_json({"type": "error", "message": f"Generation failed: {type(e).__name__}: {e}"})
+            await websocket.close()
+        except Exception:
+            pass
+
 
 
 async def handle_live_restart(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = ""):
@@ -506,25 +693,28 @@ def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
         # Find buttons — detect toggle/play-pause buttons
         for btn in search_root.find_all("button"):
             text = btn.get_text(strip=True)
+            btn_id = btn.get("id", "")
             if text:
                 onclick = btn.get("onclick", "")
                 text_lower = text.lower()
+                id_str = f' (id: "{btn_id}")' if btn_id else ""
                 # Detect toggle/play-pause buttons
                 is_toggle = any(kw in onclick.lower() for kw in ["toggleplay", "toggle", "isplaying", "autoplay", "auto_play", "toggleflight", "toggleanim"])
                 has_play_text = any(kw in text_lower for kw in ["play", "start", "auto", "▶", "resume", "begin", "launch"])
                 has_pause_text = any(kw in text_lower for kw in ["pause", "stop", "⏸", "halt", "‖"])
                 if is_toggle or has_play_text or has_pause_text:
-                    items.append(f'- Button (toggle): "{text}" — toggles play/pause. The label shows what the NEXT action will be (opposite of current state).')
+                    items.append(f'- Button{id_str} (toggle): "{text}" — toggles play/pause. The label shows what the NEXT action will be (opposite of current state).')
                 else:
-                    items.append(f'- Button: "{text}"')
+                    items.append(f'- Button{id_str}: "{text}"')
         # Find sliders/range inputs
         for inp in search_root.find_all("input"):
             inp_type = inp.get("type", "text")
+            inp_id = inp.get("id", "")
+            id_str = f' (id: "{inp_id}")' if inp_id else ""
             # Build a descriptive label from multiple sources
             label = inp.get("aria-label") or inp.get("title") or ""
             if not label:
                 # Check for a nearby label element
-                inp_id = inp.get("id", "")
                 if inp_id:
                     label_el = search_root.find("label", attrs={"for": inp_id})
                     if label_el:
@@ -546,9 +736,9 @@ def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
                 min_val = inp.get("min", "?")
                 max_val = inp.get("max", "?")
                 cur_val = inp.get("value", "?")
-                items.append(f'- Slider: "{label}" (range: {min_val}–{max_val}, current: {cur_val}). NOTE: You cannot drag sliders directly — tell the user to adjust it manually.')
+                items.append(f'- Slider{id_str}: "{label}" (range: {min_val}–{max_val}, current: {cur_val}). NOTE: You cannot drag sliders directly — tell the user to adjust it manually.')
             else:
-                items.append(f'- Input ({inp_type}): "{label}"')
+                items.append(f'- Input ({inp_type}){id_str}: "{label}"')
         # Find select dropdowns
         for sel in search_root.find_all("select"):
             label = sel.get("aria-label") or sel.get("id") or "dropdown"
@@ -572,15 +762,32 @@ def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
         return f"Could not parse controls: {e}"
 
 
-async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = ""):
+async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", grounding_sources: list[dict] | None = None):
     """
     Shared Live API session logic. Handles system instruction, tool declarations,
     Gemini connection, and bidirectional audio/tool streaming.
     """
     # Build source description for system instruction
     source_desc = ", ".join(source_labels) if source_labels else "the provided content"
+
+    # Improvement D: build grounding context block from generation-time citations
+    grounding_context_block = ""
+    if grounding_sources:
+        source_lines = "\n".join(
+            f"  - {s.get('title', s.get('url', ''))} ({s.get('url', '')})"
+            for s in grounding_sources[:10]
+        )
+        grounding_context_block = f"""
+
+    <grounding_context>
+    This diagram was grounded using Google Search during generation. You may reference these sources by name when speaking:
+{source_lines}
+    When relevant, naturally cite these sources (e.g. "According to Wikipedia...", "As reported by NASA..."). Do NOT re-fetch these with fetch_more_detail — the content is already in the diagram.
+    </grounding_context>"""
     
     system_instruction = f"""\
+    LANGUAGE RULE: Always respond in the same language the user is speaking. If the user speaks English, respond only in English — even if the diagram content, source material, or narration context is in another language. Never switch languages mid-conversation unless the user explicitly switches first.
+
     You are Narluga, an expert and charismatic Interactive Guide. You accompany the user as they explore an interactive, animated SVG diagram about: {source_desc}.
     
     You have access to TOOLS that let you manipulate the diagram in real-time. You can highlight elements, navigate to sections, zoom in/out, and fetch more info. Use them when they add value — but don't force them. Your voice is the primary medium.
@@ -589,7 +796,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     
     <diagram_context>
     {narration_context}
-    </diagram_context>
+    </diagram_context>{grounding_context_block}
     
     Here are the ACTUAL interactive controls available in the diagram's control panel:
     
@@ -609,9 +816,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     9. Keep responses concise and conversational. You're a tutor, not a lecturer.
     10. NEVER mention or reference buttons, controls, or UI elements that don't appear in <available_controls>. If a control doesn't exist, tell the user what IS available instead.
     11. CURSOR AWARENESS: You will receive "[Cursor position: ...]" messages telling you where the user's cursor is on the diagram. When you see these, briefly acknowledge what they're pointing at (e.g., "I see you're looking at the Database node — that's where...") and offer a short explanation. Don't repeat the same explanation if they stay on the same element. Don't interrupt yourself mid-sentence to acknowledge cursor moves.
-    12. PLAY/PAUSE STATE: When you receive an interaction event saying a toggle button was clicked, pay attention to the RESULTING STATE reported in the event (e.g., "now PLAYING" or "now PAUSED"). The button label shows what the NEXT action will be, which is the OPPOSITE of the current state. For example, a button that says "▶ Play" means the animation is currently PAUSED. A button that says "⏸ Pause" means it is currently PLAYING. After auto-play starts, briefly narrate what is animating on screen.
-    13. AUTO-PLAY CAPABILITY: If a toggle button exists in <available_controls> (e.g., "▶ Auto-Process Data"), you CAN and SHOULD use click_element to start or stop it when the user asks. Just use the keyword from the button text.
-    14. SLIDERS/RANGE INPUTS: If a slider/range input exists in <available_controls>, you CANNOT drag it programmatically. Instead, tell the user to adjust it manually and describe what it controls.
+    12. PLAY/PAUSE STATE: When you receive an interaction event saying a toggle button was clicked, it will tell you what the button's label *changed into* (e.g. "button turned into a '⏸ Pause' toggle"). A button that currently says "▶ Auto-Play" means the animation is PAUSED. A button that currently says "⏸ Pause" means it is PLAYING.
+    13. PROGRAMMATIC STATE CHANGES: If you receive an event saying a "button automatically changed to" a new label, it means the graphic updated its own state programmatically (for example, an auto-play sequence finished and the button reset to "Play"). Apply the same logic: the NEW label represents the NEXT available action.
+    14. AUTO-PLAY CAPABILITY: If a toggle button exists in <available_controls> (e.g., "▶ Auto-Process Data"), you CAN and SHOULD use click_element to start or stop it when the user asks. ALWAYS use the exact ID of the button (e.g. 'playBtn') as provided in <available_controls> if one exists.
+    15. SLIDERS/RANGE INPUTS: If a slider/range input exists in <available_controls>, you CANNOT drag it programmatically. Instead, tell the user to adjust it manually and describe what it controls.
+    16. CONTINUOUS ANIMATION: Most auto-play graphics loop continuously. If you have already started the animation by clicking play, NEVER assume it has stopped just because it completes a cycle, hits the end, or restarts. It will loop indefinitely until you are explicitly told the Pause button was clicked. However, by default, the graphic starts PAUSED.
     
     TOOL TIPS:
     - Call ONE tool at a time, not multiple simultaneously.
@@ -623,7 +832,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
       - 'opacity' — make elements transparent (e.g., value '0.5').
       - 'display' — hide elements (value 'none') or show them (value 'block').
       - 'filter' — add visual effects (e.g., 'blur(3px)', 'drop-shadow(0 0 10px #fff)').
-    - For click_element, match the exact button text from <available_controls>.
+    - For click_element, use the exact ID (e.g., 'playBtn') provided in <available_controls>. Only use button text if no ID is available.
     """
     
     # Define agentic tools for the Live API session
@@ -719,7 +928,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                     properties=dict(
                         element_id=types.Schema(
                             type="STRING",
-                            description="A keyword matching the button text, label, or ID to click. E.g., 'Play', 'Stop', 'Evaporation', 'Reset', 'Auto-Cycle'. Match the exact text shown on the button."
+                            description="The precise ID of the button (e.g., 'playBtn') if one was provided in the <available_controls> list. If no ID is available, fall back to a keyword matching the exact text shown on the button."
                         )
                     ),
                     required=["element_id"]
@@ -765,33 +974,19 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     client_disconnected = asyncio.Event()  # Set when frontend WS closes
     
     # --------------------------------------------------------------------------------
-    # 2. WAIT FOR USER TO START PRESENTATION
-    # --------------------------------------------------------------------------------
-    print("[WebSocket] Waiting for user to start presentation...")
-    initial_events = []
-    try:
-        while True:
-            data = await websocket.receive_text()
-            payload = json.loads(data)
-            if payload.get("type") == "start_live_session":
-                initial_events = payload.get("pre_events", [])
-                break
-    except WebSocketDisconnect:
-        print("[WebSocket] Client disconnected before starting session.")
-        return
-    except Exception as e:
-        print(f"[WebSocket] Error while waiting to start: {e}")
-        return
-
-    # Signal conversation phase
-    await websocket.send_json({"type": "phase", "phase": "conversation"})
-
-    # --------------------------------------------------------------------------------
-    # 3. Phase 2: Live Presenter — Reconnection Loop
+    # 2 + 3. PRE-CONNECT to Gemini, THEN wait for user to click "Start".
+    #
+    # Previously: wait for start_live_session → THEN open Gemini connection (~1-2s).
+    # Now: open Gemini connection immediately (while user reads the graphic) →
+    #       THEN wait for start_live_session inside the already-open connection.
+    #
+    # This hides the Live API handshake latency behind the user's reading time,
+    # so clicking "Start" feels nearly instantaneous.
     # --------------------------------------------------------------------------------
     MAX_RECONNECT_ATTEMPTS = 3
     reconnect_count = 0
     is_first_connection = True
+    initial_events = []
 
     while session_holder["alive"] and not client_disconnected.is_set():
         # Build config (with resumption handle for reconnections)
@@ -812,6 +1007,27 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
 
                 if is_first_connection:
                     is_first_connection = False
+
+                    # Gemini is already connected — now just wait for the user to click Start.
+                    # By the time they click, the connection handshake is long done.
+                    print("[WebSocket] Waiting for user to start presentation...")
+                    try:
+                        while True:
+                            data = await websocket.receive_text()
+                            payload = json.loads(data)
+                            if payload.get("type") == "start_live_session":
+                                initial_events = payload.get("pre_events", [])
+                                break
+                    except WebSocketDisconnect:
+                        print("[WebSocket] Client disconnected before starting session.")
+                        return
+                    except Exception as e:
+                        print(f"[WebSocket] Error while waiting to start: {e}")
+                        return
+
+                    # Signal conversation phase then ready — back-to-back, no waiting
+                    await websocket.send_json({"type": "phase", "phase": "conversation"})
+
                     # Drop stale pre-session events
                     if initial_events:
                         print(f"[Gemini] Dropping {len(initial_events)} stale pre-session event(s) to prevent double overview.")
@@ -819,10 +1035,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                     async with ws_lock:
                         await websocket.send_json({"type": "ready"})
 
-                    # Kick off the conversation — send a prompt so the AI starts talking immediately
-                    # Wait 1.2s to let the mic stabilize and avoid VAD false-triggers
+                    # Brief pause for the mic AudioWorklet to initialize on the frontend.
+                    # Reduced from 1.2s: the frontend already gates audio via micReadyRef,
+                    # so 0.3s is enough for the worklet to start up without mic noise bleed.
                     try:
-                        await asyncio.sleep(1.2)
+                        await asyncio.sleep(0.3)
                         await session.send_client_content(
                             turns=[types.Content(parts=[types.Part.from_text(
                                 text="The user just joined the session. Begin your welcome and overview now."
@@ -967,6 +1184,10 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                             # For click_element, provide richer feedback so AI can self-correct
                                             if tool_name == "click_element":
                                                 kw = tool_args.get("element_id", "")
+                                                # DEBUG LOG to see exactly what AI is sending
+                                                with open("/tmp/click_debug.log", "a") as df:
+                                                    df.write(f"CLICK_ELEMENT called with keyword: {kw}\n")
+                                                    
                                                 controls_inv = _extract_controls_inventory(svg_html, controls_html)
                                                 resp_msg = (
                                                     f"click_element dispatched with keyword '{kw}'. "
@@ -993,6 +1214,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                                     "action": "fetch_more_detail",
                                                     "params": {"query": query, "status": "searching"}
                                                 })
+                                            fetch_citations: list[dict] = []
                                             try:
                                                 search_response = await asyncio.to_thread(
                                                     pro_client.models.generate_content,
@@ -1003,6 +1225,22 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                                     )
                                                 )
                                                 result_text = search_response.text[:2000] if search_response.text else "No results found."
+
+                                                # Improvement B: extract grounding citations from the sidecar search
+                                                try:
+                                                    gm = search_response.candidates[0].grounding_metadata if search_response.candidates else None
+                                                    if gm:
+                                                        for chunk in (getattr(gm, "grounding_chunks", []) or []):
+                                                            web = getattr(chunk, "web", None)
+                                                            if web:
+                                                                uri = getattr(web, "uri", None)
+                                                                title = getattr(web, "title", None) or uri
+                                                                if uri and not any(c["url"] == uri for c in fetch_citations):
+                                                                    fetch_citations.append({"title": title, "url": uri})
+                                                        print(f"[Grounding] fetch_more_detail: {len(fetch_citations)} citation(s) for query '{query}'")
+                                                except Exception as meta_err:
+                                                    print(f"[Grounding] fetch_more_detail metadata error: {meta_err}")
+
                                             except Exception as fetch_err:
                                                 print(f"[Tool Call] fetch_more_detail error: {fetch_err}")
                                                 result_text = f"Could not fetch information: {fetch_err}"
@@ -1013,6 +1251,14 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                                     "action": "fetch_more_detail",
                                                     "params": {"query": query, "status": "complete"}
                                                 })
+                                                # Improvement B: send citations to frontend
+                                                if fetch_citations:
+                                                    await websocket.send_json({
+                                                        "type": "grounding_sources",
+                                                        "context": "fetch_more_detail",
+                                                        "query": query,
+                                                        "sources": fetch_citations
+                                                    })
                                             func_responses.append(
                                                 types.FunctionResponse(
                                                     name=func_call.name,

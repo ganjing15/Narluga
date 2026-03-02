@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Earth's Orbit & The Four Seasons</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg id="seasons-svg" viewBox="0 0 800 600" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="background-color: #0f172a; font-family: system-ui, -apple-system, sans-serif;">
+  <defs>
+    <!-- Sun Glow Filter -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="15" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Earth Gradient -->
+    <radialGradient id="earthGrad" cx="30%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </radialGradient>
+    
+    <!-- Sun Gradient -->
+    <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="40%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </radialGradient>
+  </defs>
+
+  <style>
+    .anim-pulse {
+      animation: pulse 3s infinite alternate ease-in-out;
+      transform-origin: 400px 300px;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      100% { transform: scale(1.05); opacity: 1; }
+    }
+    .label-bg {
+      fill: #0f172a;
+      fill-opacity: 0.7;
+      rx: 6px;
+    }
+    .label-text {
+      fill: #f8fafc;
+      font-size: 14px;
+      font-weight: 600;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      letter-spacing: 0.5px;
+    }
+    .label-sub {
+      fill: #94a3b8;
+      font-size: 12px;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+    .transition-node {
+      transition: all 0.1s linear;
+    }
+  </style>
+
+  <!-- Stars Background -->
+  <g id="stars-layer" fill="#ffffff">
+    <circle cx="150" cy="80" r="1" opacity="0.6"/>
+    <circle cx="650" cy="120" r="1.5" opacity="0.8"/>
+    <circle cx="700" cy="450" r="1" opacity="0.5"/>
+    <circle cx="100" cy="500" r="2" opacity="0.7"/>
+    <circle cx="400" cy="50" r="1" opacity="0.4"/>
+    <circle cx="50" cy="300" r="1.5" opacity="0.9"/>
+    <circle cx="750" cy="250" r="1" opacity="0.5"/>
+  </g>
+
+  <!-- Orbit Path -->
+  <ellipse id="orbit-path" cx="400" cy="300" rx="280" ry="140" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="8 8" />
+
+  <!-- Sun Rays (dynamic beam) -->
+  <line id="sun-ray" x1="400" y1="300" x2="680" y2="300" stroke="#fbbf24" stroke-width="6" stroke-opacity="0.3" class="transition-node" />
+
+  <!-- Sun Base -->
+  <circle id="sun-glow" cx="400" cy="300" r="45" fill="#f59e0b" opacity="0.3" filter="url(#glow)" class="anim-pulse" />
+  <circle id="sun" cx="400" cy="300" r="35" fill="url(#sunGrad)" />
+
+  <!-- Earth System Container -->
+  <g id="earth-container" class="transition-node" transform="translate(680, 300)">
+    
+    <!-- Earth Globe -->
+    <g id="earth-globe">
+      <!-- Base Ocean -->
+      <circle cx="0" cy="0" r="45" fill="url(#earthGrad)" />
+      
+      <!-- Fixed Axial Tilt Group (23.5 degrees) -->
+      <!-- In standard SVG, positive rotate is clockwise. Top tilts right -->
+      <g id="axial-tilt" transform="rotate(23.5)">
+        <!-- Axis Line -->
+        <line x1="0" y1="-65" x2="0" y2="65" stroke="#f8fafc" stroke-width="2" />
+        <text x="0" y="-72" fill="#f8fafc" font-size="12" font-weight="bold" text-anchor="middle">N</text>
+        <text x="0" y="78" fill="#f8fafc" font-size="12" font-weight="bold" text-anchor="middle">S</text>
+        
+        <!-- Latitudes -->
+        <!-- Arctic Circle (66.5° N) -->
+        <line x1="-30" y1="-41" x2="30" y2="-41" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 3" />
+        <!-- Tropic of Cancer (23.5° N) -->
+        <line x1="-42" y1="-18" x2="42" y2="-18" stroke="#f8fafc" stroke-width="1.5" stroke-dasharray="4 2" />
+        <!-- Equator -->
+        <line x1="-45" y1="0" x2="45" y2="0" stroke="#f8fafc" stroke-width="2.5" />
+        <!-- Tropic of Capricorn (23.5° S) -->
+        <line x1="-42" y1="18" x2="42" y2="18" stroke="#f8fafc" stroke-width="1.5" stroke-dasharray="4 2" />
+        <!-- Antarctic Circle (66.5° S) -->
+        <line x1="-30" y1="41" x2="30" y2="41" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 3" />
+      </g>
+    </g>
+
+    <!-- Terminator Shadow (Dynamic Rotation) -->
+    <!-- The D-shape covers the right half (+X). Rotation ensures it stays perfectly away from Sun -->
+    <path id="earth-shadow" d="M 0,-45 A 45,45 0 0,1 0,45 Z" fill="#000000" fill-opacity="0.65" class="transition-node" transform="rotate(0)" />
+    
+    <!-- Highlight overlay to enhance 3D sphere feel -->
+    <circle cx="0" cy="0" r="45" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.2" />
+  </g>
+
+  <!-- Static Orbit Labels -->
+  <!-- Left: Summer Solstice -->
+  <g transform="translate(60, 300)">
+    <rect x="-60" y="-20" width="120" height="40" class="label-bg" />
+    <text x="0" y="-4" class="label-text">Summer Solstice</text>
+    <text x="0" y="12" class="label-sub">June 21</text>
+  </g>
+
+  <!-- Right: Winter Solstice -->
+  <g transform="translate(740, 300)">
+    <rect x="-60" y="-20" width="120" height="40" class="label-bg" />
+    <text x="0" y="-4" class="label-text">Winter Solstice</text>
+    <text x="0" y="12" class="label-sub">Dec 21</text>
+  </g>
+
+  <!-- Top: Autumnal Equinox -->
+  <g transform="translate(400, 100)">
+    <rect x="-70" y="-20" width="140" height="40" class="label-bg" />
+    <text x="0" y="-4" class="label-text">Autumnal Equinox</text>
+    <text x="0" y="12" class="label-sub">Sept 22</text>
+  </g>
+
+  <!-- Bottom: Vernal Equinox -->
+  <g transform="translate(400, 500)">
+    <rect x="-70" y="-20" width="140" height="40" class="label-bg" />
+    <text x="0" y="-4" class="label-text">Vernal Equinox</text>
+    <text x="0" y="12" class="label-sub">March 20</text>
+  </g>
+
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>Earth's Orbit & The Four Seasons</h2>
+        <p style="color: #64748b;">Use the controls on the right to orbit the Earth and observe the seasons.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div id="controls-wrapper" style="width:100%; height:100%; box-sizing:border-box; padding:24px; background:#ffffff; display:flex; flex-direction:column; font-family:system-ui, -apple-system, sans-serif;">
+  
+  <h2 style="margin:0 0 8px 0; font-size:22px; color:#0f172a; font-weight:700;">System Controls</h2>
+  <p style="margin:0 0 24px 0; font-size:14px; color:#64748b; line-height:1.5;">Drag the slider to move Earth along its orbit. Observe how the fixed axial tilt causes sunlight to hit different latitudes.</p>
+
+  <!-- Slider Control -->
+  <div style="margin-bottom:24px;">
+    <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:14px; font-weight:600; color:#334155;">
+      <span>Dec</span>
+      <span>Mar</span>
+      <span>Jun</span>
+      <span>Sep</span>
+      <span>Dec</span>
+    </div>
+    <input type="range" id="timeSlider" min="0" max="360" value="0" style="width:100%; cursor:pointer; accent-color:#2563eb;" />
+  </div>
+
+  <!-- Play/Pause Button -->
+  <button id="playBtn" style="width:100%; padding:14px; background-color:#2563eb; color:#ffffff; border:none; border-radius:8px; font-size:16px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:background 0.2s;" onmouseover="this.style.backgroundColor='#1d4ed8'" onmouseout="this.style.backgroundColor='#2563eb'">
+    ▶ Auto-Play
+  </button>
+
+  <!-- Dynamic Info Panel -->
+  <div id="info-panel" style="margin-top:auto; padding:20px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; border-left:4px solid #2563eb;">
+    <div style="font-size:12px; font-weight:700; color:#2563eb; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;" id="info-month">DECEMBER - FEBRUARY</div>
+    <div id="info-title" style="font-weight:700; font-size:18px; color:#0f172a; margin-bottom:8px;">Winter (Northern Hemisphere)</div>
+    <div id="info-desc" style="font-size:14px; color:#475569; line-height:1.6;">
+      The Northern Hemisphere is tilted away from the Sun. Direct sunlight hits the Tropic of Capricorn in the Southern Hemisphere.
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let isPlaying = false;
+  let playInterval;
+  let currentAngle = 0; // 0 degrees = Right side = Winter Solstice in NH
+
+  const slider = document.getElementById(`timeSlider`);
+  const playBtn = document.getElementById(`playBtn`);
+
+  function updateState(angleDeg) {
+    currentAngle = Number(angleDeg);
+    
+    // Orbital Math (Elliptical Path)
+    let rad = currentAngle * Math.PI / 180;
+    let cx = 400, cy = 300;
+    let rx = 280, ry = 140;
+    let ex = cx + rx * Math.cos(rad);
+    let ey = cy + ry * Math.sin(rad);
+    
+    // Update SVG Elements
+    document.getElementById(`earth-container`).setAttribute(`transform`, `translate(${ex}, ${ey})`);
+    document.getElementById(`earth-shadow`).setAttribute(`transform`, `rotate(${currentAngle})`);
+    document.getElementById(`sun-ray`).setAttribute(`x2`, `${ex}`);
+    document.getElementById(`sun-ray`).setAttribute(`y2`, `${ey}`);
+
+    // Determine Season Logic (for Northern Hemisphere)
+    let season, desc, month;
+    if (currentAngle >= 315 || currentAngle < 45) {
+        season = `Winter (Northern Hemisphere)`;
+        desc = `The Northern Hemisphere is tilted away from the Sun. Direct sunlight strikes the Tropic of Capricorn in the south, bringing winter to the north.`;
+        month = `December - February`;
+    } else if (currentAngle >= 45 && currentAngle < 135) {
+        season = `Spring (Northern Hemisphere)`;
+        desc = `Earth's axis is parallel to the Sun. Direct sunlight strikes the Equator exactly, creating nearly equal day and night worldwide (Equinox).`;
+        month = `March - May`;
+    } else if (currentAngle >= 135 && currentAngle < 225) {
+        season = `Summer (Northern Hemisphere)`;
+        desc = `The Northern Hemisphere is tilted directly towards the Sun. Direct sunlight strikes the Tropic of Cancer, bringing summer heat.`;
+        month = `June - August`;
+    } else {
+        season = `Autumn (Northern Hemisphere)`;
+        desc = `Earth's axis is parallel to the Sun again. Direct sunlight returns to the Equator, signaling the transition to winter.`;
+        month = `September - November`;
+    }
+
+    // Update UI
+    document.getElementById(`info-title`).textContent = season;
+    document.getElementById(`info-month`).textContent = month;
+    document.getElementById(`info-desc`).textContent = desc;
+    slider.value = currentAngle;
+
+    // Telemetry
+    if (window.sendEventToAI && currentAngle % 90 === 0 && currentAngle !== 0) {
+        window.sendEventToAI(`User moved orbit to ${season}`);
+    }
+  }
+
+  // Slider Interaction
+  slider.addEventListener(`input`, (e) => {
+    if (isPlaying) togglePlay(); // Pause if user drags manually
+    updateState(e.target.value);
+  });
+
+  // Play/Pause Interaction
+  playBtn.addEventListener(`click`, togglePlay);
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+      playBtn.innerHTML = `⏸ Pause`;
+      playInterval = setInterval(() => {
+        let nextVal = (currentAngle + 1) % 360;
+        updateState(nextVal);
+      }, 40);
+    } else {
+      playBtn.innerHTML = `▶ Auto-Play`;
+      clearInterval(playInterval);
+    }
+  }
+
+  // Initialize
+  updateState(0);
+</script>
+    </div>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Earth's Orbit & The Four Seasons</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 600" width="100%" height="100%" style="background:#f8fafc; overflow:hidden;">
+  <defs>
+    <!-- Clip path to keep continents and shadows strictly within the Earth globe -->
+    <clipPath id="earth-clip">
+      <circle cx="0" cy="0" r="30" />
+    </clipPath>
+    
+    <!-- Glowing effect for the Sun -->
+    <radialGradient id="sun-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.6"/>
+      <stop offset="60%" stop-color="#f59e0b" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Orbital Path -->
+  <ellipse cx="400" cy="300" rx="280" ry="140" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 6" />
+  
+  <!-- Orbit Direction Indicators -->
+  <g fill="#94a3b8">
+    <polygon points="400,154 390,160 400,166" />
+    <polygon points="400,434 410,440 400,446" />
+  </g>
+
+  <!-- Key Event Markers on Orbit -->
+  <circle cx="680" cy="300" r="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="2" />
+  <circle cx="120" cy="300" r="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="2" />
+  <circle cx="400" cy="160" r="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="2" />
+  <circle cx="400" cy="440" r="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="2" />
+
+  <!-- The Sun -->
+  <circle cx="400" cy="300" r="80" fill="url(#sun-glow)" />
+  <circle cx="400" cy="300" r="28" fill="#f59e0b" />
+  <circle cx="400" cy="300" r="22" fill="#fbbf24" />
+
+  <!-- Direct Sunlight Ray -->
+  <line id="sun-ray" x1="400" y1="300" x2="680" y2="300" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 4" opacity="0.6" />
+
+  <!-- Earth System -->
+  <!-- Translates along the orbital path -->
+  <g id="earth-container" transform="translate(680, 300)">
+    
+    <!-- Vertical Reference Line -->
+    <line x1="0" y1="-35" x2="0" y2="-65" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="2 2" />
+    
+    <!-- 23.5 Degree Angle Indicator -->
+    <path d="M 0 -55 A 55 55 0 0 1 22 -50" fill="none" stroke="#64748b" stroke-width="1.5" />
+    <text x="26" y="-56" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#475569">23.5°</text>
+    
+    <!-- Tilted Earth Features (Rotated 23.5 degrees clockwise) -->
+    <g transform="rotate(23.5)">
+      <!-- Ocean -->
+      <circle cx="0" cy="0" r="30" fill="#2563eb" />
+      
+      <g clip-path="url(#earth-clip)">
+        <!-- Abstract Landmasses -->
+        <path d="M-15,-20 Q0,-10 10,-25 Q25,-15 15,0 Q5,-10 -15,-20" fill="#10b981" opacity="0.9" />
+        <path d="M-20,10 Q-10,25 5,15 Q15,30 -5,35 Q-25,25 -20,10" fill="#10b981" opacity="0.9" />
+        <path d="M10,20 Q20,15 25,25 Q15,35 10,20" fill="#10b981" opacity="0.9" />
+        
+        <!-- Equator -->
+        <line x1="-30" y1="0" x2="30" y2="0" stroke="#f8fafc" stroke-width="1.5" stroke-dasharray="3 2" />
+        
+        <!-- Tropic of Cancer (Northern) -->
+        <line x1="-27.5" y1="-12" x2="27.5" y2="-12" stroke="#f8fafc" stroke-width="1" stroke-dasharray="1 2" opacity="0.8"/>
+        
+        <!-- Tropic of Capricorn (Southern) -->
+        <line x1="-27.5" y1="12" x2="27.5" y2="12" stroke="#f8fafc" stroke-width="1" stroke-dasharray="1 2" opacity="0.8"/>
+      </g>
+      
+      <!-- Solid Axis Line running through the poles -->
+      <line x1="0" y1="-45" x2="0" y2="45" stroke="#334155" stroke-width="2" />
+      
+      <!-- Pole Labels -->
+      <text x="-6" y="-35" font-family="system-ui, sans-serif" font-size="10" font-weight="800" fill="#ffffff" stroke="#334155" stroke-width="0.5">N</text>
+      <text x="-6" y="42" font-family="system-ui, sans-serif" font-size="10" font-weight="800" fill="#ffffff" stroke="#334155" stroke-width="0.5">S</text>
+    </g>
+    
+    <!-- Dynamic Terminator (Shadow) Overlay -->
+    <!-- This path represents a left-facing semi-circle. It is dynamically rotated to always face AWAY from the Sun -->
+    <path id="earth-shadow" d="M 0 -30 A 30 30 0 0 0 0 30 Z" fill="#0f172a" opacity="0.5" clip-path="url(#earth-clip)" style="transition: transform 0.1s linear;" />
+  </g>
+  
+  <!-- Static Descriptive Labels for Solstices & Equinoxes -->
+  <!-- Dec Solstice -->
+  <g transform="translate(680, 360)">
+    <rect x="-55" y="-12" width="110" height="24" fill="#ffffff" opacity="0.85" rx="4" />
+    <text x="0" y="0" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle" dominant-baseline="central">Dec Solstice</text>
+  </g>
+  <!-- Jun Solstice -->
+  <g transform="translate(120, 360)">
+    <rect x="-55" y="-12" width="110" height="24" fill="#ffffff" opacity="0.85" rx="4" />
+    <text x="0" y="0" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle" dominant-baseline="central">Jun Solstice</text>
+  </g>
+  <!-- Mar Equinox -->
+  <g transform="translate(400, 110)">
+    <rect x="-55" y="-12" width="110" height="24" fill="#ffffff" opacity="0.85" rx="4" />
+    <text x="0" y="0" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle" dominant-baseline="central">Mar Equinox</text>
+  </g>
+  <!-- Sep Equinox -->
+  <g transform="translate(400, 490)">
+    <rect x="-55" y="-12" width="110" height="24" fill="#ffffff" opacity="0.85" rx="4" />
+    <text x="0" y="0" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle" dominant-baseline="central">Sep Equinox</text>
+  </g>
+
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>Earth's Orbit & The Four Seasons</h2>
+        <p style="color: #64748b;">Use the controls on the right to orbit the Earth around the Sun and discover how its constant 23.5° tilt creates the seasons.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+    .ctrl-wrapper { display: flex; flex-direction: column; gap: 16px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; }
+    .slider-box { background: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 12px; }
+    .slider-header { display: flex; justify-content: space-between; align-items: center; }
+    .slider-title { font-weight: 700; color: #0f172a; font-size: 15px; margin: 0; }
+    .slider-val { font-size: 14px; font-weight: 600; color: #2563eb; background: #dbeafe; padding: 4px 10px; border-radius: 16px; }
+    .time-slider { width: 100%; cursor: pointer; accent-color: #2563eb; }
+    
+    .dashboard { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .dash-card { background: #ffffff; padding: 14px; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .dash-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 700; display: flex; align-items: center; gap: 6px;}
+    .dash-val { font-size: 15px; color: #0f172a; font-weight: 600; line-height: 1.4; }
+    .highlight { color: #2563eb; }
+    
+    .play-btn { background: #2563eb; color: #ffffff; border: none; padding: 12px 16px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; justify-content: center; align-items: center; gap: 8px;}
+    .play-btn:hover { background: #1d4ed8; }
+    .play-btn:active { transform: scale(0.98); }
+    
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  </style>
+
+  <div class="ctrl-wrapper">
+    
+    <div class="slider-box">
+      <div class="slider-header">
+        <h3 class="slider-title">Orbit Controls</h3>
+        <span class="slider-val" id="day-counter">Day 0 (Dec 21)</span>
+      </div>
+      <input type="range" class="time-slider" id="timeSlider" min="0" max="365" value="0" oninput="updateEarthState(this.value)">
+      <button id="playBtn" class="play-btn" onclick="togglePlay()">▶ Auto-Play</button>
+    </div>
+
+    <div class="dashboard">
+      <div class="dash-card">
+        <div class="dash-label">☀️ Direct Sunlight Focus</div>
+        <div class="dash-val" id="info-lat">Directly over Tropic of Capricorn (23.5° S)</div>
+      </div>
+      
+      <div class="dash-card">
+        <div class="dash-label">📅 Current Event</div>
+        <div class="dash-val highlight" id="info-event">December Solstice</div>
+      </div>
+
+      <div class="grid-2">
+        <div class="dash-card">
+          <div class="dash-label">North Season</div>
+          <div class="dash-val" id="n-season">Winter</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-label">South Season</div>
+          <div class="dash-val" id="s-season">Summer</div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+
+  <script>
+    let isPlaying = false;
+    let playInterval;
+    
+    function updateEarthState(val) {
+      let day = Number(val);
+      
+      // Calculate Earth Position (Counter-Clockwise Orbit)
+      // Day 0 = Right side (angle 0)
+      let angle = (day / 365) * 2 * Math.PI;
+      let x = 400 + 280 * Math.cos(angle);
+      let y = 300 - 140 * Math.sin(angle); 
+      
+      // Update Earth Container translation
+      document.getElementById(`earth-container`).setAttribute(`transform`, `translate(${x}, ${y})`);
+      
+      // Update Sun Ray connecting line
+      document.getElementById(`sun-ray`).setAttribute(`x2`, `${x}`);
+      document.getElementById(`sun-ray`).setAttribute(`y2`, `${y}`);
+      
+      // Calculate Shadow Rotation
+      // Vector from Earth to Sun
+      let dx = 400 - x;
+      let dy = 300 - y;
+      let shadowAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+      document.getElementById(`earth-shadow`).setAttribute(`transform`, `rotate(${shadowAngle})`);
+      
+      // -- UI Dashboard Logic --
+      
+      // Calculate day to month mapping rough approximation for header
+      const months = [`Jan`, `Feb`, `Mar`, `Apr`, `May`, `Jun`, `Jul`, `Aug`, `Sep`, `Oct`, `Nov`, `Dec`];
+      let monthIndex = Math.floor(((day + 10) % 365) / 30.416);
+      if (monthIndex < 0) monthIndex = 0;
+      if (monthIndex > 11) monthIndex = 11;
+      document.getElementById(`day-counter`).textContent = `Day ${day} (${months[monthIndex]})`;
+      
+      // Season & Event Text Updates
+      let nSeason = ``;
+      let sSeason = ``;
+      let eventName = `Transitioning...`;
+      
+      if (day >= 350 || day <= 15) {
+        eventName = `December Solstice`;
+        nSeason = `Winter`; sSeason = `Summer`;
+      } else if (day > 75 && day < 105) {
+        eventName = `March Equinox`;
+        nSeason = `Spring`; sSeason = `Autumn`;
+      } else if (day >= 165 && day <= 195) {
+        eventName = `June Solstice`;
+        nSeason = `Summer`; sSeason = `Winter`;
+      } else if (day > 260 && day < 290) {
+        eventName = `September Equinox`;
+        nSeason = `Autumn`; sSeason = `Spring`;
+      } else if (day > 15 && day <= 75) {
+        nSeason = `Late Winter`; sSeason = `Late Summer`;
+      } else if (day >= 105 && day < 165) {
+        nSeason = `Late Spring`; sSeason = `Late Autumn`;
+      } else if (day > 195 && day <= 260) {
+        nSeason = `Late Summer`; sSeason = `Late Winter`;
+      } else {
+        nSeason = `Late Autumn`; sSeason = `Late Spring`;
+      }
+      
+      document.getElementById(`info-event`).textContent = eventName;
+      document.getElementById(`n-season`).textContent = nSeason;
+      document.getElementById(`s-season`).textContent = sSeason;
+      
+      // Direct Sunlight Latitude
+      let sunLat = -23.5 * Math.cos(angle);
+      let latString = ``;
+      
+      if (Math.abs(sunLat) <= 1.5) {
+        latString = `Directly over Equator (0.0°)`;
+      } else if (sunLat > 0) {
+        latString = `Directly over N. Hemisphere (${sunLat.toFixed(1)}° N)`;
+      } else {
+        latString = `Directly over S. Hemisphere (${Math.abs(sunLat).toFixed(1)}° S)`;
+      }
+      document.getElementById(`info-lat`).textContent = latString;
+
+      // Telemetry
+      if (window.sendEventToAI && day % 45 === 0) { 
+        window.sendEventToAI(`User progressed orbit to day ${day}`); 
+      }
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      let btn = document.getElementById(`playBtn`);
+      if (isPlaying) {
+        btn.innerHTML = `⏸ Pause Auto-Play`;
+        playInterval = setInterval(() => {
+          let slider = document.getElementById(`timeSlider`);
+          let nextVal = (Number(slider.value) + 1) % 365;
+          slider.value = nextVal;
+          updateEarthState(nextVal);
+        }, 40);
+      } else {
+        btn.innerHTML = `▶ Auto-Play`;
+        clearInterval(playInterval);
+      }
+    }
+
+    // Initialize graphic on load
+    setTimeout(() => { updateEarthState(0); }, 100);
+  </script>
+    </div>
+</body>
+</html>

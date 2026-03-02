@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Mechanism of the Seasons</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 950 540" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif;">
+    <defs>
+      <!-- Sun Glow Filters -->
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+      
+      <!-- Earth Clip Path -->
+      <clipPath id="earth-clip">
+        <circle cx="0" cy="0" r="110" />
+      </clipPath>
+    </defs>
+
+    <!-- Center Divider -->
+    <line x1="475" y1="40" x2="475" y2="500" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 6" />
+
+    <!-- Connecting Zoom Cone (Dynamic) -->
+    <polygon id="zoom-cone" points="365,258 720,160 720,380 365,282" fill="rgba(59, 130, 246, 0.04)" stroke="rgba(59, 130, 246, 0.3)" stroke-width="1.5" stroke-dasharray="4 4" />
+
+    <!-- ================= PANEL 1: ORBIT VIEW ================= -->
+    <g id="panel-1">
+      <!-- Title -->
+      <rect x="130" y="24" width="200" height="32" rx="6" fill="#ffffff" opacity="0.9" />
+      <text x="230" y="45" font-size="16" font-weight="700" fill="#0f172a" text-anchor="middle" letter-spacing="0.5">TOP-DOWN ORBIT VIEW</text>
+
+      <!-- Orbit Path -->
+      <circle cx="230" cy="270" r="150" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="8 8" />
+      
+      <!-- Orbital Axis Crosshairs -->
+      <line x1="230" y1="100" x2="230" y2="440" stroke="#e2e8f0" stroke-width="1" />
+      <line x1="60" y1="270" x2="400" y2="270" stroke="#e2e8f0" stroke-width="1" />
+
+      <!-- Season Labels -->
+      <rect x="23" y="260" width="40" height="20" rx="4" fill="#ffffff" opacity="0.8" />
+      <text x="43" y="274" font-size="12" font-weight="600" fill="#475569" text-anchor="middle">JUN</text>
+
+      <rect x="395" y="260" width="40" height="20" rx="4" fill="#ffffff" opacity="0.8" />
+      <text x="415" y="274" font-size="12" font-weight="600" fill="#475569" text-anchor="middle">DEC</text>
+
+      <rect x="210" y="90" width="40" height="20" rx="4" fill="#ffffff" opacity="0.8" />
+      <text x="230" y="104" font-size="12" font-weight="600" fill="#475569" text-anchor="middle">MAR</text>
+
+      <rect x="210" y="435" width="40" height="20" rx="4" fill="#ffffff" opacity="0.8" />
+      <text x="230" y="449" font-size="12" font-weight="600" fill="#475569" text-anchor="middle">SEP</text>
+
+      <!-- Sun -->
+      <g transform="translate(230, 270)">
+        <circle cx="0" cy="0" r="28" fill="#fef3c7" filter="url(#glow)" />
+        <circle cx="0" cy="0" r="20" fill="#fde68a" />
+        <circle cx="0" cy="0" r="14" fill="#f59e0b" />
+      </g>
+
+      <!-- Dynamic Orbiting Earth -->
+      <g id="orbit-earth" transform="translate(380, 270)">
+        <circle cx="0" cy="0" r="14" fill="#3b82f6" />
+        <path d="M 0,-14 A 14,14 0 0,1 0,14 Z" fill="rgba(15, 23, 42, 0.4)" transform="rotate(180)" id="orbit-shadow" />
+        <!-- Fixed Axis Tilt relative to Space -->
+        <line x1="0" y1="-22" x2="0" y2="22" stroke="#0f172a" stroke-width="2.5" transform="rotate(23.5)" />
+        <polygon points="0,-24 -3,-18 3,-18" fill="#0f172a" transform="rotate(23.5)" />
+      </g>
+    </g>
+
+    <!-- ================= PANEL 2: DETAIL VIEW ================= -->
+    <g id="panel-2">
+      <!-- Title -->
+      <rect x="610" y="24" width="220" height="32" rx="6" fill="#ffffff" opacity="0.9" />
+      <text x="720" y="45" font-size="16" font-weight="700" fill="#0f172a" text-anchor="middle" letter-spacing="0.5">SIDE VIEW: SUNLIGHT & TILT</text>
+
+      <!-- Incoming Sun Rays -->
+      <g stroke="#f59e0b" stroke-width="2" fill="none" opacity="0.8">
+        <line x1="520" y1="180" x2="600" y2="180" stroke-dasharray="4 4"/>
+        <polygon points="600,180 592,176 592,184" fill="#f59e0b" stroke="none" />
+        
+        <line x1="520" y1="360" x2="600" y2="360" stroke-dasharray="4 4"/>
+        <polygon points="600,360 592,356 592,364" fill="#f59e0b" stroke="none" />
+      </g>
+      
+      <!-- Subsolar Point Ray (Center) -->
+      <g transform="translate(0, 0)">
+        <line x1="520" y1="270" x2="605" y2="270" stroke="#ea580c" stroke-width="4" />
+        <polygon points="605,270 595,264 595,276" fill="#ea580c" />
+        <rect x="520" y="245" width="80" height="18" rx="2" fill="#ffffff" opacity="0.8" />
+        <text x="560" y="258" font-size="11" font-weight="700" fill="#ea580c" text-anchor="middle">DIRECT RAY</text>
+      </g>
+
+      <!-- Magnified Earth -->
+      <g id="detail-group" transform="translate(720, 270)">
+        
+        <!-- Rotating Globe based on Season -->
+        <g id="detail-earth-tilt" transform="rotate(23.5)">
+          <!-- Ocean Base -->
+          <circle cx="0" cy="0" r="110" fill="#3b82f6" />
+          
+          <!-- Latitude and Longitude Grid -->
+          <g clip-path="url(#earth-clip)">
+            <!-- Longitudes -->
+            <ellipse cx="0" cy="0" rx="55" ry="110" fill="none" stroke="#60a5fa" stroke-width="1.5" />
+            <line x1="0" y1="-110" x2="0" y2="110" stroke="#60a5fa" stroke-width="1.5" />
+            
+            <!-- Arctic & Antarctic Circles -->
+            <line x1="-110" y1="-100.9" x2="110" y2="-100.9" stroke="#93c5fd" stroke-width="1.5" stroke-dasharray="3 3" />
+            <line x1="-110" y1="100.9" x2="110" y2="100.9" stroke="#93c5fd" stroke-width="1.5" stroke-dasharray="3 3" />
+            
+            <!-- Tropics (Cancer & Capricorn at ~23.5 deg = sin(23.5)*110 = 43.8) -->
+            <line x1="-110" y1="-43.8" x2="110" y2="-43.8" stroke="#f8fafc" stroke-width="2" stroke-dasharray="4 4" />
+            <line x1="-110" y1="43.8" x2="110" y2="43.8" stroke="#f8fafc" stroke-width="2" stroke-dasharray="4 4" />
+            
+            <!-- Equator -->
+            <line x1="-110" y1="0" x2="110" y2="0" stroke="#ffffff" stroke-width="3" />
+          </g>
+          
+          <!-- Axis Line -->
+          <line x1="0" y1="-140" x2="0" y2="140" stroke="#0f172a" stroke-width="4" stroke-linecap="round" />
+          <polygon points="0,-146 -6,-134 6,-134" fill="#0f172a" />
+          
+          <!-- Hemisphere Labels -->
+          <rect x="-10" y="-165" width="20" height="16" rx="2" fill="#ffffff" opacity="0.8" />
+          <text x="0" y="-153" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">N</text>
+          
+          <rect x="-10" y="148" width="20" height="16" rx="2" fill="#ffffff" opacity="0.8" />
+          <text x="0" y="160" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">S</text>
+        </g>
+        
+        <!-- Fixed Shadow (Always dark on the right side) -->
+        <path d="M 0,-110 A 110,110 0 0,1 0,110 Z" fill="rgba(15, 23, 42, 0.65)" />
+        <line x1="0" y1="-110" x2="0" y2="110" stroke="#0f172a" stroke-width="2" />
+      </g>
+      
+      <!-- Static Labels for Latitudes -->
+      <g transform="translate(845, 270)">
+        <text x="0" y="-40" font-size="11" font-weight="600" fill="#475569">Tropic of Cancer</text>
+        <text x="0" y="4" font-size="11" font-weight="600" fill="#475569">Equator</text>
+        <text x="0" y="48" font-size="11" font-weight="600" fill="#475569">Tropic of Capricorn</text>
+      </g>
+    </g>
+  </svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Mechanism of the Seasons</h2>
+        <p style="color: #64748b;">Use the controls on the right to orbit the Earth and see how its fixed tilt changes the angle of sunlight throughout the year.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="display: flex; flex-direction: column; height: 100%; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; background: #ffffff; padding: 24px;">
+    
+    <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #0f172a;">Orbital Controls</h2>
+    
+    <!-- Time Slider -->
+    <div style="margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="font-size: 14px; font-weight: 600; color: #475569;">Time of Year (Orbit Position)</span>
+        <span id="month-indicator" style="font-size: 14px; font-weight: 700; color: #2563eb;">December</span>
+      </div>
+      <input type="range" id="timeSlider" min="0" max="360" value="0" step="1" oninput="updateState(this.value)" style="width: 100%; accent-color: #2563eb; cursor: pointer;">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-top: 4px; font-weight: 600;">
+        <span>Dec</span>
+        <span>Mar</span>
+        <span>Jun</span>
+        <span>Sep</span>
+        <span>Dec</span>
+      </div>
+    </div>
+
+    <!-- Play/Pause Button -->
+    <button id="playBtn" onclick="togglePlay()" style="background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; margin-bottom: 24px;">
+      ▶ Auto-Play
+    </button>
+
+    <!-- Dynamic Info Panel -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
+      <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px;">Current State Observation</h3>
+      
+      <div style="margin-bottom: 12px;">
+        <span style="font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase;">Northern Hemisphere Season</span>
+        <div id="info-season" style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 4px;">Winter</div>
+      </div>
+      
+      <div style="margin-bottom: 12px;">
+        <span style="font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase;">Direct Sunlight Hits</span>
+        <div id="info-subsolar" style="font-size: 15px; font-weight: 600; color: #ea580c; margin-top: 4px;">23.5° South (Tropic of Capricorn)</div>
+      </div>
+      
+      <div>
+        <span style="font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase;">Explanation</span>
+        <div id="info-desc" style="font-size: 14px; line-height: 1.5; color: #334155; margin-top: 4px;">
+          The Northern Hemisphere is currently tilted away from the Sun. Sunlight hits at a lower angle, causing colder temperatures.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isPlaying = false;
+    let playInterval;
+
+    function updateState(val) {
+      let thetaDeg = Number(val);
+      let thetaRad = thetaDeg * Math.PI / 180;
+      
+      // Calculate Earth position in Orbit View (cx=230, cy=270, r=150)
+      let cx = 230 + 150 * Math.cos(thetaRad);
+      let cy = 270 + 150 * Math.sin(thetaRad);
+      
+      document.getElementById(`orbit-earth`).setAttribute(`transform`, `translate(${cx}, ${cy})`);
+      
+      // Orient the mini-shadow dynamically so it always faces away from the sun at (230, 270)
+      let shadowRot = thetaDeg;
+      document.getElementById(`orbit-shadow`).setAttribute(`transform`, `rotate(${shadowRot})`);
+
+      // Update the connecting Zoom Cone to track the orbiting Earth
+      document.getElementById(`zoom-cone`).setAttribute(`points`, `${cx},${cy - 14} 720,160 720,380 ${cx},${cy + 14}`);
+
+      // Calculate the effective tilt relative to the sun's rays for the Detail View
+      // At theta=0 (Winter), North pole tilts right (away from sun on the left). 
+      // Rotation positive = clockwise.
+      let tiltEff = 23.5 * Math.cos(thetaRad);
+      document.getElementById(`detail-earth-tilt`).setAttribute(`transform`, `rotate(${tiltEff})`);
+
+      // Month calculation
+      let monthIdx = Math.floor(((thetaDeg + 15) % 360) / 30);
+      let months = [`December`, `January`, `February`, `March`, `April`, `May`, `June`, `July`, `August`, `September`, `October`, `November`];
+      let currentMonth = months[monthIdx];
+      
+      document.getElementById(`month-indicator`).textContent = currentMonth;
+
+      // Season logic
+      let seasonNH = ``;
+      let subsolarDesc = ``;
+      let descText = ``;
+
+      let lat = -tiltEff; // Positive lat = North, Negative lat = South
+
+      if (Math.abs(lat) < 0.5) {
+          subsolarDesc = `0.0° (Equator)`;
+      } else if (lat > 0) {
+          subsolarDesc = `${Math.abs(lat).toFixed(1)}° North`;
+          if (lat > 23) subsolarDesc += ` (Tropic of Cancer)`;
+      } else {
+          subsolarDesc = `${Math.abs(lat).toFixed(1)}° South`;
+          if (lat < -23) subsolarDesc += ` (Tropic of Capricorn)`;
+      }
+
+      if (thetaDeg < 45 || thetaDeg >= 315) {
+          seasonNH = `Winter`;
+          descText = `The Northern Hemisphere is tilted away from the Sun. Sunlight hits it at a shallow angle, scattering energy and causing colder temperatures.`;
+      } else if (thetaDeg >= 45 && thetaDeg < 135) {
+          seasonNH = `Spring`;
+          descText = `The Earth's axis is tilted sideways relative to the Sun. Both hemispheres receive roughly equal amounts of direct sunlight.`;
+      } else if (thetaDeg >= 135 && thetaDeg < 225) {
+          seasonNH = `Summer`;
+          descText = `The Northern Hemisphere is tilted towards the Sun. Sunlight strikes it directly, concentrating energy and causing warmer temperatures.`;
+      } else {
+          seasonNH = `Autumn`;
+          descText = `The Earth's axis is tilted sideways relative to the Sun. Both hemispheres receive roughly equal amounts of direct sunlight.`;
+      }
+
+      document.getElementById(`info-season`).textContent = seasonNH;
+      document.getElementById(`info-subsolar`).textContent = subsolarDesc;
+      document.getElementById(`info-desc`).textContent = descText;
+
+      // Telemetry
+      if (window.sendEventToAI && thetaDeg % 90 === 0) {
+          window.sendEventToAI(`User reached ${currentMonth} / ${seasonNH}`);
+      }
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      let btn = document.getElementById(`playBtn`);
+      if (isPlaying) {
+        if (btn) btn.innerHTML = `⏸ Pause`;
+        playInterval = setInterval(() => {
+          let slider = document.getElementById(`timeSlider`);
+          let nextVal = (Number(slider.value) + 1) % 360;
+          slider.value = nextVal;
+          updateState(nextVal);
+        }, 40);
+      } else {
+        if (btn) btn.innerHTML = `▶ Auto-Play`;
+        clearInterval(playInterval);
+      }
+    }
+
+    // Initialize state
+    updateState(0);
+  </script>
+    </div>
+</body>
+</html>
