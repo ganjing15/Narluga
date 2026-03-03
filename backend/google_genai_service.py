@@ -13,6 +13,7 @@ from google.genai.errors import APIError
 import traceback
 import json
 import re
+import time
 
 load_dotenv()
 
@@ -645,9 +646,12 @@ async def handle_live_session(websocket: WebSocket, sources: list, research_mode
         # Signal graphic is complete
         await websocket.send_json({"type": "phase", "phase": "complete"})
 
-        # 2. Phase 2: Live Presenter — delegate to shared helper
+        # 2. Phase 2: Live Presenter — loop to support multiple start/end cycles
         # Improvement D: pass grounding context into live session so AI can reference sources
-        await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, grounding_sources, controls_inventory)
+        while True:
+            ws_alive = await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, grounding_sources, controls_inventory)
+            if not ws_alive:
+                break  # Client disconnected — stop looping
 
     except Exception as e:
         print(f"[Session] UNHANDLED EXCEPTION in handle_live_session: {type(e).__name__}: {e}")
@@ -666,7 +670,10 @@ async def handle_live_restart(websocket: WebSocket, narration_context: str, sour
     Skips graphic generation and goes straight to the Live API.
     """
     print(f"[Live Restart] Starting with {len(source_labels)} source label(s)")
-    await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, controls_inventory=controls_inventory)
+    while True:
+        ws_alive = await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, controls_inventory=controls_inventory)
+        if not ws_alive:
+            break
 
 
 def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
@@ -981,7 +988,8 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     
     # --------------------------------------------------------------------------------
     # Wait for user to click "Start", THEN connect to Gemini Live API.
-    # Simple and reliable — no pre-connection, no timeout issues.
+    # Returns True if session ended cleanly (WS still alive, can start another),
+    # or False if client disconnected (WS closed, should stop).
     # --------------------------------------------------------------------------------
     MAX_RECONNECT_ATTEMPTS = 3
     reconnect_count = 0
@@ -997,14 +1005,19 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 break
     except WebSocketDisconnect:
         print("[WebSocket] Client disconnected before starting session.")
-        return
+        return False
     except Exception as e:
         print(f"[WebSocket] Error while waiting to start: {e}")
-        return
+        return False
+
+    t0 = time.time()
+    session_holder["t0"] = t0
+    print(f"[TIMING] T+0.000s: start_live_session received")
 
     # Immediately signal conversation phase so frontend transitions instantly
     # (don't wait for Gemini connection — the UI should feel responsive)
     await websocket.send_json({"type": "phase", "phase": "conversation"})
+    print(f"[TIMING] T+{time.time()-t0:.3f}s: phase:conversation sent")
 
     print("[WebSocket] User clicked Start — connecting to Gemini Live API...")
 
@@ -1018,12 +1031,12 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             break
 
         try:
-            print("[Gemini] Attempting to connect to Live API...")
+            print(f"[TIMING] T+{time.time()-t0:.3f}s: connecting to Gemini Live API...")
             async with client.aio.live.connect(model=model, config=config) as session:
                 session_holder["session"] = session
                 go_away_event.clear()
                 reconnect_count = 0  # Reset on successful connection
-                print("[Gemini] Connected to Live API")
+                print(f"[TIMING] T+{time.time()-t0:.3f}s: Gemini connected")
 
                 if is_first_connection:
                     is_first_connection = False
@@ -1032,6 +1045,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                     # now send ready to confirm Gemini is connected
                     async with ws_lock:
                         await websocket.send_json({"type": "ready"})
+                    print(f"[TIMING] T+{time.time()-t0:.3f}s: ready sent to frontend")
                 else:
                     print("[Gemini] Session resumed successfully — conversation continues seamlessly.")
 
@@ -1067,6 +1081,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                         print(f"[Receive Task] Gemini session died (1011). Will reconnect.")
                                         return  # Let the outer loop handle reconnection
                                     print(f"[Receive Task] Error sending audio to Gemini: {inner_e}")
+                            elif payload.get("type") == "end_live_session":
+                                print("[Receive Task] User ended session")
+                                session_holder["alive"] = False
+                                return  # Exit relay — Gemini closes, WS stays open
+
                             elif "clientContent" in payload:
                                 try:
                                     text = payload["clientContent"]["turns"][0]["parts"][0]["text"]
@@ -1127,6 +1146,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                     error_1011_count = 0
                                     for part in server_content.model_turn.parts:
                                         if part.inline_data:
+                                            if not session_holder.get("first_audio_sent"):
+                                                session_holder["first_audio_sent"] = True
+                                                _t0 = session_holder.get("t0")
+                                                if _t0:
+                                                    print(f"[TIMING] T+{time.time()-_t0:.3f}s: first audio chunk sent to frontend")
                                             audio_base64 = base64.b64encode(part.inline_data.data).decode("utf-8")
                                             async with ws_lock:
                                                 await websocket.send_json({
@@ -1341,13 +1365,14 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 # before start_live_session is sent), so no need to wait.
                 if not session_holder.get("prompted"):
                     session_holder["prompted"] = True
-                    print("[Gemini] Sending initial prompt immediately")
+                    print(f"[TIMING] T+{time.time()-t0:.3f}s: sending initial prompt to Gemini")
                     try:
                         await session.send_client_content(
                             turns=[types.Content(parts=[types.Part.from_text(
                                 text="The user just joined the session. Begin your welcome and overview now."
                             )])]
                         )
+                        print(f"[TIMING] T+{time.time()-t0:.3f}s: initial prompt sent")
                     except Exception as e:
                         print(f"[Gemini] Error sending initial prompt: {e}")
 
@@ -1392,10 +1417,15 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             print(f"[Gemini] Will retry in {reconnect_count}s...")
             await asyncio.sleep(1.0 * reconnect_count)
 
-    print("[Live Session] Complete/Terminated.")
-
-    # Send a clean WebSocket close so the frontend gets a 1000 instead of 1006
-    try:
-        await websocket.close(code=1000, reason="Live session ended. Click 'Start Live Conversation' to reconnect.")
-    except Exception:
-        pass  # Already closed by client
+    # Return True if WS is still alive (user ended session), False if client disconnected
+    ws_still_alive = not client_disconnected.is_set()
+    if ws_still_alive:
+        print("[Live Session] Session ended. WebSocket kept alive for fast reconnect.")
+        # Send phase:complete so frontend shows "Start Live Conversation" button again
+        try:
+            await websocket.send_json({"type": "phase", "phase": "complete"})
+        except Exception:
+            ws_still_alive = False
+    else:
+        print("[Live Session] Client disconnected.")
+    return ws_still_alive

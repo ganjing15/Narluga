@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Earth's Orbit & The Seasons</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 500" width="100%" height="100%" style="font-family: system-ui, -apple-system, sans-serif;">
+    <defs>
+      <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#fef08a" />
+        <stop offset="60%" stop-color="#f59e0b" />
+        <stop offset="100%" stop-color="#ea580c" />
+      </radialGradient>
+      
+      <radialGradient id="earthGrad" cx="40%" cy="40%" r="60%">
+        <stop offset="0%" stop-color="#38bdf8" />
+        <stop offset="80%" stop-color="#0284c7" />
+        <stop offset="100%" stop-color="#0369a1" />
+      </radialGradient>
+
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+
+      <style>
+        @keyframes flowRays {
+          from { stroke-dashoffset: 20; }
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes pulseSun {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.03); }
+          100% { transform: scale(1); }
+        }
+        .ray {
+          stroke-dasharray: 10 10;
+          animation: flowRays 1s linear infinite;
+        }
+        .sun-body {
+          transform-origin: -50px 250px;
+          animation: pulseSun 4s ease-in-out infinite;
+        }
+        .tropic-line {
+          stroke-dasharray: 6 4;
+        }
+      </style>
+    </defs>
+
+    <!-- Sun and Light Rays -->
+    <g id="sun-system">
+      <circle id="sun" class="sun-body" cx="-50" cy="250" r="140" fill="url(#sunGrad)" filter="url(#glow)" />
+      
+      <g stroke="#fbbf24" stroke-width="2" opacity="0.6">
+        <line class="ray" x1="100" y1="170" x2="250" y2="170" />
+        <line class="ray" x1="100" y1="210" x2="250" y2="210" />
+        
+        <!-- Central Direct Ray -->
+        <line class="ray" x1="100" y1="250" x2="225" y2="250" stroke-width="4" stroke="#f59e0b" />
+        <polygon points="225,245 235,250 225,255" fill="#f59e0b" />
+        
+        <line class="ray" x1="100" y1="290" x2="250" y2="290" />
+        <line class="ray" x1="100" y1="330" x2="250" y2="330" />
+      </g>
+      
+      <!-- Sunlight Label -->
+      <g transform="translate(100, 235)">
+        <rect x="0" y="-12" width="105" height="18" fill="#ffffff" opacity="0.85" rx="4" />
+        <text x="6" y="1" font-size="12" font-weight="bold" fill="#ea580c">Direct Sunlight</text>
+      </g>
+    </g>
+
+    <!-- Main Large Earth View -->
+    <g id="main-earth-group" transform="translate(350, 250)">
+      <!-- Earth Background -->
+      <circle r="120" fill="url(#earthGrad)" />
+      
+      <!-- Rotator Group for Axis and Latitudes -->
+      <g id="earth-rotator" transform="rotate(23.5)">
+        <!-- Axis Line -->
+        <line x1="0" y1="-155" x2="0" y2="155" stroke="#f8fafc" stroke-width="4" stroke-linecap="round" />
+        
+        <!-- North Pole Label -->
+        <rect x="-8" y="-178" width="16" height="18" fill="#ffffff" opacity="0.8" rx="4" />
+        <text x="-5" y="-164" font-size="12" font-weight="bold" fill="#334155">N</text>
+        
+        <!-- South Pole Label -->
+        <rect x="-8" y="160" width="16" height="18" fill="#ffffff" opacity="0.8" rx="4" />
+        <text x="-4" y="174" font-size="12" font-weight="bold" fill="#334155">S</text>
+
+        <!-- Arctic Circle (66.5 N) -->
+        <line x1="-47.8" y1="-110" x2="47.8" y2="-110" stroke="#f8fafc" stroke-width="2" stroke-dasharray="4 4" opacity="0.6" />
+        
+        <!-- Tropic of Cancer (23.5 N) -->
+        <line class="tropic-line" x1="-110" y1="-47.8" x2="110" y2="-47.8" stroke="#fef08a" stroke-width="2" />
+        <rect x="-105" y="-62" width="100" height="14" fill="#ffffff" opacity="0.85" rx="2" />
+        <text x="-101" y="-51" font-size="10" font-weight="bold" fill="#0f172a">Tropic of Cancer</text>
+
+        <!-- Equator (0) -->
+        <line x1="-120" y1="0" x2="120" y2="0" stroke="#f8fafc" stroke-width="3" />
+        <rect x="-105" y="-14" width="50" height="14" fill="#ffffff" opacity="0.85" rx="2" />
+        <text x="-101" y="-3" font-size="10" font-weight="bold" fill="#0f172a">Equator</text>
+
+        <!-- Tropic of Capricorn (23.5 S) -->
+        <line class="tropic-line" x1="-110" y1="47.8" x2="110" y2="47.8" stroke="#fef08a" stroke-width="2" />
+        <rect x="-105" y="48" width="112" height="14" fill="#ffffff" opacity="0.85" rx="2" />
+        <text x="-101" y="59" font-size="10" font-weight="bold" fill="#0f172a">Tropic of Capricorn</text>
+        
+        <!-- Antarctic Circle (66.5 S) -->
+        <line x1="-47.8" y1="110" x2="47.8" y2="110" stroke="#f8fafc" stroke-width="2" stroke-dasharray="4 4" opacity="0.6" />
+      </g>
+
+      <!-- Fixed Terminator (Shadow on the night side, facing away from sun) -->
+      <!-- The arc command draws perfectly over the right half of the earth -->
+      <path id="terminator" d="M 0 -120 A 120 120 0 0 1 0 120 Z" fill="#0f172a" opacity="0.55" />
+    </g>
+
+    <!-- Mini-Map (Orbit Top View) -->
+    <g id="minimap" transform="translate(640, 130)">
+      <!-- Map Background & Box -->
+      <rect x="-110" y="-100" width="220" height="200" fill="#f1f5f9" rx="12" stroke="#e2e8f0" stroke-width="1" />
+      <text x="-100" y="-80" font-size="12" font-weight="bold" fill="#64748b" letter-spacing="0.5">ORBIT MINI-MAP</text>
+      
+      <!-- Orbit Path -->
+      <circle r="70" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 4" />
+      
+      <!-- Center Sun -->
+      <circle r="12" fill="#f59e0b" filter="url(#glow)" />
+      
+      <!-- Orbiting Earth -->
+      <!-- Initial state: Month 0 (Winter Solstice), right side -->
+      <g id="mini-earth-group" transform="translate(70, 0)">
+        <circle r="8" fill="#0284c7" />
+        <!-- Fixed Axis Line indicating 3D tilt direction (Always points RIGHT in this 2D plane) -->
+        <line x1="-12" y1="0" x2="16" y2="0" stroke="#ef4444" stroke-width="2" stroke-linecap="round" />
+        <polygon points="16,-3 20,0 16,3" fill="#ef4444" />
+        <!-- Mini Terminator -->
+        <path d="M 0 -8 A 8 8 0 0 1 0 8 Z" fill="#0f172a" opacity="0.6" />
+      </g>
+      
+      <!-- Orbit Labels -->
+      <rect x="75" y="-7" width="30" height="14" fill="#ffffff" opacity="0.9" rx="2" />
+      <text x="78" y="4" font-size="10" font-weight="bold" fill="#475569">DEC</text>
+
+      <rect x="-105" y="-7" width="30" height="14" fill="#ffffff" opacity="0.9" rx="2" />
+      <text x="-102" y="4" font-size="10" font-weight="bold" fill="#475569">JUN</text>
+
+      <rect x="-15" y="-93" width="30" height="14" fill="#ffffff" opacity="0.9" rx="2" />
+      <text x="-12" y="-82" font-size="10" font-weight="bold" fill="#475569">MAR</text>
+
+      <rect x="-15" y="79" width="30" height="14" fill="#ffffff" opacity="0.9" rx="2" />
+      <text x="-12" y="90" font-size="10" font-weight="bold" fill="#475569">SEP</text>
+    </g>
+  </svg>
+    </div>
+    <div class="controls-container">
+        <h2>Earth's Orbit & The Seasons</h2>
+        <p style="color: #64748b;">Use the controls on the right to orbit the Earth and observe how its fixed tilt changes the angle of direct sunlight.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="padding: 24px; background: #ffffff; height: 100%; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; gap: 20px;">
+    
+    <div>
+      <h2 style="margin: 0 0 8px 0; font-size: 22px; color: #0f172a; font-weight: 700;">Earth's Orbit & Seasons</h2>
+      <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.5;">
+        As the Earth orbits the Sun, its axis remains fixed. Explore how this constant tilt changes the angle of incoming sunlight throughout the year.
+      </p>
+    </div>
+
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <label for="monthSlider" style="font-weight: 600; font-size: 14px; color: #1e293b;">Time of Year</label>
+        <button id="playBtn" onclick="togglePlay()" style="background: #2563eb; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background 0.2s;">
+          ▶ Auto-Play
+        </button>
+      </div>
+      <input type="range" id="monthSlider" min="0" max="12" step="0.05" value="0" oninput="updateState(Number(this.value))" style="width: 100%; cursor: pointer; accent-color: #2563eb;">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b; margin-top: 8px; font-weight: 500;">
+        <span>Dec</span>
+        <span>Mar</span>
+        <span>Jun</span>
+        <span>Sep</span>
+        <span>Dec</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="background: #ffffff; border-left: 4px solid #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 14px; border-radius: 0 8px 8px 0; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+        <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Current Phase</div>
+        <div id="info-month" style="font-size: 16px; font-weight: 700; color: #0f172a;">December 21 (Winter Solstice)</div>
+      </div>
+
+      <div style="background: #ffffff; border-left: 4px solid #10b981; box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 14px; border-radius: 0 8px 8px 0; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+        <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Northern Hemisphere Season</div>
+        <div id="info-season" style="font-size: 16px; font-weight: 700; color: #0f172a;">Winter (Leaning away from Sun)</div>
+      </div>
+
+      <div style="background: #ffffff; border-left: 4px solid #f59e0b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 14px; border-radius: 0 8px 8px 0; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+        <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Subsolar Point (Direct Sunlight)</div>
+        <div id="info-subsolar" style="font-size: 16px; font-weight: 700; color: #0f172a;">23.5° S (Tropic of Capricorn)</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isPlaying = false;
+    let playInterval;
+
+    const monthNames = [
+      `December`, `January`, `February`, `March`, 
+      `April`, `May`, `June`, `July`, 
+      `August`, `September`, `October`, `November`, `December`
+    ];
+
+    function updateState(val) {
+      // 1. Calculate Tilt for Main Earth Diagram
+      // In this 2D projection, the Earth's absolute tilt stays fixed, 
+      // but relative to the Sun, it changes from +23.5 (Dec) to -23.5 (Jun)
+      let tilt = 23.5 * Math.cos(val * 30 * Math.PI / 180);
+      let earthRotator = document.getElementById(`earth-rotator`);
+      if (earthRotator) {
+        earthRotator.setAttribute(`transform`, `rotate(${tilt})`);
+      }
+
+      // 2. Calculate Orbit Position for Mini-Map
+      // Val goes 0 to 12. 0 = Right, 3 = Top, 6 = Left, 9 = Bottom
+      let angleDeg = -val * 30; 
+      let miniX = 70 * Math.cos(angleDeg * Math.PI / 180);
+      let miniY = 70 * Math.sin(angleDeg * Math.PI / 180);
+      let miniEarth = document.getElementById(`mini-earth-group`);
+      if (miniEarth) {
+        miniEarth.setAttribute(`transform`, `translate(${miniX}, ${miniY})`);
+      }
+
+      // 3. Update Text Content
+      // Find Month & Event Name
+      let exactMonth = val % 12;
+      let monthIdx = Math.floor(exactMonth);
+      let eventStr = ``;
+      
+      // Determine key events
+      if (exactMonth < 0.2 || exactMonth > 11.8) eventStr = ` (Winter Solstice)`;
+      else if (Math.abs(exactMonth - 3) < 0.2) eventStr = ` (Vernal Equinox)`;
+      else if (Math.abs(exactMonth - 6) < 0.2) eventStr = ` (Summer Solstice)`;
+      else if (Math.abs(exactMonth - 9) < 0.2) eventStr = ` (Autumnal Equinox)`;
+      
+      document.getElementById(`info-month`).textContent = `${monthNames[monthIdx]} 21${eventStr}`;
+
+      // Determine Season in Northern Hemisphere
+      let season = ``;
+      if (exactMonth >= 0 && exactMonth < 3) season = `Winter (Leaning away from Sun)`;
+      else if (exactMonth >= 3 && exactMonth < 6) season = `Spring (Transitioning toward Sun)`;
+      else if (exactMonth >= 6 && exactMonth < 9) season = `Summer (Leaning toward Sun)`;
+      else season = `Autumn (Transitioning away from Sun)`;
+      
+      // Edge cases exactly at 12
+      if (val === 12) season = `Winter (Leaning away from Sun)`;
+      document.getElementById(`info-season`).textContent = season;
+
+      // Determine Subsolar Point (Latitude receiving direct overhead sunlight)
+      // Positive tilt means axis leans RIGHT (North Pole leans AWAY from light on left)
+      // Therefore sunlight hits SOUTH of the equator. Subsolar = -tilt.
+      let subsolar = -tilt; 
+      let hemi = subsolar > 0.1 ? `N` : (subsolar < -0.1 ? `S` : ``);
+      let absLat = Math.abs(subsolar).toFixed(1);
+      
+      let tropicStr = ``;
+      if (Math.abs(subsolar - 23.5) < 0.5) tropicStr = ` (Tropic of Cancer)`;
+      else if (Math.abs(subsolar + 23.5) < 0.5) tropicStr = ` (Tropic of Capricorn)`;
+      else if (Math.abs(subsolar) < 0.5) tropicStr = ` (Equator)`;
+      
+      document.getElementById(`info-subsolar`).textContent = `${absLat}° ${hemi}${tropicStr}`;
+
+      // Telemetry mapping
+      if (window.sendEventToAI && (Math.abs((val * 10) % 10) < 0.01)) { 
+        window.sendEventToAI(`User observed orbit at month index ${val.toFixed(1)}`); 
+      }
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      let btn = document.getElementById(`playBtn`);
+      if (isPlaying) {
+        if (btn) {
+          btn.innerHTML = `⏸ Pause`;
+          btn.style.background = `#334155`;
+        }
+        clearInterval(playInterval);
+        playInterval = setInterval(() => {
+          let slider = document.getElementById(`monthSlider`);
+          let nextVal = Number(slider.value) + 0.05;
+          if (nextVal >= 12) nextVal = 0;
+          slider.value = nextVal;
+          updateState(nextVal);
+        }, 50);
+      } else {
+        if (btn) {
+          btn.innerHTML = `▶ Auto-Play`;
+          btn.style.background = `#2563eb`;
+        }
+        clearInterval(playInterval);
+      }
+    }
+    
+    // Initial setup
+    updateState(0);
+  </script>
+    </div>
+</body>
+</html>

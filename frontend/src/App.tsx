@@ -415,9 +415,9 @@ function App() {
     micReadyRef.current = false
     workletPreloadedRef.current = false
     hasStartedRef.current = false
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
+    // Tell backend to end Gemini session, but keep WS alive for fast reconnect
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "end_live_session" }))
     }
     if (audioWorkletNodeRef.current) {
       audioWorkletNodeRef.current.disconnect()

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Macroscopic Quantum Tunnelling</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <style>
+  #svg-container {
+    width: 100%;
+    height: 100%;
+    background-color: #f8fafc;
+    position: relative;
+    overflow: hidden;
+  }
+  .svg-text {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    fill: #0f172a;
+    pointer-events: none;
+  }
+  .label-bg {
+    fill: rgba(255, 255, 255, 0.85);
+    rx: 6px;
+  }
+  .energy-line {
+    stroke: #94a3b8;
+    stroke-width: 2;
+    stroke-dasharray: 6 6;
+    transition: stroke 0.3s ease;
+  }
+  .energy-line.active {
+    stroke: #3b82f6;
+    stroke-width: 3;
+    stroke-dasharray: none;
+  }
+  .glow-filter {
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+  }
+  @keyframes pulse {
+    0% { opacity: 0.8; }
+    50% { opacity: 1; filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.9)); }
+    100% { opacity: 0.8; }
+  }
+  #wave-path {
+    animation: pulse 3s infinite ease-in-out;
+  }
+  .hud-text {
+    font-family: monospace;
+    font-size: 12px;
+    fill: #475569;
+  }
+</style>
+
+<div id="svg-container">
+  <svg id="quantum-tunnelling-svg" width="100%" height="100%" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <linearGradient id="wave-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(59, 130, 246, 0.6)" />
+        <stop offset="100%" stop-color="rgba(59, 130, 246, 0.1)" />
+      </linearGradient>
+      <linearGradient id="land-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#f1f5f9" />
+        <stop offset="100%" stop-color="#cbd5e1" />
+      </linearGradient>
+      <pattern id="hatch" width="10" height="10" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+        <line x1="0" y1="0" x2="0" y2="10" stroke="#94a3b8" stroke-width="2" />
+      </pattern>
+    </defs>
+
+    <!-- Background Grid -->
+    <g id="grid" stroke="#e2e8f0" stroke-width="1">
+      <line x1="0" y1="100" x2="800" y2="100" />
+      <line x1="0" y1="200" x2="800" y2="200" />
+      <line x1="0" y1="300" x2="800" y2="300" />
+      <line x1="0" y1="400" x2="800" y2="400" />
+      <line x1="200" y1="0" x2="200" y2="500" />
+      <line x1="400" y1="0" x2="400" y2="500" />
+      <line x1="600" y1="0" x2="600" y2="500" />
+    </g>
+
+    <!-- Energy Landscape -->
+    <g id="landscape">
+      <path id="landscape-path" d="M -10 500 L -10 100 L 100 100 L 100 380 L 380 380 L 380 120 L 520 120 L 520 380 L 810 380 L 810 500 Z" fill="url(#land-grad)" stroke="#64748b" stroke-width="4" stroke-linejoin="round" />
+    </g>
+
+    <!-- Insulating Barrier Fill -->
+    <g id="barrier">
+      <rect x="382" y="122" width="136" height="256" fill="url(#hatch)" opacity="0.5" />
+    </g>
+
+    <!-- Discrete Energy Levels in the Well -->
+    <g id="energy-levels">
+      <line id="level-2" class="energy-line" x1="100" y1="190" x2="380" y2="190" />
+      <line id="level-1" class="energy-line" x1="100" y1="260" x2="380" y2="260" />
+      <line id="level-0" class="energy-line active" x1="100" y1="330" x2="380" y2="330" />
+      
+      <text x="110" y="185" class="hud-text">Level 2 (Quanta: 2)</text>
+      <text x="110" y="255" class="hud-text">Level 1 (Quanta: 1)</text>
+      <text x="110" y="325" class="hud-text">Level 0 (Base State)</text>
+    </g>
+
+    <!-- Macroscopic Wave Function -->
+    <g id="wave-group">
+      <path id="wave-path" d="" fill="url(#wave-grad)" stroke="#2563eb" stroke-width="4" class="glow-filter" />
+      <!-- Core representation of Cooper Pairs -->
+      <circle id="wave-core" cx="240" cy="330" r="6" fill="#ffffff" stroke="#1d4ed8" stroke-width="2" class="glow-filter" />
+    </g>
+
+    <!-- Voltage Meter -->
+    <g id="voltage-meter" transform="translate(680, 100)">
+      <rect x="-60" y="-50" width="120" height="70" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+      <path d="M -40 0 A 40 40 0 0 1 40 0" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-linecap="round" />
+      <path d="M 0 0 L 28 -28" stroke="#fca5a5" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.4" />
+      <!-- Needle Group -->
+      <g id="needle-group">
+        <line x1="0" y1="0" x2="-35" y2="0" stroke="#ef4444" stroke-width="3" stroke-linecap="round" />
+        <circle cx="0" cy="0" r="4" fill="#0f172a" />
+      </g>
+      <text x="0" y="14" font-family="monospace" font-size="10" font-weight="bold" fill="#0f172a" text-anchor="middle">VOLTAGE</text>
+    </g>
+
+    <!-- Painter's Model Labels (Background rects + Text) -->
+    <g id="labels">
+      <rect x="135" y="410" width="190" height="40" class="label-bg" />
+      <text x="230" y="435" class="svg-text" text-anchor="middle">Zero-Voltage State</text>
+      
+      <rect x="385" y="70" width="130" height="40" class="label-bg" />
+      <text x="450" y="95" class="svg-text" text-anchor="middle">Insulating Barrier</text>
+      
+      <rect x="585" y="410" width="170" height="40" class="label-bg" />
+      <text x="670" y="435" class="svg-text" text-anchor="middle">Voltage State (Free)</text>
+    </g>
+
+  </svg>
+</div>
+    </div>
+    <div class="controls-container">
+        <h2>Macroscopic Quantum Tunnelling</h2>
+        <p style="color: #64748b;">Use the controls on the right to add microwave energy and help the system tunnel through the barrier.</p>
+        <p style="font-size: 13px; margin-top: -8px;"><a href="https://www.nobelprize.org/prizes/physics/2025/popular-information/" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+  #controls-container {
+    width: 100%;
+    height: 100%;
+    padding: 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    background-color: #ffffff;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .ctrl-header {
+    font-size: 20px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+  }
+  .ctrl-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ctrl-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+  }
+  input[type="range"] {
+    width: 100%;
+    cursor: pointer;
+    accent-color: #2563eb;
+  }
+  .slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+    padding: 0 4px;
+  }
+  .btn-group {
+    display: flex;
+    gap: 12px;
+  }
+  button {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-primary {
+    background-color: #2563eb;
+    color: white;
+  }
+  .btn-primary:hover {
+    background-color: #1d4ed8;
+  }
+  .btn-secondary {
+    background-color: #e2e8f0;
+    color: #0f172a;
+  }
+  .btn-secondary:hover {
+    background-color: #cbd5e1;
+  }
+  #info-panel {
+    margin-top: auto;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #info-title {
+    font-weight: 700;
+    font-size: 15px;
+    color: #0f172a;
+    margin: 0;
+  }
+  #info-desc {
+    font-size: 13px;
+    color: #475569;
+    line-height: 1.5;
+    margin: 0;
+  }
+  .progress-bg {
+    width: 100%;
+    height: 8px;
+    background-color: #cbd5e1;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background-color: #10b981;
+    transition: width 0.1s linear;
+  }
+</style>
+
+<div id="controls-container">
+  <h2 class="ctrl-header">System Controls</h2>
+  
+  <div class="ctrl-section">
+    <label class="ctrl-label">Microwave Energy (Quanta)</label>
+    <input type="range" id="energy-slider" min="0" max="2" value="0" step="1" oninput="handleSliderChange(this.value)">
+    <div class="slider-labels">
+      <span>0 (Low)</span>
+      <span>1 (Med)</span>
+      <span>2 (High)</span>
+    </div>
+  </div>
+  
+  <div class="btn-group">
+    <button id="resetBtn" class="btn-secondary" onclick="resetSystem()">⟲ Reset System</button>
+    <button id="playBtn" class="btn-primary" onclick="togglePlay()">▶ Auto-Play</button>
+  </div>
+
+  <div id="info-panel">
+    <div id="info-title">State: Trapped (Zero-Voltage)</div>
+    <div id="info-desc">The macroscopic wave function is trapped behind the barrier. At Level 0, the probability of tunnelling is extremely low.</div>
+    <div class="ctrl-label" style="font-size: 12px; margin-top: 4px;">Probability to Tunnel (Time Elapsed):</div>
+    <div class="progress-bg">
+      <div id="prob-bar" class="progress-fill"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let isPlaying = false;
+  let playInterval;
+  let animFrame;
+  
+  // Physics State
+  let time = 0;
+  let activeCx = 240;
+  let targetCx = 240;
+  let currentLevel = 0;
+  let baseYs = [330, 260, 190];
+  let currentBaseY = baseYs[0];
+  
+  let escapeProgress = 0;
+  // Rates determine how fast the progress bar fills (frames to 100%)
+  // L0: very slow, L1: medium, L2: very fast
+  let escapeRates = [0.12, 0.40, 1.60]; 
+  let state = `trapped`; // `trapped`, `escaping`, `escaped`
+
+  function handleSliderChange(val) {
+    let level = parseInt(val);
+    if (level !== currentLevel && state === `trapped`) {
+      setEnergyLevel(level);
+      if (window.sendEventToAI) { 
+        window.sendEventToAI(`User changed energy level to ${level}`); 
+      }
+    }
+  }
+
+  function setEnergyLevel(level) {
+    currentLevel = level;
+    document.getElementById(`energy-slider`).value = level;
+    
+    // Update SVG dashed lines
+    document.getElementById(`level-0`).classList.remove(`active`);
+    document.getElementById(`level-1`).classList.remove(`active`);
+    document.getElementById(`level-2`).classList.remove(`active`);
+    document.getElementById(`level-${level}`).classList.add(`active`);
+    
+    updateInfoText();
+  }
+
+  function resetSystem() {
+    state = `trapped`;
+    activeCx = 240;
+    targetCx = 240;
+    escapeProgress = 0;
+    document.getElementById(`prob-bar`).style.width = `0%`;
+    updateInfoText();
+    if (window.sendEventToAI && !isPlaying) { 
+      window.sendEventToAI(`User reset the system`); 
+    }
+  }
+
+  function updateInfoText() {
+    let title = document.getElementById(`info-title`);
+    let desc = document.getElementById(`info-desc`);
+    
+    if (state === `trapped`) {
+      title.textContent = `State: Trapped (Zero-Voltage)`;
+      if (currentLevel === 0) {
+        desc.textContent = `At Level 0, the wave barely penetrates the barrier. It will take a long time to tunnel.`;
+      } else if (currentLevel === 1) {
+        desc.textContent = `At Level 1, the wave reaches further into the barrier. Tunnelling will occur faster.`;
+      } else {
+        desc.textContent = `At Level 2, the high energy allows the wave to deeply penetrate the barrier. Tunnelling is imminent!`;
+      }
+    } else if (state === `escaping`) {
+      title.textContent = `State: Tunnelling!`;
+      desc.textContent = `The macroscopic quantum state is magically passing straight through the solid barrier.`;
+    } else if (state === `escaped`) {
+      title.textContent = `State: Escaped (Voltage Detected)`;
+      desc.textContent = `Tunnelling complete! The system has escaped the zero-voltage state, generating a measurable electrical voltage.`;
+    }
+  }
+
+  function render() {
+    time += 0.08;
+    
+    // Logic Loop
+    if (state === `trapped`) {
+      escapeProgress += escapeRates[currentLevel];
+      if (escapeProgress >= 100) {
+        escapeProgress = 100;
+        state = `escaping`;
+        targetCx = 660; // Move to right well
+        updateInfoText();
+        if (window.sendEventToAI) {
+           window.sendEventToAI(`System tunnelled automatically at level ${currentLevel}`);
+        }
+      }
+    }
+    
+    // Interpolate physical properties for smooth animation
+    currentBaseY += (baseYs[currentLevel] - currentBaseY) * 0.1;
+    activeCx += (targetCx - activeCx) * 0.04;
+    
+    if (state === `escaping` && activeCx > 650) {
+      state = `escaped`;
+      updateInfoText();
+    }
+
+    // Build the dynamic wave path
+    let pathData = `M -10,480 `;
+    for (let x = -10; x <= 820; x += 5) {
+      let dist = x - activeCx;
+      
+      // Spread dictates how wide the wave is. 
+      // Higher energy (lower Y) -> wider spread -> penetrates barrier more deeply.
+      let spread = 80 + (330 - currentBaseY) * 0.5; 
+      
+      if (state !== `trapped`) {
+        spread = 140; // Maintain cohesive wave shape while travelling
+      }
+
+      let envelope = Math.exp(-(dist * dist) / (spread * spread));
+      
+      // Clean up tiny floating point remnants
+      if (envelope < 0.001) envelope = 0;
+      
+      // Frequency and amplitude scale with energy
+      let freq = 0.05 + (330 - currentBaseY) * 0.0002;
+      let amp = 20 + (330 - currentBaseY) * 0.1;
+      
+      let y = currentBaseY - (Math.sin(x * freq - time) * amp * envelope);
+      pathData += `L ${x},${y} `;
+    }
+    pathData += `L 820,480 Z`;
+    
+    // Update SVG Elements
+    let wavePath = document.getElementById(`wave-path`);
+    if(wavePath) wavePath.setAttribute(`d`, pathData);
+    
+    let waveCore = document.getElementById(`wave-core`);
+    if(waveCore) {
+      waveCore.setAttribute(`cx`, activeCx);
+      waveCore.setAttribute(`cy`, currentBaseY - Math.sin(-time) * (20 + (330 - currentBaseY) * 0.1));
+    }
+    
+    let probBar = document.getElementById(`prob-bar`);
+    if(probBar) probBar.style.width = escapeProgress + `%`;
+    
+    // Voltage Meter Logic (Needle swings when wave crosses the barrier center x=450)
+    let voltage = 0;
+    if (activeCx > 450) {
+      voltage = Math.min(100, (activeCx - 450));
+    }
+    // Needle rotates from 0 (left) to 180 (right)
+    let needleGrp = document.getElementById(`needle-group`);
+    if(needleGrp) needleGrp.setAttribute(`transform`, `rotate(${voltage * 1.8})`);
+
+    animFrame = requestAnimationFrame(render);
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    let btn = document.getElementById(`playBtn`);
+    
+    if (isPlaying) {
+      btn.innerHTML = `⏸ Pause Auto-Play`;
+      resetSystem();
+      setEnergyLevel(0);
+      
+      // Auto-play cycles every 8 seconds
+      autoPlayInterval = setInterval(() => {
+        let slider = document.getElementById(`energy-slider`);
+        let nextLevel = (parseInt(slider.value) + 1) % 3;
+        resetSystem();
+        setEnergyLevel(nextLevel);
+      }, 8000);
+      
+    } else {
+      btn.innerHTML = `▶ Auto-Play`;
+      clearInterval(autoPlayInterval);
+    }
+  }
+
+  // Init
+  cancelAnimationFrame(animFrame);
+  render();
+
+</script>
+    </div>
+</body>
+</html>
