@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Magic of Plant Growth</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" height="100%" style="display: block; background: #f8fafc; font-family: system-ui, -apple-system, sans-serif;">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#bae6fd" />
+      <stop offset="100%" stop-color="#e0f2fe" />
+    </linearGradient>
+    <linearGradient id="soilGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#854d0e" />
+      <stop offset="100%" stop-color="#451a03" />
+    </linearGradient>
+    
+    <!-- Sun Ray Gradient -->
+    <linearGradient id="rayGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#fef3c7" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.15" />
+    </filter>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <!-- Rain Path -->
+    <pattern id="rainPattern" width="40" height="40" patternUnits="userSpaceOnUse">
+      <line x1="20" y1="0" x2="10" y2="20" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" opacity="0.6" stroke-dasharray="10 20" class="rain-drop"/>
+    </pattern>
+  </defs>
+
+  <style>
+    @keyframes sun-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes rain-fall {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: -30; }
+    }
+    .sun-rays-anim {
+      transform-origin: 650px 120px;
+      animation: sun-spin 15s linear infinite;
+    }
+    .rain-drop {
+      animation: rain-fall 1s linear infinite;
+    }
+    .smooth-transition {
+      transition: all 0.4s ease-out;
+    }
+    .soil-clump {
+      fill: #271201;
+      opacity: 0.2;
+    }
+  </style>
+
+  <!-- Environment Background -->
+  <rect id="sky-bg" width="800" height="380" fill="url(#skyGrad)" />
+  <rect id="soil-bg" y="380" width="800" height="220" fill="url(#soilGrad)" />
+
+  <!-- Soil Surface Line -->
+  <line x1="0" y1="380" x2="800" y2="380" stroke="#713f12" stroke-width="6" />
+
+  <!-- Rain Layer (Active early on) -->
+  <rect id="rain-group" width="800" height="380" fill="url(#rainPattern)" class="smooth-transition" />
+
+  <!-- Sun Layer -->
+  <g id="sun-group" class="smooth-transition" style="opacity: 0.3;">
+    <g class="sun-rays-anim">
+      <!-- Rays -->
+      <line x1="650" y1="40" x2="650" y2="20" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" />
+      <line x1="650" y1="200" x2="650" y2="220" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" />
+      <line x1="570" y1="120" x2="550" y2="120" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" />
+      <line x1="730" y1="120" x2="750" y2="120" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" />
+      
+      <line x1="593" y1="63" x2="579" y2="49" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" />
+      <line x1="707" y1="177" x2="721" y2="191" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" />
+      <line x1="593" y1="177" x2="579" y2="191" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" />
+      <line x1="707" y1="63" x2="721" y2="49" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" />
+    </g>
+    <!-- Sun Body -->
+    <circle cx="650" cy="120" r="45" fill="#fcd34d" filter="url(#glow)"/>
+    <circle cx="650" cy="120" r="35" fill="#f59e0b" />
+  </g>
+
+  <!-- Soil Clumps / Depth details -->
+  <circle cx="150" cy="450" r="12" class="soil-clump" />
+  <circle cx="170" cy="460" r="8" class="soil-clump" />
+  <circle cx="680" cy="520" r="15" class="soil-clump" />
+  <circle cx="650" cy="540" r="10" class="soil-clump" />
+  <circle cx="280" cy="560" r="14" class="soil-clump" />
+  <circle cx="500" cy="420" r="10" class="soil-clump" />
+
+  <!-- PLANT SYSTEM -->
+  <g id="plant-system">
+    
+    <!-- Roots (Drawn from 400,420 downwards) -->
+    <g id="roots-group" fill="none" stroke="#fef08a" stroke-linecap="round" stroke-linejoin="round" filter="url(#shadow)">
+      <path id="main-root" stroke-width="6" d="M 400 420 Q 380 460 410 500 T 390 570" style="stroke-dasharray: 200; stroke-dashoffset: 200; transition: stroke-dashoffset 0.1s linear;" />
+      <path id="lateral-root-1" stroke-width="4" d="M 395 450 Q 360 460 340 480" style="stroke-dasharray: 80; stroke-dashoffset: 80; transition: stroke-dashoffset 0.1s linear;" />
+      <path id="lateral-root-2" stroke-width="4" d="M 405 480 Q 440 490 460 520" style="stroke-dasharray: 90; stroke-dashoffset: 90; transition: stroke-dashoffset 0.1s linear;" />
+      <path id="lateral-root-3" stroke-width="3" d="M 398 520 Q 360 530 350 560" style="stroke-dasharray: 70; stroke-dashoffset: 70; transition: stroke-dashoffset 0.1s linear;" />
+    </g>
+
+    <!-- Stem (Drawn from 400,420 upwards) -->
+    <path id="stem" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round" d="M 400 420 Q 415 320 395 220 T 400 90" style="stroke-dasharray: 360; stroke-dashoffset: 360; transition: stroke-dashoffset 0.1s linear;" filter="url(#shadow)" />
+
+    <!-- Leaves -->
+    <!-- Left Leaf -->
+    <g id="leaf-left" style="transform-origin: 395px 240px; transform: scale(0);" class="smooth-transition">
+      <path d="M 395 240 C 320 250 260 200 240 180 C 270 140 350 160 395 240 Z" fill="#16a34a" filter="url(#shadow)"/>
+      <path d="M 395 240 C 350 220 300 200 240 180" fill="none" stroke="#15803d" stroke-width="3" />
+    </g>
+    
+    <!-- Right Leaf -->
+    <g id="leaf-right" style="transform-origin: 398px 160px; transform: scale(0);" class="smooth-transition">
+      <path d="M 398 160 C 460 180 520 150 550 120 C 510 80 440 110 398 160 Z" fill="#16a34a" filter="url(#shadow)"/>
+      <path d="M 398 160 C 440 150 490 140 550 120" fill="none" stroke="#15803d" stroke-width="3" />
+    </g>
+    
+    <!-- Lower Left Small Leaf -->
+    <g id="leaf-lower" style="transform-origin: 405px 310px; transform: scale(0);" class="smooth-transition">
+      <path d="M 405 310 C 450 320 490 290 510 270 C 480 240 430 260 405 310 Z" fill="#22c55e" filter="url(#shadow)"/>
+      <path d="M 405 310 C 440 300 470 290 510 270" fill="none" stroke="#16a34a" stroke-width="2" />
+    </g>
+
+    <!-- Flower -->
+    <g id="flower-group" style="transform-origin: 400px 90px; transform: scale(0);" class="smooth-transition">
+      <!-- Petals -->
+      <path d="M 400 90 C 380 40 420 40 400 90 Z" fill="#ec4899" filter="url(#shadow)"/>
+      <path d="M 400 90 C 440 70 450 110 400 90 Z" fill="#f472b6" filter="url(#shadow)"/>
+      <path d="M 400 90 C 430 140 390 140 400 90 Z" fill="#ec4899" filter="url(#shadow)"/>
+      <path d="M 400 90 C 360 120 350 80 400 90 Z" fill="#f472b6" filter="url(#shadow)"/>
+      <path d="M 400 90 C 370 50 350 90 400 90 Z" fill="#ec4899" filter="url(#shadow)"/>
+      <path d="M 400 90 C 430 50 450 90 400 90 Z" fill="#f472b6" filter="url(#shadow)"/>
+      <!-- Flower Center -->
+      <circle cx="400" cy="90" r="14" fill="#fcd34d" />
+      <circle cx="400" cy="90" r="10" fill="#f59e0b" />
+    </g>
+
+    <!-- Seed (Placed last to appear on top of root start) -->
+    <!-- Seed Left Half -->
+    <g id="seed-left" style="transform-origin: 400px 420px; transform: rotate(0deg);" class="smooth-transition">
+      <path d="M 400 405 C 385 405 385 435 400 435 Z" fill="#92400e" filter="url(#shadow)"/>
+      <path d="M 400 405 C 385 405 385 435 400 435 Z" fill="none" stroke="#78350f" stroke-width="2"/>
+    </g>
+    <!-- Seed Right Half -->
+    <g id="seed-right" style="transform-origin: 400px 420px; transform: rotate(0deg);" class="smooth-transition">
+      <path d="M 400 405 C 415 405 415 435 400 435 Z" fill="#92400e" filter="url(#shadow)"/>
+      <path d="M 400 405 C 415 405 415 435 400 435 Z" fill="none" stroke="#78350f" stroke-width="2"/>
+    </g>
+
+  </g>
+
+  <!-- Educational Labels Layer -->
+  <g id="labels-layer">
+    <!-- Soil Line Label -->
+    <foreignObject x="20" y="340" width="160" height="40">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="background: rgba(255,255,255,0.85); border-left: 4px solid #713f12; padding: 4px 8px; font-size: 13px; font-weight: 600; color: #451a03; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); word-wrap: break-word; overflow: hidden; box-sizing: border-box;">
+        Soil Surface
+      </div>
+    </foreignObject>
+
+    <!-- Sun Label -->
+    <foreignObject x="560" y="20" width="200" height="50" id="label-sun" style="opacity:0; transition: opacity 0.5s ease;">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="background: rgba(255,255,255,0.85); border-left: 4px solid #fbbf24; padding: 4px 8px; font-size: 13px; font-weight: 600; color: #b45309; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); word-wrap: break-word; overflow: hidden; box-sizing: border-box;">
+        Sunlight (Energy Source)
+      </div>
+    </foreignObject>
+
+    <!-- Root Label -->
+    <foreignObject x="20" y="480" width="220" height="60" id="label-roots" style="opacity:0; transition: opacity 0.5s ease;">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="background: rgba(255,255,255,0.85); border-left: 4px solid #facc15; padding: 4px 8px; font-size: 13px; font-weight: 600; color: #451a03; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); word-wrap: break-word; overflow: hidden; box-sizing: border-box;">
+        Root System<br/><span style="font-size:11px; font-weight: 400; color: #713f12;">Absorbs water and nutrients</span>
+      </div>
+    </foreignObject>
+  </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Magic of Plant Growth</h2>
+        <p style="color: #64748b;">Drag the time slider on the right to watch a tiny seed transform into a blooming plant.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div style="width: 100%; height: 100%; padding: 24px; display: flex; flex-direction: column; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; background: #ffffff;">
+  
+  <div style="margin-bottom: 24px;">
+    <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: #0f172a;">Time Simulation</h2>
+    <p style="margin: 0; font-size: 14px; color: #64748b; line-height: 1.5;">Watch how the biological systems develop over time.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 32px;">
+    <!-- Slider Control -->
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <span style="font-size: 13px; font-weight: 600; color: #475569;">Day 0</span>
+      <input type="range" id="timeSlider" min="0" max="100" value="0" oninput="updateState(this.value)" style="flex-grow: 1; accent-color: #10b981; height: 6px; border-radius: 4px; cursor: pointer;">
+      <span style="font-size: 13px; font-weight: 600; color: #475569;">Day 100</span>
+    </div>
+
+    <!-- Play/Pause Button -->
+    <button id="playBtn" onclick="togglePlay()" style="width: 100%; padding: 12px 16px; border: none; border-radius: 8px; background: #10b981; color: white; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);">
+      ▶ Auto-Play
+    </button>
+  </div>
+
+  <!-- Dynamic Info Panel -->
+  <div id="info-panel" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-top: auto; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+      <div id="phase-badge" style="background: #3b82f6; color: white; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+        Phase 1
+      </div>
+      <h3 id="info-title" style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">Imbibition</h3>
+    </div>
+    <p id="info-desc" style="margin: 0; font-size: 15px; color: #334155; line-height: 1.6;">
+      The dormant seed sits in the soil. Rainwater softens the tough seed coat and triggers internal metabolism.
+    </p>
+    
+    <!-- Biological Stats -->
+    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #cbd5e1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+      <div>
+        <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Energy Source</div>
+        <div id="stat-energy" style="font-size: 13px; color: #0f172a; font-weight: 500;">Seed Endosperm</div>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Direction</div>
+        <div id="stat-dir" style="font-size: 13px; color: #0f172a; font-weight: 500;">Neutral</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let isPlaying = false;
+  let playInterval;
+
+  function updateState(val) {
+    val = Number(val);
+    
+    // --- SVG Math & Logic ---
+    
+    // Roots (Offset starts at max and goes to 0)
+    let mainRootOffset = 200 - Math.min(200, (val / 30) * 200);
+    let latRoot1Offset = 80 - Math.min(80, (Math.max(0, val - 15) / 30) * 80);
+    let latRoot2Offset = 90 - Math.min(90, (Math.max(0, val - 25) / 30) * 90);
+    let latRoot3Offset = 70 - Math.min(70, (Math.max(0, val - 40) / 30) * 70);
+    
+    document.getElementById('main-root').style.strokeDashoffset = `${mainRootOffset}`;
+    document.getElementById('lateral-root-1').style.strokeDashoffset = `${latRoot1Offset}`;
+    document.getElementById('lateral-root-2').style.strokeDashoffset = `${latRoot2Offset}`;
+    document.getElementById('lateral-root-3').style.strokeDashoffset = `${latRoot3Offset}`;
+
+    // Stem
+    let stemOffset = 360 - Math.min(360, (Math.max(0, val - 20) / 50) * 360);
+    document.getElementById('stem').style.strokeDashoffset = `${stemOffset}`;
+
+    // Leaves Scales
+    let leafLeftScale = Math.min(1, Math.max(0, (val - 40) / 20));
+    let leafRightScale = Math.min(1, Math.max(0, (val - 50) / 20));
+    let leafLowerScale = Math.min(1, Math.max(0, (val - 35) / 20));
+    
+    document.getElementById('leaf-left').style.transform = `scale(${leafLeftScale})`;
+    document.getElementById('leaf-right').style.transform = `scale(${leafRightScale})`;
+    document.getElementById('leaf-lower').style.transform = `scale(${leafLowerScale})`;
+
+    // Flower Scale
+    let flowerScale = Math.min(1, Math.max(0, (val - 75) / 25));
+    document.getElementById('flower-group').style.transform = `scale(${flowerScale})`;
+
+    // Seed halves split apart visually as germinating
+    let seedSplit = Math.min(15, Math.max(0, (val - 15) * 1.5));
+    document.getElementById('seed-left').style.transform = `rotate(-${seedSplit}deg)`;
+    document.getElementById('seed-right').style.transform = `rotate(${seedSplit}deg)`;
+
+    // Environmental Opacities
+    let sunOpacity = Math.min(1, 0.3 + (val / 100) * 0.7); // Sun gets brighter
+    let rainOpacity = val < 25 ? 0.8 : (val < 40 ? 0.4 : 0); // Rain fades out
+    
+    document.getElementById('sun-group').style.opacity = `${sunOpacity}`;
+    document.getElementById('rain-group').style.opacity = `${rainOpacity}`;
+
+    // Labels
+    document.getElementById('label-sun').style.opacity = val > 45 ? `1` : `0`;
+    document.getElementById('label-roots').style.opacity = val > 30 ? `1` : `0`;
+
+    // --- Info Panel Update Logic ---
+    
+    let titleText = ``;
+    let descText = ``;
+    let badgeText = ``;
+    let badgeColor = ``;
+    let statEnergy = ``;
+    let statDir = ``;
+
+    if (val < 20) {
+        badgeText = `Phase 1`;
+        badgeColor = `#3b82f6`; // Blue
+        titleText = `Imbibition`;
+        descText = `The dormant seed sits in the soil. Rainwater softens the tough seed coat and triggers internal metabolism to wake the seed up.`;
+        statEnergy = `Seed Endosperm (Stored)`;
+        statDir = `Neutral`;
+    } else if (val < 50) {
+        badgeText = `Phase 2`;
+        badgeColor = `#eab308`; // Yellow
+        titleText = `Germination`;
+        descText = `The primary root (radicle) emerges to anchor the plant and find water (Gravitropism). The shoot breaks the seed coat and reaches upwards for the surface (Phototropism).`;
+        statEnergy = `Seed Endosperm (Depleting)`;
+        statDir = `Roots Down, Shoot Up`;
+    } else if (val < 80) {
+        badgeText = `Phase 3`;
+        badgeColor = `#22c55e`; // Green
+        titleText = `Vegetative Growth`;
+        descText = `The stem breaches the surface and leaves unfold. The plant now performs photosynthesis, using sunlight, carbon dioxide, and water to manufacture its own food.`;
+        statEnergy = `Photosynthesis (Sunlight)`;
+        statDir = `Stem and Leaves Upwards`;
+    } else {
+        badgeText = `Phase 4`;
+        badgeColor = `#ec4899`; // Pink
+        titleText = `Reproduction`;
+        descText = `The mature plant directs its energy into producing a flower. The blossom contains reproductive organs designed to attract pollinators and create new seeds, completing the life cycle.`;
+        statEnergy = `Photosynthesis (Sunlight)`;
+        statDir = `Blooming`;
+    }
+
+    document.getElementById('phase-badge').textContent = badgeText;
+    document.getElementById('phase-badge').style.background = badgeColor;
+    document.getElementById('info-title').textContent = titleText;
+    document.getElementById('info-desc').textContent = descText;
+    document.getElementById('stat-energy').textContent = statEnergy;
+    document.getElementById('stat-dir').textContent = statDir;
+
+    // Telemetry
+    if (window.sendEventToAI && val % 25 === 0 && val > 0) {
+        window.sendEventToAI(`User moved graphic to phase ${val}`);
+    }
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    let btn = document.getElementById('playBtn');
+    if (isPlaying) {
+      btn.innerHTML = `⏸ Pause Auto-Play`;
+      btn.style.background = `#f59e0b`; // Amber color for pause
+      btn.style.boxShadow = `0 2px 4px rgba(245, 158, 11, 0.2)`;
+      
+      clearInterval(playInterval);
+      playInterval = setInterval(() => {
+        let slider = document.getElementById('timeSlider');
+        let nextVal = (Number(slider.value) + 1) % 101;
+        slider.value = nextVal;
+        updateState(nextVal);
+      }, 80);
+    } else {
+      btn.innerHTML = `▶ Auto-Play`;
+      btn.style.background = `#10b981`; // Back to green
+      btn.style.boxShadow = `0 2px 4px rgba(16, 185, 129, 0.2)`;
+      clearInterval(playInterval);
+    }
+  }
+
+  // Initialize the state once the script loads
+  setTimeout(() => { updateState(0); }, 100);
+</script>
+    </div>
+</body>
+</html>

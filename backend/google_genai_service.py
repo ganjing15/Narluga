@@ -58,8 +58,8 @@ async def fetch_youtube_transcript(url: str) -> str:
                     job_id = data.get("jobId")
                     if job_id:
                         print(f"[YouTube] Supadata AI generation started (JobID: {job_id}). Polling...")
-                        for attempt in range(18):  # 90 seconds max
-                            await asyncio.sleep(5)
+                        for attempt in range(30):  # 60 seconds max
+                            await asyncio.sleep(2)
                             poll_url = f"{SUPADATA_ENDPOINT}/{job_id}"
                             async with session.get(poll_url, headers=headers) as poll_res:
                                 if poll_res.ok:
@@ -260,36 +260,37 @@ async def gather_source_content(sources: list, send_status, use_deep_digest: boo
     sources: [{ type: 'url'|'youtube'|'text'|'file', content: str, label: str }]
     use_deep_digest: if True, URL sources are processed via Gemini+Search grounded digest (Improvement E).
     """
-    combined_parts = []
     source_labels = []
-    
-    for i, source in enumerate(sources):
+
+    async def _fetch_one(i: int, source: dict) -> str:
         src_type = source.get("type", "text")
         content = source.get("content", "")
         label = source.get("label", f"Source {i+1}")
-        source_labels.append(label)
-        
-        await send_status(f"Reading source {i+1}/{len(sources)}: {label[:50]}...")
-        
+
         if src_type == "url":
             if "vertexaisearch.cloud.google.com" in content:
                 text = f"[Web Source: {label} - Detailed content requires browser access. AI must leverage internal knowledge or Google Search tool.]"
             elif use_deep_digest:
-                text = await fetch_website_content_grounded(content)  # Improvement E (deep only)
+                text = await fetch_website_content_grounded(content)
             else:
                 text = await fetch_website_content(content)
-            combined_parts.append(f"=== SOURCE: {label} (Web Page) ===\n{text}")
+            return f"=== SOURCE: {label} (Web Page) ===\n{text}"
         elif src_type == "youtube":
             text = await fetch_youtube_transcript(content)
-            combined_parts.append(f"=== SOURCE: {label} (YouTube Video Transcript) ===\n{text}")
+            return f"=== SOURCE: {label} (YouTube Video Transcript) ===\n{text}"
         elif src_type == "file":
-            # content already contains the extracted text from the upload endpoint
-            combined_parts.append(f"=== SOURCE: {label} (Uploaded File) ===\n{content}")
+            return f"=== SOURCE: {label} (Uploaded File) ===\n{content}"
         elif src_type == "text":
-            combined_parts.append(f"=== SOURCE: User Text Input ===\n{content}")
+            return f"=== SOURCE: User Text Input ===\n{content}"
         else:
-            combined_parts.append(f"=== SOURCE: {label} ===\n{content}")
-    
+            return f"=== SOURCE: {label} ===\n{content}"
+
+    for i, source in enumerate(sources):
+        source_labels.append(source.get("label", f"Source {i+1}"))
+
+    await send_status(f"Reading {len(sources)} source(s)...")
+    combined_parts = await asyncio.gather(*[_fetch_one(i, s) for i, s in enumerate(sources)])
+
     combined_content = "\n\n".join(combined_parts)
     return combined_content, source_labels
 

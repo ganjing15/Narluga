@@ -136,8 +136,9 @@ Gemini Live Agent Challenge/
 - Gemini Pro generates a complete SVG animation and HTML controls panel.
 - To prevent CSS/JS conflicts with the main React app, the generated graphic is securely isolated inside a **sandboxed iframe**.
 - An intermediate tracking script is dynamically injected into the iframe to restore telemetry and fix common generation bugs:
-  - **Hover Tracking**: 1500ms debounced cursor position tracking that pauses during CSS animations.
-  - **Interaction Tracking**: Fast 300ms debounced global listeners that capture slider drags and button clicks, detecting toggle states (e.g. "Play" -> "Pause").
+  - **Hover Tracking**: 1500ms debounced cursor position tracking that pauses during CSS animations. Distinguishes between SVG area and controls panel — reports the actual control name (e.g. `"Play" button in the controls panel`) when cursor is over controls, not a stale SVG label. Nearest-label proximity radius is **20px** (down from 60-150px) to prevent false "you're pointing at X" reports when the cursor is just passing through. Stale timers are cancelled when cursor leaves the SVG area.
+  - **Interaction Tracking**: Uses `{capture: true}` on the click listener so `beforeLabel` is captured *before* any button's own `onclick` updates the DOM (fixes systematic play/pause state inversion). 50ms debounce. Calls `clearAudioNow()` immediately on click so AI audio stops at the moment of interaction rather than after a Gemini round-trip.
+  - **`sendEventToAI` Rate Limiting**: Generated graphics call `window.sendEventToAI()` for both user actions and auto-play animation milestones. Uses semantic click detection via `lastClickTriggeredAtRef` (set when `INTERACTION_EVENT` or `CLICK_RESULT` fires) to distinguish the two: click-triggered events send in 150ms; automatic animation steps are throttled to at most one per 2.5s so the AI has time to finish narrating each point.
   - **Interval Stacking Protection**: A `setInterval`/`clearInterval` monkey-patch prevents a common AI generation bug where toggle buttons create new intervals without clearing old ones. All intervals are tracked and force-cleared when a pause state is detected.
   - Telemetry is sent via `postMessage` to the parent window and forwarded to the AI.
 - Each graphic is auto-saved to `backend/generated_graphics/` as a standalone HTML file.
@@ -149,6 +150,8 @@ Gemini Live Agent Challenge/
 - Supports interruptions and event-driven context updates
   - *Note*: The native-audio model handles Voice Activity Detection (VAD) automatically. Custom `RealtimeInputConfig` settings are not supported (causes 1008 API error).
   - During a voice interruption, **actionable tools** (`click_element`, `modify_element`, `fetch_more_detail`) are always executed to ensure responsiveness, while cosmetic tools (`highlight_element`, `zoom_view`) are skipped.
+- **Pre-connect optimization**: `live.connect()` is called immediately when `_run_live_session` starts (right after the graphic is ready), before the user clicks "Start". The `start_live_session` wait happens *inside* the already-open connection, hiding the ~1-2s Gemini handshake behind the user's reading time. `asyncio.sleep` before the initial prompt is 0.3s (down from 1.2s).
+- **Language lock**: The system instruction begins with an explicit `LANGUAGE RULE` — respond in the user's spoken language, never switch based on diagram content or source material. This prevents the AI from drifting into the language of the source content mid-conversation.
 
 ### Agentic Tool Use (Live Session)
 The AI ("Narluga") proactively uses tools to manipulate the diagram inside the iframe sandbox while speaking:
@@ -224,6 +227,17 @@ cd frontend
 npm install
 npm run dev                        # Starts on port 5173
 ```
+
+## What Requires a Restart After Code Changes
+
+| Changed file | What to do | Generate new graphic? |
+|---|---|---|
+| `frontend/src/App.tsx` or any frontend file | Vite HMR usually hot-reloads, but **refresh the browser (Cmd+R)** for changes involving refs, WebSocket state, or audio nodes | No |
+| `backend/google_genai_service.py` or `backend/main.py` | **Restart the backend** (`Ctrl+C` then re-run `./venv/bin/python main.py`) | No (existing graphic stays loaded in the browser) |
+| Changes to the **iframe injection script** (the large template literal in `App.tsx`) | Browser refresh is enough — the script is re-injected each time the graphic renders | No, but the new script only applies the **next time** a graphic is loaded into the iframe |
+| Changes to the **Gemini prompt / SVG generation logic** | Backend restart + generate a new graphic | Yes |
+
+> **Claude should always mention which of the above applies whenever making code changes.**
 
 ---
 

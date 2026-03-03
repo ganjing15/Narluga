@@ -17,6 +17,36 @@ import {
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 const WS_BACKEND_URL = BACKEND_URL.replace(/^http/, 'ws')
 
+// PCM worklet code extracted so it can be pre-loaded before the user clicks Start
+const PCM_WORKLET_CODE = `
+  class PCMProcessor extends AudioWorkletProcessor {
+    constructor() {
+      super();
+      this.buffer = new Int16Array(4096);
+      this.offset = 0;
+      this.sumSquare = 0;
+    }
+    process(inputs, outputs, parameters) {
+      const input = inputs[0];
+      if (input && input.length > 0) {
+        const channelData = input[0];
+        for (let i = 0; i < channelData.length; i++) {
+          const val = Math.max(-32768, Math.min(32767, channelData[i] * 32768));
+          this.buffer[this.offset++] = val;
+          this.sumSquare += val * val;
+          if (this.offset >= 4096) {
+            this.port.postMessage(this.buffer.buffer.slice(0));
+            this.offset = 0;
+            this.sumSquare = 0;
+          }
+        }
+      }
+      return true;
+    }
+  }
+  registerProcessor('pcm-processor', PCMProcessor);
+`
+
 // Source types
 type SourceType = 'url' | 'youtube' | 'text' | 'file'
 type Source = {
@@ -98,6 +128,7 @@ function App() {
   const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null)
   const micAudioCtxRef = useRef<AudioContext | null>(null)
   const micReadyRef = useRef<boolean>(false)
+  const workletPreloadedRef = useRef<boolean>(false)
   const hasStartedRef = useRef<boolean>(false)
   const eventQueueRef = useRef<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -105,6 +136,7 @@ function App() {
   const iframeReadyRef = useRef<boolean>(false)
   const nextPlayTimeRef = useRef<number>(0)
   const activeAudioNodesRef = useRef<AudioBufferSourceNode[]>([])
+  const lastDisconnectAtRef = useRef<number>(0)
 
   // Detect input type from text
   const detectInputType = useCallback((text: string): { type: SourceType, label: string } => {
@@ -379,6 +411,7 @@ function App() {
   // Disconnect cleanup
   const disconnect = useCallback(() => {
     micReadyRef.current = false
+    workletPreloadedRef.current = false
     hasStartedRef.current = false
     if (wsRef.current) {
       wsRef.current.close()
@@ -400,6 +433,7 @@ function App() {
       audioCtxRef.current.close()
       audioCtxRef.current = null
     }
+    lastDisconnectAtRef.current = Date.now()
     setIsConnecting(false)
     setHasStarted(false)
     // If we're ending a conversation and have a graphic, go back to 'complete'
@@ -587,80 +621,54 @@ function App() {
     }
   }
 
-  // Helper: setup mic AudioWorklet
+  // Helper: attach mic stream to the AudioWorklet processor and start streaming.
+  // Fast path: AudioContext + module pre-loaded in the background → just create the node.
+  // Slow path: full initialization (addModule) if pre-load didn't happen in time.
   const setupMic = () => {
-    if (streamRef.current && !micAudioCtxRef.current) {
-      const startMic = async () => {
+    if (!streamRef.current) return
+
+    const attachStream = async (micAudioCtx: AudioContext) => {
+      try {
+        if (micAudioCtx.state === 'suspended') await micAudioCtx.resume()
+        const source = micAudioCtx.createMediaStreamSource(streamRef.current!)
+        const processorNode = new AudioWorkletNode(micAudioCtx, 'pcm-processor')
+        processorNode.port.onmessage = (e) => {
+          const uint8Array = new Uint8Array(e.data)
+          let binary = ''
+          for (let i = 0; i < uint8Array.byteLength; i++) binary += String.fromCharCode(uint8Array[i])
+          const base64Data = btoa(binary)
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && micReadyRef.current) {
+            wsRef.current.send(JSON.stringify({
+              realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Data }] }
+            }))
+          }
+        }
+        source.connect(processorNode)
+        processorNode.connect(micAudioCtx.destination)
+        audioWorkletNodeRef.current = processorNode
+        micAudioCtxRef.current = micAudioCtx
+      } catch (err) {
+        console.error('Failed to connect mic to AudioWorklet:', err)
+      }
+    }
+
+    if (micAudioCtxRef.current && workletPreloadedRef.current && !audioWorkletNodeRef.current) {
+      // Fast path: worklet module already loaded — skip addModule entirely
+      attachStream(micAudioCtxRef.current)
+    } else if (!micAudioCtxRef.current) {
+      // Slow path: pre-load didn't finish in time, do full init now
+      ;(async () => {
         try {
           const micAudioCtx = new AudioContext({ sampleRate: 16000 })
-          if (micAudioCtx.state === 'suspended') {
-            await micAudioCtx.resume();
-          }
-
-          const source = micAudioCtx.createMediaStreamSource(streamRef.current!)
-
-          const workletCode = `
-              class PCMProcessor extends AudioWorkletProcessor {
-                constructor() {
-                  super();
-                  this.buffer = new Int16Array(4096);
-                  this.offset = 0;
-                  this.sumSquare = 0;
-                }
-                process(inputs, outputs, parameters) {
-                  const input = inputs[0];
-                  if (input && input.length > 0) {
-                    const channelData = input[0];
-                    for (let i = 0; i < channelData.length; i++) {
-                      const val = Math.max(-32768, Math.min(32767, channelData[i] * 32768));
-                      this.buffer[this.offset++] = val;
-                      this.sumSquare += val * val;
-                      
-                      if (this.offset >= 4096) {
-                         this.port.postMessage(this.buffer.buffer.slice(0));
-                         this.offset = 0;
-                         this.sumSquare = 0;
-                      }
-                    }
-                  }
-                  return true;
-                }
-              }
-              registerProcessor('pcm-processor', PCMProcessor);
-            `;
-
-          const blob = new Blob([workletCode], { type: 'application/javascript' });
-          const workletUrl = URL.createObjectURL(blob);
-          await micAudioCtx.audioWorklet.addModule(workletUrl);
-
-          const processorNode = new AudioWorkletNode(micAudioCtx, 'pcm-processor')
-
-          processorNode.port.onmessage = (e) => {
-            const buffer = e.data;
-            const uint8Array = new Uint8Array(buffer);
-            let binary = '';
-            for (let i = 0; i < uint8Array.byteLength; i++) {
-              binary += String.fromCharCode(uint8Array[i]);
-            }
-            const base64Data = btoa(binary);
-
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && micReadyRef.current) {
-              wsRef.current.send(JSON.stringify({
-                realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Data }] }
-              }));
-            }
-          };
-
-          source.connect(processorNode)
-          processorNode.connect(micAudioCtx.destination)
-
-          audioWorkletNodeRef.current = processorNode
-          micAudioCtxRef.current = micAudioCtx
+          const blob = new Blob([PCM_WORKLET_CODE], { type: 'application/javascript' })
+          const url = URL.createObjectURL(blob)
+          await micAudioCtx.audioWorklet.addModule(url)
+          URL.revokeObjectURL(url)
+          await attachStream(micAudioCtx)
         } catch (err) {
-          console.error("Failed to start mic audio context", err);
+          console.error('Failed to start mic audio context:', err)
         }
-      };
-      startMic();
+      })()
     }
   }
 
@@ -850,6 +858,26 @@ function App() {
     setError('')
   }, [disconnect])
 
+  // Pre-load AudioWorklet module as soon as the graphic is ready so clicking
+  // "Start Live Conversation" only needs getUserMedia (not addModule too).
+  useEffect(() => {
+    if (sessionPhase !== 'complete' || workletPreloadedRef.current || micAudioCtxRef.current) return
+    ;(async () => {
+      try {
+        const micAudioCtx = new AudioContext({ sampleRate: 16000 })
+        const blob = new Blob([PCM_WORKLET_CODE], { type: 'application/javascript' })
+        const url = URL.createObjectURL(blob)
+        await micAudioCtx.audioWorklet.addModule(url)
+        URL.revokeObjectURL(url)
+        micAudioCtxRef.current = micAudioCtx
+        workletPreloadedRef.current = true
+        console.log('[Preload] AudioWorklet pre-loaded')
+      } catch (err) {
+        console.warn('[Preload] AudioWorklet pre-load failed:', err)
+      }
+    })()
+  }, [sessionPhase])
+
   // Cursor hover tracking — tell the AI what the user is pointing at
   useEffect(() => {
     if (sessionPhase !== 'conversation') return
@@ -886,9 +914,11 @@ function App() {
         directLabel = (directText.textContent || '').trim()
       }
 
-      // 2. Find the nearest <text> label by proximity (within 150px)
+      // 2. Find the nearest <text> label — tight 20px radius only.
+      // 150px was far too loose; 20px covers hovering near small/thin elements
+      // without falsely reporting labels the cursor isn't actually close to.
       let nearestLabel = ''
-      let nearestDist = 150
+      let nearestDist = 20
       container.querySelectorAll('text').forEach(textEl => {
         const content = (textEl.textContent || '').trim()
         if (content.length < 2 || content.length > 60) return
@@ -896,29 +926,15 @@ function App() {
         const textCx = rect.left + rect.width / 2
         const textCy = rect.top + rect.height / 2
         const dist = Math.sqrt((cx - textCx) ** 2 + (cy - textCy) ** 2)
-        if (dist < nearestDist) {
-          nearestDist = dist
-          nearestLabel = content
-        }
+        if (dist < nearestDist) { nearestDist = dist; nearestLabel = content }
       })
 
-      // 3. Describe the element under cursor
-      const tagName = target.tagName.toLowerCase()
-      const fill = target.getAttribute('fill') || ''
-      let elementDesc = ''
-      if (['rect', 'circle', 'ellipse', 'polygon', 'path', 'line'].includes(tagName)) {
-        elementDesc = `a ${fill ? fill + ' ' : ''}${tagName} shape`
-      }
-
-      // Build the report
+      // Build the report — only direct hits and genuinely close labels
       let report = ''
       if (directLabel && directLabel.length >= 2) {
         report = `"${directLabel}"`
       } else if (nearestLabel) {
-        report = `near the "${nearestLabel}" label`
-        if (elementDesc) report += ` (on ${elementDesc})`
-      } else if (elementDesc) {
-        report = elementDesc
+        report = `"${nearestLabel}"`
       }
 
       if (!report || report === lastReport) return
@@ -963,42 +979,8 @@ function App() {
   // Listen for telemetry // Setup iframe listener for AI events & Hovers & Interactions
   useEffect(() => {
     const handleIframeMessage = (event: MessageEvent) => {
-      // Allow AI_EVENT (explicitly sent by generated code via sendEventToAI)
-      if (event.data?.type === 'AI_EVENT' && event.data?.payload) {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
-          wsRef.current.send(JSON.stringify({
-            clientContent: {
-              turns: [{ role: "user", parts: [{ text: `[Graphic Event: ${event.data.payload}]` }] }],
-              turnComplete: false
-            }
-          }))
-        }
-      }
-      // Allow HOVER_EVENT (automatically sent continuously by the iframe script)
-      else if (event.data?.type === 'HOVER_EVENT' && event.data?.payload) {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
-          wsRef.current.send(JSON.stringify({
-            clientContent: {
-              turns: [{ role: "user", parts: [{ text: `[Cursor position: The user is currently pointing at ${event.data.payload} in the diagram.]` }] }],
-              turnComplete: false
-            }
-          }))
-        }
-      }
-      // Allow INTERACTION_EVENT (automatically sent when user clicks buttons/inputs in the iframe)
-      else if (event.data?.type === 'INTERACTION_EVENT' && event.data?.payload) {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
-          console.log('[INTERACTION] Sending to AI:', event.data.payload);
-          wsRef.current.send(JSON.stringify({
-            clientContent: {
-              turns: [{ role: "user", parts: [{ text: `[Interaction: The user just ${event.data.payload} in the interactive controls panel.]` }] }],
-              turnComplete: true
-            }
-          }))
-        }
-      }
       // Allow CLICK_RESULT (sent by iframe after AI executes click_element)
-      else if (event.data?.type === 'CLICK_RESULT') {
+      if (event.data?.type === 'CLICK_RESULT') {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && hasStartedRef.current) {
           if (!event.data.success) {
             wsRef.current.send(JSON.stringify({
@@ -1155,6 +1137,12 @@ function App() {
       width: 380px;
       min-width: 380px;
       max-width: 380px;
+    }
+    /* Fix: CSS animations that set 'transform' override SVG transform attributes,
+       causing positioned elements to snap to the origin. animation-composition: add
+       makes animations ADD to the base SVG transform instead of replacing it. */
+    svg [transform] {
+      animation-composition: add;
     }
   </style>
   
@@ -1589,7 +1577,41 @@ function App() {
       if (!svgContainer) return;
       
       const target = e.target;
-      if (!svgContainer.contains(target)) return;
+
+      // --- Controls panel hover ---
+      const controlsContainer = document.querySelector('.controls-area');
+      if (controlsContainer && controlsContainer.contains(target)) {
+        // Cursor is on the controls panel — describe the control element, not the SVG graphic.
+        // Cancel any pending SVG hover report so the stale graphic description doesn't fire.
+        if (debounceTimer) clearTimeout(debounceTimer);
+        const interactiveEl = target.closest('button, input, select, label, [role="button"]');
+        let controlReport = '';
+        if (interactiveEl) {
+          const label = (interactiveEl.innerText || interactiveEl.getAttribute('aria-label') || interactiveEl.getAttribute('title') || interactiveEl.id || '').trim();
+          const kind = interactiveEl.tagName.toLowerCase() === 'input' && interactiveEl.type === 'range' ? 'slider'
+            : interactiveEl.tagName.toLowerCase() === 'select' ? 'dropdown'
+            : 'button';
+          if (label && label.length >= 2 && label.length <= 60) {
+            controlReport = 'the "' + label + '" ' + kind + ' in the controls panel';
+          }
+        }
+        if (!controlReport) controlReport = 'the controls panel';
+        if (controlReport === lastReport) return;
+        lastReport = controlReport;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          window.parent.postMessage({ type: 'HOVER_EVENT', payload: controlReport }, '*');
+        }, 1500);
+        return;
+      }
+
+      // --- SVG graphic hover ---
+      if (!svgContainer.contains(target)) {
+        // Cursor left both areas — cancel stale pending report
+        if (debounceTimer) clearTimeout(debounceTimer);
+        lastReport = '';
+        return;
+      }
 
       // Priority 1: Direct label attributes
       const directLabel = target.getAttribute('data-label') || target.getAttribute('id') || '';
@@ -1610,30 +1632,20 @@ function App() {
         parentLabel = parentLabel.replace(/^(svg-|graphic-|element-)/, '');
       }
       
-      // Priority 4: Find nearest text label (only if nothing else found)
+      // Priority 4: nearest text label — but only within a tight 20px radius.
+      // 60px was too loose and caused the AI to report labels the cursor wasn't near.
       let nearestLabel = '';
-      let nearestDist = 60; 
-      
+      let nearestDist = 20;
       if (!directLabel && !titleText && !parentLabel) {
         svgContainer.querySelectorAll('text').forEach(textEl => {
-        const content = (textEl.textContent || '').trim();
-        if (content.length < 2 || content.length > 60) return;
-        const rect = textEl.getBoundingClientRect();
-        const textCx = rect.left + rect.width / 2;
-        const textCy = rect.top + rect.height / 2;
-        const dist = Math.sqrt((e.clientX - textCx) ** 2 + (e.clientY - textCy) ** 2);
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearestLabel = content;
-        }
-      });
-      }
-
-      const tagName = target.tagName.toLowerCase();
-      const fill = target.getAttribute('fill') || '';
-      let elementDesc = '';
-      if (['rect', 'circle', 'ellipse', 'polygon', 'path', 'line'].includes(tagName)) {
-        elementDesc = "a " + (fill ? fill + ' ' : '') + tagName + " shape";
+          const content = (textEl.textContent || '').trim();
+          if (content.length < 2 || content.length > 60) return;
+          const rect = textEl.getBoundingClientRect();
+          const textCx = rect.left + rect.width / 2;
+          const textCy = rect.top + rect.height / 2;
+          const dist = Math.sqrt((e.clientX - textCx) ** 2 + (e.clientY - textCy) ** 2);
+          if (dist < nearestDist) { nearestDist = dist; nearestLabel = content; }
+        });
       }
 
       let report = '';
@@ -1644,10 +1656,7 @@ function App() {
       } else if (parentLabel && parentLabel.length >= 2) {
         report = '"' + parentLabel + '"';
       } else if (nearestLabel) {
-        report = 'near the "' + nearestLabel + '" label';
-        if (elementDesc) report += ' (on ' + elementDesc + ')';
-      } else if (elementDesc) {
-        report = elementDesc;
+        report = '"' + nearestLabel + '"';
       }
 
       if (!report || report === lastReport) return;
@@ -1672,6 +1681,9 @@ function App() {
     // already synchronously updated its own text (e.g. "▶ Play" → "⏸ Pause"), which
     // causes beforeLabel to capture the POST-click label and inverts the reported state.
     document.addEventListener('click', (e) => {
+      // Skip non-trusted (programmatic) clicks — these come from animation code resetting
+      // its own button state (e.g., auto-play cycle end) and must not be reported as user actions.
+      if (!e.isTrusted) return;
       // Skip if this click was triggered by the AI's click_element tool
       if (window.__aiClickInProgress) {
         return;
@@ -2487,6 +2499,21 @@ function App() {
                     {!hasStarted && (
                       <button
                         onClick={startPresentation}
+                        onMouseEnter={() => {
+                          // Prefetch mic stream on hover so it's ready when user clicks.
+                          // Skip if we just disconnected (prevents the mic icon from lingering).
+                          if (!streamRef.current && Date.now() - lastDisconnectAtRef.current > 1000) {
+                            navigator.mediaDevices.getUserMedia({
+                              audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                            }).then(s => {
+                              if (!streamRef.current) {
+                                streamRef.current = s
+                              } else {
+                                s.getTracks().forEach(t => t.stop())
+                              }
+                            }).catch(() => {})
+                          }
+                        }}
                         className="w-full py-3 px-6 bg-[var(--accent-primary)] hover:bg-[#0a48ad] text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
                       >
                         <MicIcon className="w-5 h-5" /> Start Live Conversation
