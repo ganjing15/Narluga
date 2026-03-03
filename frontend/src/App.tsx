@@ -86,6 +86,7 @@ function App() {
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
+  const [isStartingConversation, setIsStartingConversation] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [currentPage, setCurrentPage] = useState<'home' | 'gallery'>('home')
@@ -120,6 +121,7 @@ function App() {
   const [researchMode, setResearchMode] = useState<'off' | 'fast' | 'deep'>('fast')
   const narrationContextRef = useRef<string>('')
   const sourceLabelsRef = useRef<string[]>([])
+  const controlsInventoryRef = useRef<string>('')
 
   // Refs
   const wsRef = useRef<WebSocket | null>(null)
@@ -136,7 +138,7 @@ function App() {
   const iframeReadyRef = useRef<boolean>(false)
   const nextPlayTimeRef = useRef<number>(0)
   const activeAudioNodesRef = useRef<AudioBufferSourceNode[]>([])
-  const lastDisconnectAtRef = useRef<number>(0)
+
 
   // Detect input type from text
   const detectInputType = useCallback((text: string): { type: SourceType, label: string } => {
@@ -433,8 +435,8 @@ function App() {
       audioCtxRef.current.close()
       audioCtxRef.current = null
     }
-    lastDisconnectAtRef.current = Date.now()
     setIsConnecting(false)
+    setIsStartingConversation(false)
     setHasStarted(false)
     // If we're ending a conversation and have a graphic, go back to 'complete'
     setSessionPhase(prev => {
@@ -448,51 +450,72 @@ function App() {
 
   // Start live conversation (mic + audio)
   const startPresentation = async () => {
-    if (!streamRef.current) {
-      try {
-        streamRef.current = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            sampleRate: 16000,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        });
-      } catch (err: any) {
-        setError("Microphone permission is required to converse with the AI.");
-        return;
-      }
-    }
-
-    if (!audioCtxRef.current) {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      audioCtxRef.current = new AudioContext({ sampleRate: 24000 });
-      nextPlayTimeRef.current = audioCtxRef.current.currentTime;
-    }
+    setIsStartingConversation(true)
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      // WS is already open — just send start_live_session
+      // Fast path: WS already open (from graphic generation)
+      // Need mic before we can proceed
+      if (!streamRef.current) {
+        try {
+          streamRef.current = await navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          });
+        } catch (err: any) {
+          setIsStartingConversation(false)
+          setError("Microphone permission is required to converse with the AI.");
+          return;
+        }
+      }
+      if (!audioCtxRef.current) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        audioCtxRef.current = new AC({ sampleRate: 24000 });
+        nextPlayTimeRef.current = audioCtxRef.current.currentTime;
+      }
       wsRef.current.send(JSON.stringify({
         type: "start_live_session",
         pre_events: eventQueueRef.current
       }))
       setHasStarted(true)
+      setIsStartingConversation(false)
       hasStartedRef.current = true
+      micReadyRef.current = true
       eventQueueRef.current = []
-
-      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      if (audioCtxRef.current.state === 'suspended') {
         try { audioCtxRef.current.resume(); } catch (err) { }
       }
-
       setupMic()
     } else if (narrationContextRef.current) {
-      // WS is closed but we have context — reconnect via /ws/live-restart
+      // Reconnect path: no WS open (loaded graphic from gallery)
+      // Run getUserMedia + getIdToken in PARALLEL to save ~500-800ms
       setIsConnecting(true)
       setError('')
-      setStatusMessage('Reconnecting...')
+      setStatusMessage('Connecting...')
 
-      const token = await getIdToken()
+      let stream: MediaStream
+      let token: string | null
+      try {
+        [stream, token] = await Promise.all([
+          streamRef.current
+            ? Promise.resolve(streamRef.current)
+            : navigator.mediaDevices.getUserMedia({
+                audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+              }),
+          getIdToken()
+        ])
+        streamRef.current = stream
+      } catch (err: any) {
+        setIsStartingConversation(false)
+        setIsConnecting(false)
+        setError("Microphone permission is required to converse with the AI.");
+        return;
+      }
+
+      if (!audioCtxRef.current) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        audioCtxRef.current = new AC({ sampleRate: 24000 });
+        nextPlayTimeRef.current = audioCtxRef.current.currentTime;
+      }
+
       const wsUrl = token ? `${WS_BACKEND_URL}/ws/live-restart?token=${encodeURIComponent(token)}` : `${WS_BACKEND_URL}/ws/live-restart`
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
@@ -505,26 +528,34 @@ function App() {
           narration_context: narrationContextRef.current,
           source_labels: sourceLabelsRef.current,
           svg_html: currentSvgRef.current || "",
-          controls_html: currentControlsRef.current || ""
+          controls_html: currentControlsRef.current || "",
+          controls_inventory: controlsInventoryRef.current || ""
         }))
-        // Immediately send start_live_session
-        ws.send(JSON.stringify({
-          type: "start_live_session",
-          pre_events: eventQueueRef.current
-        }))
+        // Set up mic BEFORE sending start_live_session so audio flows to Gemini
+        // before the backend sends the initial prompt
         setHasStarted(true)
+        setIsStartingConversation(false)
         hasStartedRef.current = true
+        micReadyRef.current = true
         eventQueueRef.current = []
 
         if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
           try { audioCtxRef.current.resume(); } catch (err) { }
         }
+
+        setupMic()
+
+        // Send start_live_session AFTER mic setup so backend waits for audio before prompting
+        ws.send(JSON.stringify({
+          type: "start_live_session",
+          pre_events: eventQueueRef.current
+        }))
       }
 
       // Reuse the same message/close/error handlers
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
-        console.log('[WebSocket] Received message:', data.type, data);
+        if (data.type !== 'audio') console.log('[WebSocket] Received message:', data.type, data);
 
         if (data.type === 'phase') {
           setSessionPhase(data.phase as SessionPhase)
@@ -706,7 +737,7 @@ function App() {
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
-        console.log('[WebSocket] Received message:', data.type, data);
+        if (data.type !== 'audio') console.log('[WebSocket] Received message:', data.type, data);
 
         if (data.type === 'phase') {
           setSessionPhase(data.phase as SessionPhase)
@@ -726,6 +757,7 @@ function App() {
           // Store narration context for conversation restart
           if (data.narration_context) narrationContextRef.current = data.narration_context
           if (data.source_labels) sourceLabelsRef.current = data.source_labels
+          if (data.controls_inventory) controlsInventoryRef.current = data.controls_inventory
           // Improvement C: store generation-time grounding citations
           setGroundingSources(data.grounding_sources || [])
 
@@ -858,10 +890,10 @@ function App() {
     setError('')
   }, [disconnect])
 
-  // Pre-load AudioWorklet module as soon as the graphic is ready so clicking
-  // "Start Live Conversation" only needs getUserMedia (not addModule too).
+  // Pre-load AudioWorklet module early (during designing phase) so it's ready
+  // well before the user clicks "Start Live Conversation".
   useEffect(() => {
-    if (sessionPhase !== 'complete' || workletPreloadedRef.current || micAudioCtxRef.current) return
+    if ((sessionPhase !== 'designing' && sessionPhase !== 'complete') || workletPreloadedRef.current || micAudioCtxRef.current) return
     ;(async () => {
       try {
         const micAudioCtx = new AudioContext({ sampleRate: 16000 })
@@ -874,6 +906,12 @@ function App() {
         console.log('[Preload] AudioWorklet pre-loaded')
       } catch (err) {
         console.warn('[Preload] AudioWorklet pre-load failed:', err)
+      }
+      // Also pre-create playback AudioContext (will be suspended until user gesture)
+      if (!audioCtxRef.current) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext
+        audioCtxRef.current = new AC({ sampleRate: 24000 })
+        nextPlayTimeRef.current = audioCtxRef.current.currentTime
       }
     })()
   }, [sessionPhase])
@@ -1990,6 +2028,7 @@ function App() {
             setCurrentSubtitle(g.subtitle || null)
             narrationContextRef.current = g.narration_context || ''
             sourceLabelsRef.current = g.source_labels || []
+            controlsInventoryRef.current = ''
             // Reconstruct sources so the left panel shows the original links
             setSources((g.source_labels || []).map((label, i) => {
               const l = label.toLowerCase()
@@ -2499,24 +2538,14 @@ function App() {
                     {!hasStarted && (
                       <button
                         onClick={startPresentation}
-                        onMouseEnter={() => {
-                          // Prefetch mic stream on hover so it's ready when user clicks.
-                          // Skip if we just disconnected (prevents the mic icon from lingering).
-                          if (!streamRef.current && Date.now() - lastDisconnectAtRef.current > 1000) {
-                            navigator.mediaDevices.getUserMedia({
-                              audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-                            }).then(s => {
-                              if (!streamRef.current) {
-                                streamRef.current = s
-                              } else {
-                                s.getTracks().forEach(t => t.stop())
-                              }
-                            }).catch(() => {})
-                          }
-                        }}
-                        className="w-full py-3 px-6 bg-[var(--accent-primary)] hover:bg-[#0a48ad] text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                        disabled={isStartingConversation}
+                        className={`w-full py-3 px-6 ${isStartingConversation ? 'bg-[#0a48ad] opacity-80' : 'bg-[var(--accent-primary)] hover:bg-[#0a48ad]'} text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md`}
                       >
-                        <MicIcon className="w-5 h-5" /> Start Live Conversation
+                        {isStartingConversation ? (
+                          <><span className="spinner" style={{ width: 18, height: 18 }} /> Connecting...</>
+                        ) : (
+                          <><MicIcon className="w-5 h-5" /> Start Live Conversation</>
+                        )}
                       </button>
                     )}
 

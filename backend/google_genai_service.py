@@ -626,6 +626,9 @@ async def handle_live_session(websocket: WebSocket, sources: list, research_mode
         except FileNotFoundError:
             pass
             
+        # Pre-compute controls inventory so reconnects don't need to re-parse HTML
+        controls_inventory = _extract_controls_inventory(svg_html, controls_html)
+
         # Send the SVG and Controls directly to the frontend
         await websocket.send_json({
             "type": "interactive_svg",
@@ -636,14 +639,15 @@ async def handle_live_session(websocket: WebSocket, sources: list, research_mode
             "narration_context": narration_context,
             "source_labels": source_labels,
             "grounding_sources": grounding_sources,  # Improvement C: citation URLs for the UI
+            "controls_inventory": controls_inventory,
         })
-        
+
         # Signal graphic is complete
         await websocket.send_json({"type": "phase", "phase": "complete"})
-        
+
         # 2. Phase 2: Live Presenter — delegate to shared helper
         # Improvement D: pass grounding context into live session so AI can reference sources
-        await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, grounding_sources)
+        await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, grounding_sources, controls_inventory)
 
     except Exception as e:
         print(f"[Session] UNHANDLED EXCEPTION in handle_live_session: {type(e).__name__}: {e}")
@@ -656,13 +660,13 @@ async def handle_live_session(websocket: WebSocket, sources: list, research_mode
 
 
 
-async def handle_live_restart(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = ""):
+async def handle_live_restart(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", controls_inventory: str = ""):
     """
     Restart a live conversation on an existing graphic.
     Skips graphic generation and goes straight to the Live API.
     """
     print(f"[Live Restart] Starting with {len(source_labels)} source label(s)")
-    await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html)
+    await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, controls_inventory=controls_inventory)
 
 
 def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
@@ -763,7 +767,7 @@ def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
         return f"Could not parse controls: {e}"
 
 
-async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", grounding_sources: list[dict] | None = None):
+async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", grounding_sources: list[dict] | None = None, controls_inventory: str = ""):
     """
     Shared Live API session logic. Handles system instruction, tool declarations,
     Gemini connection, and bidirectional audio/tool streaming.
@@ -800,9 +804,9 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     </diagram_context>{grounding_context_block}
     
     Here are the ACTUAL interactive controls available in the diagram's control panel:
-    
+
     <available_controls>
-    {_extract_controls_inventory(svg_html, controls_html)}
+    {controls_inventory or _extract_controls_inventory(svg_html, controls_html)}
     </available_controls>
     
     YOUR BEHAVIOR:
@@ -973,21 +977,36 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     session_holder = {"session": None, "alive": True}
     go_away_event = asyncio.Event()  # Set when server sends GoAway
     client_disconnected = asyncio.Event()  # Set when frontend WS closes
+    audio_started = asyncio.Event()  # Set when first mic audio frame arrives
     
     # --------------------------------------------------------------------------------
-    # 2 + 3. PRE-CONNECT to Gemini, THEN wait for user to click "Start".
-    #
-    # Previously: wait for start_live_session → THEN open Gemini connection (~1-2s).
-    # Now: open Gemini connection immediately (while user reads the graphic) →
-    #       THEN wait for start_live_session inside the already-open connection.
-    #
-    # This hides the Live API handshake latency behind the user's reading time,
-    # so clicking "Start" feels nearly instantaneous.
+    # Wait for user to click "Start", THEN connect to Gemini Live API.
+    # Simple and reliable — no pre-connection, no timeout issues.
     # --------------------------------------------------------------------------------
     MAX_RECONNECT_ATTEMPTS = 3
     reconnect_count = 0
     is_first_connection = True
-    initial_events = []
+
+    # Wait for user to click "Start Live Conversation"
+    print("[WebSocket] Waiting for user to start presentation...")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            payload = json.loads(data)
+            if payload.get("type") == "start_live_session":
+                break
+    except WebSocketDisconnect:
+        print("[WebSocket] Client disconnected before starting session.")
+        return
+    except Exception as e:
+        print(f"[WebSocket] Error while waiting to start: {e}")
+        return
+
+    # Immediately signal conversation phase so frontend transitions instantly
+    # (don't wait for Gemini connection — the UI should feel responsive)
+    await websocket.send_json({"type": "phase", "phase": "conversation"})
+
+    print("[WebSocket] User clicked Start — connecting to Gemini Live API...")
 
     while session_holder["alive"] and not client_disconnected.is_set():
         # Build config (with resumption handle for reconnections)
@@ -1009,45 +1028,10 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 if is_first_connection:
                     is_first_connection = False
 
-                    # Gemini is already connected — now just wait for the user to click Start.
-                    # By the time they click, the connection handshake is long done.
-                    print("[WebSocket] Waiting for user to start presentation...")
-                    try:
-                        while True:
-                            data = await websocket.receive_text()
-                            payload = json.loads(data)
-                            if payload.get("type") == "start_live_session":
-                                initial_events = payload.get("pre_events", [])
-                                break
-                    except WebSocketDisconnect:
-                        print("[WebSocket] Client disconnected before starting session.")
-                        return
-                    except Exception as e:
-                        print(f"[WebSocket] Error while waiting to start: {e}")
-                        return
-
-                    # Signal conversation phase then ready — back-to-back, no waiting
-                    await websocket.send_json({"type": "phase", "phase": "conversation"})
-
-                    # Drop stale pre-session events
-                    if initial_events:
-                        print(f"[Gemini] Dropping {len(initial_events)} stale pre-session event(s) to prevent double overview.")
-
+                    # phase:conversation was already sent before connecting —
+                    # now send ready to confirm Gemini is connected
                     async with ws_lock:
                         await websocket.send_json({"type": "ready"})
-
-                    # Brief pause for the mic AudioWorklet to initialize on the frontend.
-                    # Reduced from 1.2s: the frontend already gates audio via micReadyRef,
-                    # so 0.3s is enough for the worklet to start up without mic noise bleed.
-                    try:
-                        await asyncio.sleep(0.3)
-                        await session.send_client_content(
-                            turns=[types.Content(parts=[types.Part.from_text(
-                                text="The user just joined the session. Begin your welcome and overview now."
-                            )])]
-                        )
-                    except Exception as e:
-                        print(f"[Gemini] Error sending initial prompt: {e}")
                 else:
                     print("[Gemini] Session resumed successfully — conversation continues seamlessly.")
 
@@ -1065,6 +1049,9 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                 continue  # Reconnecting, skip
 
                             if "realtimeInput" in payload:
+                                if not audio_started.is_set():
+                                    audio_started.set()
+                                    print("[Receive Task] First audio frame received from client")
                                 chunk = payload["realtimeInput"]["mediaChunks"][0]
                                 b64_data = chunk["data"]
                                 mime_type = chunk["mimeType"]
@@ -1348,6 +1335,21 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 receive_task = asyncio.create_task(receive_from_client_and_send_to_gemini())
                 gemini_task = asyncio.create_task(receive_from_gemini_and_send_to_client())
                 keepalive_task = asyncio.create_task(keep_alive_ping())
+
+                # On first connection: send initial prompt immediately.
+                # Mic audio is already flowing from the frontend (setupMic runs
+                # before start_live_session is sent), so no need to wait.
+                if not session_holder.get("prompted"):
+                    session_holder["prompted"] = True
+                    print("[Gemini] Sending initial prompt immediately")
+                    try:
+                        await session.send_client_content(
+                            turns=[types.Content(parts=[types.Part.from_text(
+                                text="The user just joined the session. Begin your welcome and overview now."
+                            )])]
+                        )
+                    except Exception as e:
+                        print(f"[Gemini] Error sending initial prompt: {e}")
 
                 done, pending = await asyncio.wait(
                     [receive_task, gemini_task, keepalive_task],

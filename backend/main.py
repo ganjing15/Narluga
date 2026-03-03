@@ -168,11 +168,12 @@ async def websocket_restart_endpoint(websocket: WebSocket):
         source_labels = payload.get("source_labels", [])
         svg_html = payload.get("svg_html", "")
         controls_html = payload.get("controls_html", "")
-        
+        controls_inventory = payload.get("controls_inventory", "")
+
         print(f"[WebSocket Restart] Restarting with {len(source_labels)} source label(s)")
-        
+
         # Go straight to the Live API — no graphic generation
-        await handle_live_restart(websocket, narration_context, source_labels, svg_html, controls_html)
+        await handle_live_restart(websocket, narration_context, source_labels, svg_html, controls_html, controls_inventory)
         
     except WebSocketDisconnect:
         print("[WebSocket Restart] Client disconnected")
