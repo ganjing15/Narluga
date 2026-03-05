@@ -64,6 +64,9 @@ type SearchResult = {
 // Session phases
 type SessionPhase = 'idle' | 'analyzing' | 'designing' | 'complete' | 'conversation'
 
+// Module-level guard to prevent duplicate preconnect (survives hot-reload)
+let _preConnectInFlight = false
+
 function App() {
   // Source management
   const [sources, setSources] = useState<Source[]>([])
@@ -87,6 +90,7 @@ function App() {
   const [error, setError] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
   const [isStartingConversation, setIsStartingConversation] = useState(false)
+  const [eagerAudioReady, setEagerAudioReady] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [currentPage, setCurrentPage] = useState<'home' | 'gallery'>('home')
@@ -134,10 +138,11 @@ function App() {
   const hasStartedRef = useRef<boolean>(false)
   const eventQueueRef = useRef<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const pendingToolActionsRef = useRef<Array<{action: string, params: any}>>([])
+  const pendingToolActionsRef = useRef<Array<{ action: string, params: any }>>([])
   const iframeReadyRef = useRef<boolean>(false)
   const nextPlayTimeRef = useRef<number>(0)
   const activeAudioNodesRef = useRef<AudioBufferSourceNode[]>([])
+  const audioMutedUntilRef = useRef<number>(0)
 
 
   // Detect input type from text
@@ -413,8 +418,8 @@ function App() {
   // Disconnect cleanup
   const disconnect = useCallback(() => {
     micReadyRef.current = false
-    workletPreloadedRef.current = false
     hasStartedRef.current = false
+    // Note: don't reset _preConnectInFlight here — it's managed by preConnectForGalleryGraphic only
     // Tell backend to end Gemini session, but keep WS alive for fast reconnect
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "end_live_session" }))
@@ -423,10 +428,7 @@ function App() {
       audioWorkletNodeRef.current.disconnect()
       audioWorkletNodeRef.current = null
     }
-    if (micAudioCtxRef.current) {
-      try { micAudioCtxRef.current.close() } catch (e) { }
-      micAudioCtxRef.current = null
-    }
+    // Keep micAudioCtxRef alive with worklet loaded — setupMic() reuses it (fast path)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
@@ -438,6 +440,7 @@ function App() {
     setIsConnecting(false)
     setIsStartingConversation(false)
     setHasStarted(false)
+    setEagerAudioReady(false)
     // If we're ending a conversation and have a graphic, go back to 'complete'
     setSessionPhase(prev => {
       if ((prev === 'conversation' || prev === 'complete') && currentSvgRef.current) {
@@ -448,30 +451,203 @@ function App() {
     setStatusMessage('')
   }, [])
 
+  // Attach onmessage/onclose/onerror to a live-restart WebSocket.
+  // Extracted so both startPresentation (Path B) and preConnectForGalleryGraphic can reuse it.
+  const attachRestartHandlers = (ws: WebSocket) => {
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (data.type !== 'audio') console.log('[WebSocket] Received message:', data.type, data);
+
+      if (data.type === 'phase') {
+        setSessionPhase(data.phase as SessionPhase)
+      } else if (data.type === 'ready') {
+        micReadyRef.current = true
+        setupMic()
+      } else if (data.type === 'clear') {
+        if (audioCtxRef.current) {
+          activeAudioNodesRef.current.forEach(node => { try { node.stop() } catch (e) { } })
+          activeAudioNodesRef.current = []
+          nextPlayTimeRef.current = audioCtxRef.current.currentTime
+        }
+        // Backend confirmed interruption — allow new audio through immediately
+        audioMutedUntilRef.current = 0
+      } else if (data.type === 'audio') {
+        if (Date.now() < audioMutedUntilRef.current) return;
+        const base64Data = data.data
+        const binaryStr = window.atob(base64Data)
+        const len = binaryStr.length
+        const bytes = new Uint8Array(len)
+        for (let i = 0; i < len; i++) { bytes[i] = binaryStr.charCodeAt(i) }
+        const int16Array = new Int16Array(bytes.buffer)
+        const float32Array = new Float32Array(int16Array.length)
+        for (let i = 0; i < int16Array.length; i++) { float32Array[i] = int16Array[i] / 32768.0 }
+        if (audioCtxRef.current) {
+          const audioBuffer = audioCtxRef.current.createBuffer(1, float32Array.length, 24000)
+          audioBuffer.getChannelData(0).set(float32Array)
+          const source = audioCtxRef.current.createBufferSource()
+          source.buffer = audioBuffer
+          source.connect(audioCtxRef.current.destination)
+          const startTime = Math.max(audioCtxRef.current.currentTime, nextPlayTimeRef.current)
+          source.start(startTime)
+          nextPlayTimeRef.current = startTime + audioBuffer.duration
+          activeAudioNodesRef.current.push(source)
+          source.onended = () => { activeAudioNodesRef.current = activeAudioNodesRef.current.filter(n => n !== source) }
+        }
+      } else if (data.type === 'tool_action') {
+        const { action, params } = data
+        console.log('[Parent] Received tool_action:', action, params);
+        if (action === 'fetch_more_detail') {
+          if (params.status === 'searching') {
+            const badge = document.createElement('div')
+            badge.id = 'fetch-indicator'
+            badge.style.cssText = 'position:fixed;top:20px;right:20px;background:rgba(59,130,246,0.9);color:white;padding:8px 16px;border-radius:20px;font-size:13px;z-index:9999;backdrop-filter:blur(8px);animation:fadeIn 0.3s ease;'
+            badge.textContent = `🔍 Searching: ${params.query}`
+            document.body.appendChild(badge)
+          } else {
+            document.getElementById('fetch-indicator')?.remove()
+          }
+        }
+        if (iframeRef.current && iframeRef.current.contentWindow && iframeReadyRef.current) {
+          console.log('[Parent] Forwarding to iframe:', iframeRef.current.contentWindow);
+          iframeRef.current.contentWindow.postMessage({ type: 'TOOL_ACTION', action, params }, '*')
+        } else {
+          console.warn('[Parent] Iframe not ready, queuing tool_action:', action);
+          pendingToolActionsRef.current.push({ action, params })
+        }
+      } else if (data.type === 'eager_audio_ready') {
+        setEagerAudioReady(true)
+        console.log('[PreConnect] AI audio ready — click Start for instant playback')
+      } else if (data.type === 'error') {
+        setError(data.message)
+        disconnect()
+      }
+    }
+    ws.onclose = (event) => {
+      if (event.code === 1000 && event.reason) {
+        setStatusMessage(event.reason)
+      } else if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
+        setError(`Connection lost (${event.code}). Click 'Start Live Conversation' to reconnect.`)
+      }
+      disconnect()
+    }
+    ws.onerror = () => {
+      setError('WebSocket connection error.')
+      disconnect()
+    }
+  }
+
+  // Pre-connect WebSocket when a gallery graphic is opened so the first click
+  // on "Start Live Conversation" takes Path A (fast) instead of Path B (slow).
+  const preConnectForGalleryGraphic = async () => {
+    // Prevent duplicate preconnect (module-level flag survives hot-reload)
+    if (_preConnectInFlight) {
+      console.log('[PreConnect] Already preconnecting — skipping duplicate')
+      return
+    }
+    _preConnectInFlight = true
+    // Always close old WS — it may be from /ws/live (graphic generation) not /ws/live-restart
+    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      // Detach handlers so stale onclose doesn't call disconnect()
+      wsRef.current.onclose = null
+      wsRef.current.onerror = null
+      wsRef.current.close()
+      wsRef.current = null
+    }
+
+    // Pre-acquire mic if permission was already granted (no surprise dialog)
+    if (!streamRef.current && navigator.permissions) {
+      navigator.permissions.query({ name: 'microphone' as PermissionName }).then(status => {
+        if (status.state === 'granted') {
+          navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          }).then(stream => {
+            streamRef.current = stream
+            console.log('[PreConnect] Mic stream pre-acquired (permission was granted)')
+          }).catch(() => { })
+        }
+      }).catch(() => { })
+    }
+
+    try {
+      const token = await getIdToken()
+      const wsUrl = token
+        ? `${WS_BACKEND_URL}/ws/live-restart?token=${encodeURIComponent(token)}`
+        : `${WS_BACKEND_URL}/ws/live-restart`
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+      ws.onopen = () => {
+        _preConnectInFlight = false
+        ws.send(JSON.stringify({
+          type: "restart_live",
+          narration_context: narrationContextRef.current,
+          source_labels: sourceLabelsRef.current,
+          svg_html: currentSvgRef.current || "",
+          controls_html: currentControlsRef.current || "",
+          controls_inventory: controlsInventoryRef.current || ""
+        }))
+        console.log('[PreConnect] Gallery graphic WS ready — next click will use fast path')
+      }
+      attachRestartHandlers(ws)
+    } catch (err) {
+      // Pre-connect failed silently — startPresentation will fall back to Path B on click
+      _preConnectInFlight = false
+      wsRef.current = null
+    }
+  }
+
   // Start live conversation (mic + audio)
   const startPresentation = async () => {
     setIsStartingConversation(true)
+    setSessionPhase('conversation')  // Transition UI immediately on ALL paths
+    setStatusMessage('Connecting to AI...')
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      // Fast path: WS already open (from graphic generation)
-      // Need mic before we can proceed
-      if (!streamRef.current) {
-        try {
-          streamRef.current = await navigator.mediaDevices.getUserMedia({
-            audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-          });
-        } catch (err: any) {
-          setIsStartingConversation(false)
-          setError("Microphone permission is required to converse with the AI.");
-          return;
-        }
+    // Ensure mic is acquired (parallel with WS wait)
+    const micPromise = streamRef.current
+      ? Promise.resolve(streamRef.current)
+      : navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      }).catch((err: any) => {
+        setIsStartingConversation(false)
+        setSessionPhase('complete')
+        setError("Microphone permission is required to converse with the AI.")
+        return null
+      })
+
+    // Ensure playback AudioContext exists
+    if (!audioCtxRef.current) {
+      const AC = window.AudioContext || (window as any).webkitAudioContext
+      audioCtxRef.current = new AC({ sampleRate: 24000 })
+      nextPlayTimeRef.current = audioCtxRef.current.currentTime
+    }
+
+    // --- WS readiness: wait for preconnect WS or create a new one ---
+    let ws = wsRef.current
+
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+      // Preconnect WS exists — wait for it to open (no timeout, it WILL complete)
+      if (ws.readyState === WebSocket.CONNECTING) {
+        console.log('[startPresentation] Waiting for preconnect WS to open...')
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            if (ws!.readyState === WebSocket.OPEN) { resolve(); return }
+            if (ws!.readyState === WebSocket.CLOSED || ws!.readyState === WebSocket.CLOSING) { resolve(); return }
+            setTimeout(check, 50)
+          }
+          check()
+        })
       }
-      if (!audioCtxRef.current) {
-        const AC = window.AudioContext || (window as any).webkitAudioContext;
-        audioCtxRef.current = new AC({ sampleRate: 24000 });
-        nextPlayTimeRef.current = audioCtxRef.current.currentTime;
-      }
-      wsRef.current.send(JSON.stringify({
+      ws = wsRef.current  // re-read in case it changed
+    }
+
+    // Wait for mic (parallel)
+    const stream = await micPromise
+    if (!stream) return  // mic was denied, error already set
+    streamRef.current = stream
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      // ===== FAST PATH: preconnect WS is OPEN =====
+      console.log('[startPresentation] Using fast path (preconnect WS)')
+      ws.send(JSON.stringify({
         type: "start_live_session",
         pre_events: eventQueueRef.current
       }))
@@ -485,45 +661,25 @@ function App() {
       }
       setupMic()
     } else if (narrationContextRef.current) {
-      // Reconnect path: no WS open (loaded graphic from gallery)
-      // Run getUserMedia + getIdToken in PARALLEL to save ~500-800ms
+      // ===== SLOW PATH: no preconnect WS — create one fresh =====
+      console.log('[startPresentation] No preconnect WS available — creating new connection')
       setIsConnecting(true)
       setError('')
-      setStatusMessage('Connecting...')
 
-      let stream: MediaStream
       let token: string | null
       try {
-        [stream, token] = await Promise.all([
-          streamRef.current
-            ? Promise.resolve(streamRef.current)
-            : navigator.mediaDevices.getUserMedia({
-                audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-              }),
-          getIdToken()
-        ])
-        streamRef.current = stream
-      } catch (err: any) {
-        setIsStartingConversation(false)
-        setIsConnecting(false)
-        setError("Microphone permission is required to converse with the AI.");
-        return;
-      }
-
-      if (!audioCtxRef.current) {
-        const AC = window.AudioContext || (window as any).webkitAudioContext;
-        audioCtxRef.current = new AC({ sampleRate: 24000 });
-        nextPlayTimeRef.current = audioCtxRef.current.currentTime;
+        token = await getIdToken()
+      } catch {
+        token = null
       }
 
       const wsUrl = token ? `${WS_BACKEND_URL}/ws/live-restart?token=${encodeURIComponent(token)}` : `${WS_BACKEND_URL}/ws/live-restart`
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
+      const newWs = new WebSocket(wsUrl)
+      wsRef.current = newWs
 
-      ws.onopen = () => {
+      newWs.onopen = () => {
         setIsConnecting(false)
-        // Send restart context
-        ws.send(JSON.stringify({
+        newWs.send(JSON.stringify({
           type: "restart_live",
           narration_context: narrationContextRef.current,
           source_labels: sourceLabelsRef.current,
@@ -531,8 +687,6 @@ function App() {
           controls_html: currentControlsRef.current || "",
           controls_inventory: controlsInventoryRef.current || ""
         }))
-        // Set up mic BEFORE sending start_live_session so audio flows to Gemini
-        // before the backend sends the initial prompt
         setHasStarted(true)
         setIsStartingConversation(false)
         hasStartedRef.current = true
@@ -545,110 +699,13 @@ function App() {
 
         setupMic()
 
-        // Send start_live_session AFTER mic setup so backend waits for audio before prompting
-        ws.send(JSON.stringify({
+        newWs.send(JSON.stringify({
           type: "start_live_session",
           pre_events: eventQueueRef.current
         }))
       }
 
-      // Reuse the same message/close/error handlers
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        if (data.type !== 'audio') console.log('[WebSocket] Received message:', data.type, data);
-
-        if (data.type === 'phase') {
-          setSessionPhase(data.phase as SessionPhase)
-        } else if (data.type === 'ready') {
-          micReadyRef.current = true
-          setupMic()
-        } else if (data.type === 'clear') {
-          if (audioCtxRef.current) {
-            // Stop all currently scheduled/playing audio nodes instantly without destroying the AudioContext
-            activeAudioNodesRef.current.forEach(node => {
-              try { node.stop() } catch (e) { }
-            })
-            activeAudioNodesRef.current = []
-            // Reset the playhead so new audio plays immediately
-            nextPlayTimeRef.current = audioCtxRef.current.currentTime
-          }
-        } else if (data.type === 'audio') {
-          const base64Data = data.data
-          const binaryStr = window.atob(base64Data)
-          const len = binaryStr.length
-          const bytes = new Uint8Array(len)
-          for (let i = 0; i < len; i++) {
-            bytes[i] = binaryStr.charCodeAt(i)
-          }
-          const int16Array = new Int16Array(bytes.buffer)
-          const float32Array = new Float32Array(int16Array.length)
-          for (let i = 0; i < int16Array.length; i++) {
-            float32Array[i] = int16Array[i] / 32768.0
-          }
-          if (audioCtxRef.current) {
-            const audioBuffer = audioCtxRef.current.createBuffer(1, float32Array.length, 24000)
-            audioBuffer.getChannelData(0).set(float32Array)
-            const source = audioCtxRef.current.createBufferSource()
-            source.buffer = audioBuffer
-            source.connect(audioCtxRef.current.destination)
-            const startTime = Math.max(audioCtxRef.current.currentTime, nextPlayTimeRef.current)
-            source.start(startTime)
-            nextPlayTimeRef.current = startTime + audioBuffer.duration
-
-            // Track the playing node so we can interrupt it later
-            activeAudioNodesRef.current.push(source)
-            // Clean up node from tracking array when it finishes naturally
-            source.onended = () => {
-              activeAudioNodesRef.current = activeAudioNodesRef.current.filter(n => n !== source)
-            }
-          }
-        } else if (data.type === 'tool_action') {
-          const { action, params } = data
-          console.log('[Parent] Received tool_action:', action, params);
-
-          // Handle fetch_more_detail indicator in the parent
-          if (action === 'fetch_more_detail') {
-            if (params.status === 'searching') {
-              const badge = document.createElement('div')
-              badge.id = 'fetch-indicator'
-              badge.style.cssText = 'position:fixed;top:20px;right:20px;background:rgba(59,130,246,0.9);color:white;padding:8px 16px;border-radius:20px;font-size:13px;z-index:9999;backdrop-filter:blur(8px);animation:fadeIn 0.3s ease;'
-              badge.textContent = `🔍 Searching: ${params.query}`
-              document.body.appendChild(badge)
-            } else {
-              document.getElementById('fetch-indicator')?.remove()
-            }
-          }
-
-          // Forward ALL tool actions into the iframe where the SVG elements actually live
-          if (iframeRef.current && iframeRef.current.contentWindow && iframeReadyRef.current) {
-            console.log('[Parent] Forwarding to iframe:', iframeRef.current.contentWindow);
-            iframeRef.current.contentWindow.postMessage(
-              { type: 'TOOL_ACTION', action, params }, '*'
-            )
-          } else {
-            console.warn('[Parent] Iframe not ready, queuing tool_action:', action);
-            pendingToolActionsRef.current.push({ action, params })
-          }
-        } else if (data.type === 'error') {
-          setError(data.message)
-          disconnect()
-        }
-      }
-
-      ws.onclose = (event) => {
-        if (event.code === 1000 && event.reason) {
-          // Clean server-side close with a reason — show it as info, not error
-          setStatusMessage(event.reason)
-        } else if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
-          setError(`Connection lost (${event.code}). Click 'Start Live Conversation' to reconnect.`)
-        }
-        disconnect()
-      }
-
-      ws.onerror = () => {
-        setError('WebSocket connection error.')
-        disconnect()
-      }
+      attachRestartHandlers(newWs)
     }
   }
 
@@ -688,7 +745,7 @@ function App() {
       attachStream(micAudioCtxRef.current)
     } else if (!micAudioCtxRef.current) {
       // Slow path: pre-load didn't finish in time, do full init now
-      ;(async () => {
+      ; (async () => {
         try {
           const micAudioCtx = new AudioContext({ sampleRate: 16000 })
           const blob = new Blob([PCM_WORKLET_CODE], { type: 'application/javascript' })
@@ -791,6 +848,7 @@ function App() {
             nextPlayTimeRef.current = audioCtxRef.current.currentTime
           }
         } else if (data.type === 'audio') {
+          if (Date.now() < audioMutedUntilRef.current) return; // discard in-flight old-response chunks
           const base64Data = data.data
           const binaryStr = window.atob(base64Data)
           const len = binaryStr.length
@@ -877,6 +935,7 @@ function App() {
   // Reset everything for a new graphic
   const resetSession = useCallback(() => {
     disconnect()
+    _preConnectInFlight = false  // Allow preconnect for next gallery graphic
     // Keep sources — only reset graphic state
     setCurrentSvg(null)
     setCurrentControls(null)
@@ -894,26 +953,26 @@ function App() {
   // well before the user clicks "Start Live Conversation".
   useEffect(() => {
     if ((sessionPhase !== 'designing' && sessionPhase !== 'complete') || workletPreloadedRef.current || micAudioCtxRef.current) return
-    ;(async () => {
-      try {
-        const micAudioCtx = new AudioContext({ sampleRate: 16000 })
-        const blob = new Blob([PCM_WORKLET_CODE], { type: 'application/javascript' })
-        const url = URL.createObjectURL(blob)
-        await micAudioCtx.audioWorklet.addModule(url)
-        URL.revokeObjectURL(url)
-        micAudioCtxRef.current = micAudioCtx
-        workletPreloadedRef.current = true
-        console.log('[Preload] AudioWorklet pre-loaded')
-      } catch (err) {
-        console.warn('[Preload] AudioWorklet pre-load failed:', err)
-      }
-      // Also pre-create playback AudioContext (will be suspended until user gesture)
-      if (!audioCtxRef.current) {
-        const AC = window.AudioContext || (window as any).webkitAudioContext
-        audioCtxRef.current = new AC({ sampleRate: 24000 })
-        nextPlayTimeRef.current = audioCtxRef.current.currentTime
-      }
-    })()
+      ; (async () => {
+        try {
+          const micAudioCtx = new AudioContext({ sampleRate: 16000 })
+          const blob = new Blob([PCM_WORKLET_CODE], { type: 'application/javascript' })
+          const url = URL.createObjectURL(blob)
+          await micAudioCtx.audioWorklet.addModule(url)
+          URL.revokeObjectURL(url)
+          micAudioCtxRef.current = micAudioCtx
+          workletPreloadedRef.current = true
+          console.log('[Preload] AudioWorklet pre-loaded')
+        } catch (err) {
+          console.warn('[Preload] AudioWorklet pre-load failed:', err)
+        }
+        // Also pre-create playback AudioContext (will be suspended until user gesture)
+        if (!audioCtxRef.current) {
+          const AC = window.AudioContext || (window as any).webkitAudioContext
+          audioCtxRef.current = new AC({ sampleRate: 24000 })
+          nextPlayTimeRef.current = audioCtxRef.current.currentTime
+        }
+      })()
   }, [sessionPhase])
 
   // Cursor hover tracking — tell the AI what the user is pointing at
@@ -1033,7 +1092,7 @@ function App() {
 
             if (event.data.newLabel && event.data.newLabel !== event.data.clickedLabel) {
               const newLabelLower = event.data.newLabel.toLowerCase();
-              
+
               // Determine what action was actually performed based on the result
               if (newLabelLower.includes('pause') || newLabelLower.includes('stop') || newLabelLower.includes('⏸')) {
                 // Button now says "Pause" = animation is playing = user clicked Play
@@ -1041,7 +1100,7 @@ function App() {
               } else if (newLabelLower.includes('play') || newLabelLower.includes('start') || newLabelLower.includes('▶')) {
                 // Button now says "Play" = animation is paused = user clicked Pause
                 feedbackMsg += `You clicked "${event.data.clickedLabel}" and PAUSED the animation. It is now STOPPED.`;
-                
+
                 // Include current slider values when paused
                 if (event.data.sliderValues && event.data.sliderValues.length > 0) {
                   const sliderInfo = event.data.sliderValues.map((s: any) => `${s.label}: ${s.value}`).join(', ');
@@ -1068,7 +1127,7 @@ function App() {
       else if (event.data?.type === 'IFRAME_READY') {
         console.log('[Parent] Iframe is ready, replaying', pendingToolActionsRef.current.length, 'queued actions');
         iframeReadyRef.current = true;
-        
+
         // Replay all queued tool actions
         if (iframeRef.current && iframeRef.current.contentWindow) {
           pendingToolActionsRef.current.forEach(({ action, params }) => {
@@ -1078,6 +1137,21 @@ function App() {
             );
           });
           pendingToolActionsRef.current = [];
+        }
+      } else if (event.data?.type === 'CLEAR_AUDIO') {
+        // User clicked something in the iframe — immediately stop queued AI audio
+        if (audioCtxRef.current) {
+          activeAudioNodesRef.current.forEach(node => { try { node.stop() } catch (_) { } });
+          activeAudioNodesRef.current = [];
+          nextPlayTimeRef.current = audioCtxRef.current.currentTime;
+        }
+        // Mute incoming WebSocket chunks briefly to discard in-flight old-response audio.
+        // The backend's 'clear' response resets this to 0 almost immediately (~10ms);
+        // 400ms is just a fallback in case 'clear' is delayed.
+        audioMutedUntilRef.current = Date.now() + 400;
+        // Tell backend immediately so it can send 'clear' back and reset the muting
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "user_interrupt" }));
         }
       }
     };
@@ -1089,18 +1163,18 @@ function App() {
   const sanitizeSvg = useCallback((svgHtml: string): string => {
     // Remove script tags
     let sanitized = svgHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    
+
     // Remove event handler attributes (onclick, onload, etc.)
     sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
     sanitized = sanitized.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
-    
+
     // Remove javascript: URLs
     sanitized = sanitized.replace(/javascript:/gi, '');
-    
+
     // Remove data: URLs (can contain scripts)
     sanitized = sanitized.replace(/href\s*=\s*["']data:[^"']*["']/gi, 'href="#"');
     sanitized = sanitized.replace(/src\s*=\s*["']data:[^"']*["']/gi, 'src=""');
-    
+
     return sanitized;
   }, []);
 
@@ -1111,17 +1185,17 @@ function App() {
     // 2. CSP already prevents malicious inline scripts from doing harm
     // 3. User only sees their own graphics (no cross-user attacks)
     // 4. AI-generated code needs to run for graphics to be interactive
-    
+
     // Only remove javascript: URLs (minimal sanitization)
     let sanitized = controlsHtml.replace(/javascript:/gi, '');
-    
+
     return sanitized;
   }, []);
 
   // Construct a secure, isolated HTML document for the graphic and controls
   const iframeSrcDoc = useMemo(() => {
     if (!currentSvg) return '';
-    
+
     // Sanitize SVG and controls before embedding
     const safeSvg = sanitizeSvg(currentSvg);
     const safeControls = currentControls ? sanitizeControls(currentControls) : '';
@@ -1260,11 +1334,13 @@ function App() {
           const id = (el.id || '').toLowerCase().replace(/[-_]/g, ' ');
           const label = (el.getAttribute('data-label') || '').toLowerCase();
           const section = (el.getAttribute('data-section') || '').toLowerCase();
-          
+          const classStr = (el.getAttribute('class') || '').toLowerCase().replace(/[-_]/g, ' ');
+
           const idScore = scoreMatch(id, kw);
           const labelScore = scoreMatch(label, kw);
           const sectionScore = scoreMatch(section, kw);
-          const maxScore = Math.max(idScore, labelScore, sectionScore);
+          const classScore = scoreMatch(classStr, kw);
+          const maxScore = Math.max(idScore, labelScore, sectionScore, classScore);
           
           if (maxScore > 0 && !isTooLarge(el)) {
             // Boost score for visual elements (shapes) vs text/labels
@@ -1328,12 +1404,36 @@ function App() {
           el.style.transition = 'all 0.4s ease';
           el.style.filter = "drop-shadow(0 0 16px " + color + ") drop-shadow(0 0 8px " + color + ")";
           if (el instanceof SVGElement) {
-            el.style.transform = 'scale(1.03)';
-            el.style.transformOrigin = 'center';
+            // Only apply the scale bump if modify_element hasn't claimed this element's transform.
+            // dataset.originalTransform being set means modify_element owns the transform; touching
+            // it here and restoring after 4 s would undo the AI's persistent resize.
+            if (el.dataset.originalTransform === undefined) {
+              try {
+                const bbox = el.getBBox();
+                const cx = bbox.x + bbox.width / 2;
+                const cy = bbox.y + bbox.height / 2;
+                const existingTransform = el.getAttribute('transform') || '';
+                el.dataset.prevTransform = existingTransform;
+                const newTransform = (existingTransform + ' translate(' + cx + ', ' + cy + ') scale(1.03) translate(' + (-cx) + ', ' + (-cy) + ')').trim();
+                el.setAttribute('transform', newTransform);
+              } catch (e) {
+                el.style.transform = 'scale(1.03)';
+                el.style.transformOrigin = 'center';
+                el.style.transformBox = 'fill-box';
+              }
+            }
           }
           setTimeout(() => {
             el.style.filter = '';
-            el.style.transform = '';
+            if (el instanceof SVGElement) {
+              // Only restore the pre-highlight transform if modify_element hasn't claimed ownership
+              if (el.dataset.prevTransform !== undefined && el.dataset.originalTransform === undefined) {
+                el.setAttribute('transform', el.dataset.prevTransform);
+              }
+              delete el.dataset.prevTransform;
+            } else {
+              el.style.transform = '';
+            }
             setTimeout(() => { el.style.cssText = prev; }, 400);
           }, 4000);
         });
@@ -1402,13 +1502,16 @@ function App() {
               const bbox = el.getBBox();
               const cx = bbox.x + bbox.width / 2;
               const cy = bbox.y + bbox.height / 2;
-              
-              // Get existing transform or create new one
-              const existingTransform = el.getAttribute('transform') || '';
-              // Remove any existing scale transforms
-              const withoutScale = existingTransform.replace(/scale\\([^)]*\\)/g, '').trim();
-              // Add new scale transform centered on element
-              const newTransform = (withoutScale + ' translate(' + cx + ', ' + cy + ') scale(' + val + ') translate(' + (-cx) + ', ' + (-cy) + ')').trim();
+
+              // Store the original transform on first scale, then always rebuild from it
+              // (regex-stripping scale() left orphaned translate() wrappers causing drift)
+              if (!el.dataset.originalTransform && el.dataset.originalTransform !== '') {
+                el.dataset.originalTransform = el.getAttribute('transform') || '';
+              }
+              const baseTransform = el.dataset.originalTransform;
+
+              // Build new scale transform from the clean base
+              const newTransform = (baseTransform + ' translate(' + cx + ', ' + cy + ') scale(' + val + ') translate(' + (-cx) + ', ' + (-cy) + ')').trim();
               el.setAttribute('transform', newTransform);
             } catch (e) {
               // Fallback to CSS if getBBox fails
@@ -1731,6 +1834,10 @@ function App() {
       const interactiveEl = target.closest('button, a, input, select, [role="button"]');
       if (!interactiveEl) return;
 
+      // Immediately interrupt AI audio — fires in capture phase before the button's own
+      // onclick, so audio stops at the moment of the click rather than after a Gemini round-trip.
+      window.parent.postMessage({ type: 'CLEAR_AUDIO' }, '*');
+
       // Capture the BEFORE label immediately (capture phase guarantees this is pre-click)
       let beforeLabel = (interactiveEl.innerText || interactiveEl.value || interactiveEl.id || interactiveEl.getAttribute('aria-label') || '').trim();
       if (!beforeLabel || beforeLabel.length > 50) return;
@@ -1832,6 +1939,16 @@ function App() {
     document.addEventListener('DOMContentLoaded', () => {
       // Signal to parent that iframe is ready to receive tool actions
       window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+
+      // Fix: range inputs default to step="1", which rounds fractional values like 0.4 back to 0.
+      // Generated animation code often uses sub-integer increments (e.g. slider.value += 0.4).
+      // Setting step="any" allows the DOM to store any numeric value without rounding.
+      document.querySelectorAll('input[type="range"]').forEach(slider => {
+        const step = slider.getAttribute('step');
+        if (!step || step === '1') {
+          slider.setAttribute('step', 'any');
+        }
+      });
       
       let buttonStates = new Map(); // button -> 'playing' | 'paused'
       let clickTriggeredButtons = new Set();
@@ -2044,6 +2161,10 @@ function App() {
             }))
             setSessionPhase('complete')
             setCurrentPage('home')
+            // Reset guard so preconnect always fires for each gallery load
+            _preConnectInFlight = false
+            // Pre-connect WS so the first "Start Live Conversation" click uses the fast path
+            preConnectForGalleryGraphic()
           }}
           onDeleteGraphic={(id) => setSavedGraphics(prev => prev.filter(x => x.id !== id))}
           onBack={() => setCurrentPage('home')}
@@ -2524,8 +2645,8 @@ function App() {
                   </div>
                 )}
 
-                {/* Phase: complete — show action buttons */}
-                {sessionPhase === 'complete' && (
+                {/* Phase: complete — show action buttons (hide when hasStarted, conversation UI takes over) */}
+                {sessionPhase === 'complete' && !hasStarted && (
                   <div className="sidebar-actions-area">
                     <div className="status-indicator mb-6">
                       <div className={getPhaseDotClass()}></div>
@@ -2559,8 +2680,8 @@ function App() {
                   </div>
                 )}
 
-                {/* Phase: conversation — show live indicator */}
-                {sessionPhase === 'conversation' && (
+                {/* Phase: conversation — show live indicator (also show when hasStarted but phase hasn't transitioned yet) */}
+                {(sessionPhase === 'conversation' || (sessionPhase === 'complete' && hasStarted)) && (
                   <div className="sidebar-actions-area">
                     <div className="status-indicator mb-6">
                       <div className={getPhaseDotClass()}></div>

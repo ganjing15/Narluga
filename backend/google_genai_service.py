@@ -19,6 +19,8 @@ load_dotenv()
 
 # We need a global async client for the pro sidecar
 pro_client = genai.Client()
+# Reusable Live API client (v1alpha for Live sessions)
+live_client = genai.Client(http_options={'api_version': 'v1alpha'})
 
 SUPADATA_ENDPOINT = "https://api.supadata.ai/v1/transcript"
 
@@ -372,7 +374,7 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
        ```
        <div id="controls-panel">
          <h2>System Control</h2>
-         <input type="range" id="timeSlider" min="0" max="100" value="0" oninput="updateState(this.value)">
+         <input type="range" id="timeSlider" min="0" max="100" step="any" value="0" oninput="updateState(this.value)">
          <button id="playBtn" class="ctrl-btn" onclick="togglePlay()">▶ Auto-Play</button>
          <div id="info-panel" style="margin-top:16px; padding:16px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0;">
            <div id="info-title" style="font-weight:600; font-size:15px; color:#0f172a; margin-bottom:6px;">Phase 0</div>
@@ -423,6 +425,7 @@ async def generate_presentation_plan(combined_content: str, source_labels: list,
        - ALWAYS update button text immediately when toggling: "▶ Auto-Play" when paused, "⏸ Pause" when playing
        - ALWAYS ensure your slider has proper min/max attributes and your loop respects them
        - TEST your modulo arithmetic: if max is 100, use `(val + 1) % 101` not `% 100`
+       - ALWAYS set `step="any"` on range inputs used for animation. The default step="1" causes fractional increments like +0.4 to be silently rounded back to the previous integer, breaking the animation loop.
 
        CRITICAL: You are NOT limited to highlight colors. Build physical interactivity tailored to the concept—sliders that orbit, buttons that pump data flows, switches that change day/night, etc. You must still include `<g id="node-XXX">` and use `transform-box: fill-box;` for any nodes you animate via CSS.
 
@@ -671,7 +674,7 @@ async def handle_live_restart(websocket: WebSocket, narration_context: str, sour
     """
     print(f"[Live Restart] Starting with {len(source_labels)} source label(s)")
     while True:
-        ws_alive = await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, controls_inventory=controls_inventory)
+        ws_alive = await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, controls_inventory=controls_inventory, eager_connect=True)
         if not ws_alive:
             break
 
@@ -774,7 +777,7 @@ def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
         return f"Could not parse controls: {e}"
 
 
-async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", grounding_sources: list[dict] | None = None, controls_inventory: str = ""):
+async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", grounding_sources: list[dict] | None = None, controls_inventory: str = "", eager_connect: bool = False):
     """
     Shared Live API session logic. Handles system instruction, tool declarations,
     Gemini connection, and bidirectional audio/tool streaming.
@@ -817,8 +820,8 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     </available_controls>
     
     YOUR BEHAVIOR:
-    1. Welcome the user warmly. Give a 2-3 sentence summary of what the graphic shows.
-    2. Then invite the user to explore: "What part would you like to dive into?"
+    1. Welcome the user warmly. Give a BRIEF 1-sentence summary of what the graphic shows, then invite the user to explore.
+    2. VOICE-FIRST RULE: Your very first response MUST be spoken words ONLY — no tool calls. Get your voice to the user as fast as possible. You can use tools (highlight, click, etc.) AFTER your initial greeting.
     3. When the user asks about a concept, explain it clearly. Use `highlight_element` to point out the relevant part if helpful.
     4. Use `navigate_to_section` only when moving between distinctly different areas of the diagram.
     5. Use `zoom_view` sparingly — only if the user asks to see details up close.
@@ -830,9 +833,10 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     11. CURSOR AWARENESS: You will receive "[Cursor position: ...]" messages telling you where the user's cursor is on the diagram. When you see these, briefly acknowledge what they're pointing at (e.g., "I see you're looking at the Database node — that's where...") and offer a short explanation. Don't repeat the same explanation if they stay on the same element. Don't interrupt yourself mid-sentence to acknowledge cursor moves.
     12. PLAY/PAUSE STATE: When you receive an interaction event saying a toggle button was clicked, it will tell you what the button's label *changed into* (e.g. "button turned into a '⏸ Pause' toggle"). A button that currently says "▶ Auto-Play" means the animation is PAUSED. A button that currently says "⏸ Pause" means it is PLAYING.
     13. PROGRAMMATIC STATE CHANGES: If you receive an event saying a "button automatically changed to" a new label, it means the graphic updated its own state programmatically (for example, an auto-play sequence finished and the button reset to "Play"). Apply the same logic: the NEW label represents the NEXT available action.
-    14. AUTO-PLAY CAPABILITY: If a toggle button exists in <available_controls> (e.g., "▶ Auto-Process Data"), you CAN and SHOULD use click_element to start or stop it when the user asks. ALWAYS use the exact ID of the button (e.g. 'playBtn') as provided in <available_controls> if one exists.
+    14. AUTO-PLAY CAPABILITY: If a toggle button exists in <available_controls> (e.g., "▶ Auto-Process Data"), use click_element to start or stop it when the user asks or after your initial greeting. ALWAYS use the exact ID of the button (e.g. 'playBtn') as provided in <available_controls> if one exists. CRITICAL: `highlight_element` only adds a visual glow — it does NOT click anything. To actually start or stop a button, you MUST use click_element. NEVER claim to have started or stopped auto-play unless you used click_element.
     15. SLIDERS/RANGE INPUTS: If a slider/range input exists in <available_controls>, you CANNOT drag it programmatically. Instead, tell the user to adjust it manually and describe what it controls.
     16. CONTINUOUS ANIMATION: Most auto-play graphics loop continuously. If you have already started the animation by clicking play, NEVER assume it has stopped just because it completes a cycle, hits the end, or restarts. It will loop indefinitely until you are explicitly told the Pause button was clicked. However, by default, the graphic starts PAUSED.
+    17. USER INTERACTION RESPONSE: When you receive a "[System Status: The user just interacted with the dashboard UI. Action: ...]" message, the user manually clicked something — they may have interrupted you. IMMEDIATELY generate a brief verbal acknowledgment focused on their new action (e.g. "I see you clicked Auto-Play — the animation is now running!"). Do NOT continue the previous narration thread. Start fresh from the user's new action.
     
     TOOL TIPS:
     - Call ONE tool at a time, not multiple simultaneously.
@@ -934,7 +938,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             ),
             types.FunctionDeclaration(
                 name="click_element",
-                description="Programmatically click a button or interactive element in the diagram or its controls panel. Use this when the user asks you to interact with the UI controls (e.g., 'stop the autoplay', 'click the Evaporation button', 'press Play', 'toggle the switch'). This simulates a real mouse click.",
+                description="Programmatically click a button or interactive element in the diagram or its controls panel. Use this to trigger any button interaction — including proactively starting auto-play at session start, or when the user requests it (e.g., 'stop the autoplay', 'click Play', 'toggle the switch'). This is the ONLY way to actually activate a button; highlight_element does NOT click anything.",
                 parameters=types.Schema(
                     type="OBJECT",
                     properties=dict(
@@ -949,8 +953,8 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
         ])
     ]
     
-    # We must use the asynchronous client for the Live API
-    client = genai.Client(http_options={'api_version': 'v1alpha'})
+    # Reuse the module-level v1alpha client for Live API
+    client = live_client
     # Use the specific audio-preview model
     model = "gemini-2.5-flash-native-audio-preview-12-2025"
     
@@ -985,7 +989,13 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     go_away_event = asyncio.Event()  # Set when server sends GoAway
     client_disconnected = asyncio.Event()  # Set when frontend WS closes
     audio_started = asyncio.Event()  # Set when first mic audio frame arrives
-    
+
+    # Eager-connect buffering: buffer Gemini responses until user clicks Start
+    eager_buffer = []              # Queued messages (audio, tool_action, clear) before user clicks
+    eager_flushed = asyncio.Event()
+    if not eager_connect:
+        eager_flushed.set()        # Non-eager: no buffering, send directly from the start
+
     # --------------------------------------------------------------------------------
     # Wait for user to click "Start", THEN connect to Gemini Live API.
     # Returns True if session ended cleanly (WS still alive, can start another),
@@ -995,31 +1005,35 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     reconnect_count = 0
     is_first_connection = True
 
-    # Wait for user to click "Start Live Conversation"
-    print("[WebSocket] Waiting for user to start presentation...")
-    try:
-        while True:
-            data = await websocket.receive_text()
-            payload = json.loads(data)
-            if payload.get("type") == "start_live_session":
-                break
-    except WebSocketDisconnect:
-        print("[WebSocket] Client disconnected before starting session.")
-        return False
-    except Exception as e:
-        print(f"[WebSocket] Error while waiting to start: {e}")
-        return False
+    if not eager_connect:
+        # Normal path: wait for user to click "Start Live Conversation" first
+        print("[WebSocket] Waiting for user to start presentation...")
+        try:
+            while True:
+                data = await websocket.receive_text()
+                payload = json.loads(data)
+                if payload.get("type") == "start_live_session":
+                    break
+        except WebSocketDisconnect:
+            print("[WebSocket] Client disconnected before starting session.")
+            return False
+        except Exception as e:
+            print(f"[WebSocket] Error while waiting to start: {e}")
+            return False
 
-    t0 = time.time()
-    session_holder["t0"] = t0
-    print(f"[TIMING] T+0.000s: start_live_session received")
+        t0 = time.time()
+        session_holder["t0"] = t0
+        print(f"[TIMING] T+0.000s: start_live_session received")
 
-    # Immediately signal conversation phase so frontend transitions instantly
-    # (don't wait for Gemini connection — the UI should feel responsive)
-    await websocket.send_json({"type": "phase", "phase": "conversation"})
-    print(f"[TIMING] T+{time.time()-t0:.3f}s: phase:conversation sent")
-
-    print("[WebSocket] User clicked Start — connecting to Gemini Live API...")
+        # Immediately signal conversation phase so frontend transitions instantly
+        await websocket.send_json({"type": "phase", "phase": "conversation"})
+        print(f"[TIMING] T+{time.time()-t0:.3f}s: phase:conversation sent")
+        print("[WebSocket] User clicked Start — connecting to Gemini Live API...")
+    else:
+        # Set t0 for timing logs during pre-connect; will be reset when user actually clicks
+        t0 = time.time()
+        session_holder["t0"] = t0
+        print("[Eager] Connecting to Gemini BEFORE user clicks Start...")
 
     while session_holder["alive"] and not client_disconnected.is_set():
         # Build config (with resumption handle for reconnections)
@@ -1036,16 +1050,33 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 session_holder["session"] = session
                 go_away_event.clear()
                 reconnect_count = 0  # Reset on successful connection
-                print(f"[TIMING] T+{time.time()-t0:.3f}s: Gemini connected")
 
                 if is_first_connection:
                     is_first_connection = False
 
-                    # phase:conversation was already sent before connecting —
-                    # now send ready to confirm Gemini is connected
-                    async with ws_lock:
-                        await websocket.send_json({"type": "ready"})
-                    print(f"[TIMING] T+{time.time()-t0:.3f}s: ready sent to frontend")
+                    if eager_connect:
+                        # Eager path: send initial prompt NOW and start buffering Gemini responses.
+                        # The receive_from_client task will handle start_live_session and flush.
+                        print("[Eager] Gemini pre-connected. Sending initial prompt eagerly...")
+                        session_holder["prompted"] = True
+                        try:
+                            await session.send_client_content(
+                                turns=[types.Content(parts=[types.Part.from_text(
+                                    text="The user just joined the session. Begin your welcome and overview now. Start speaking IMMEDIATELY — do NOT use any tools (highlight, click, etc.) until AFTER you have finished your initial welcome greeting. Get your voice to the user as fast as possible."
+                                )])]
+                            )
+                            print("[Eager] Initial prompt sent to Gemini (pre-click)")
+                        except Exception as e:
+                            print(f"[Eager] Error sending eager initial prompt: {e}")
+                        # Fall through — tasks will start, Gemini responses buffered until user clicks
+                    else:
+                        print(f"[TIMING] T+{time.time()-t0:.3f}s: Gemini connected")
+
+                    # Send ready to confirm Gemini is connected (eager path defers this to flush)
+                    if not eager_connect:
+                        async with ws_lock:
+                            await websocket.send_json({"type": "ready"})
+                        print(f"[TIMING] T+{time.time()-t0:.3f}s: ready sent to frontend")
                 else:
                     print("[Gemini] Session resumed successfully — conversation continues seamlessly.")
 
@@ -1081,6 +1112,40 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                         print(f"[Receive Task] Gemini session died (1011). Will reconnect.")
                                         return  # Let the outer loop handle reconnection
                                     print(f"[Receive Task] Error sending audio to Gemini: {inner_e}")
+                            elif payload.get("type") == "user_interrupt":
+                                # User clicked something in the graphic — immediately send clear
+                                # so the frontend can reset audio muting and play new audio ASAP
+                                async with ws_lock:
+                                    await websocket.send_json({"type": "clear"})
+                                # Immediately interrupt Gemini's current generation.
+                                # turn_complete=False = "more context coming, stop talking but don't respond yet"
+                                try:
+                                    await cur_session.send_client_content(
+                                        turns=[types.Content(parts=[types.Part.from_text(
+                                            text="[The user is interacting with the graphic right now]"
+                                        )])],
+                                        turn_complete=False
+                                    )
+                                except Exception:
+                                    pass
+
+                            elif payload.get("type") == "start_live_session":
+                                # Eager path: user clicked Start — flush buffered Gemini responses
+                                if not eager_flushed.is_set():
+                                    t0 = time.time()
+                                    session_holder["t0"] = t0
+                                    session_holder["first_audio_sent"] = False
+                                    await websocket.send_json({"type": "phase", "phase": "conversation"})
+                                    async with ws_lock:
+                                        await websocket.send_json({"type": "ready"})
+                                    buf_count = len(eager_buffer)
+                                    for msg in eager_buffer:
+                                        async with ws_lock:
+                                            await websocket.send_json(msg)
+                                    eager_buffer.clear()
+                                    eager_flushed.set()
+                                    print(f"[TIMING] T+{time.time()-t0:.3f}s: EAGER flush — {buf_count} buffered messages sent")
+
                             elif payload.get("type") == "end_live_session":
                                 print("[Receive Task] User ended session")
                                 session_holder["alive"] = False
@@ -1089,8 +1154,10 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                             elif "clientContent" in payload:
                                 try:
                                     text = payload["clientContent"]["turns"][0]["parts"][0]["text"]
+                                    turn_complete = payload["clientContent"].get("turnComplete", True)
                                     await cur_session.send_client_content(
-                                        turns=[types.Content(parts=[types.Part.from_text(text=text)])]
+                                        turns=[types.Content(parts=[types.Part.from_text(text=text)])],
+                                        turn_complete=turn_complete
                                     )
                                 except Exception as inner_e:
                                     err_str = str(inner_e)
@@ -1137,8 +1204,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                     if getattr(server_content, "interrupted", False):
                                         print("[Gemini] User Interruption Detected! Halting queue...")
                                         interrupted = True
-                                        async with ws_lock:
-                                            await websocket.send_json({"type": "clear"})
+                                        if eager_flushed.is_set():
+                                            async with ws_lock:
+                                                await websocket.send_json({"type": "clear"})
+                                        else:
+                                            eager_buffer.append({"type": "clear"})
                                         continue
 
                                 if server_content and server_content.model_turn:
@@ -1146,18 +1216,28 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                     error_1011_count = 0
                                     for part in server_content.model_turn.parts:
                                         if part.inline_data:
-                                            if not session_holder.get("first_audio_sent"):
-                                                session_holder["first_audio_sent"] = True
-                                                _t0 = session_holder.get("t0")
-                                                if _t0:
-                                                    print(f"[TIMING] T+{time.time()-_t0:.3f}s: first audio chunk sent to frontend")
                                             audio_base64 = base64.b64encode(part.inline_data.data).decode("utf-8")
-                                            async with ws_lock:
-                                                await websocket.send_json({
-                                                    "type": "audio",
-                                                    "mimeType": part.inline_data.mime_type,
-                                                    "data": audio_base64
-                                                })
+                                            audio_msg = {
+                                                "type": "audio",
+                                                "mimeType": part.inline_data.mime_type,
+                                                "data": audio_base64
+                                            }
+                                            if eager_flushed.is_set():
+                                                if not session_holder.get("first_audio_sent"):
+                                                    session_holder["first_audio_sent"] = True
+                                                    _t0 = session_holder.get("t0")
+                                                    if _t0:
+                                                        print(f"[TIMING] T+{time.time()-_t0:.3f}s: first audio chunk sent to frontend")
+                                                async with ws_lock:
+                                                    await websocket.send_json(audio_msg)
+                                            else:
+                                                eager_buffer.append(audio_msg)
+                                                # Signal frontend when first audio is buffered (AI is warmed up)
+                                                if not session_holder.get("eager_audio_signaled"):
+                                                    session_holder["eager_audio_signaled"] = True
+                                                    async with ws_lock:
+                                                        await websocket.send_json({"type": "eager_audio_ready"})
+                                                    print(f"[Eager] First audio buffered — signaled frontend")
 
                                 # Check turnComplete — if GoAway was received, now is safe to reconnect
                                 if server_content and getattr(server_content, "turn_complete", False):
@@ -1187,12 +1267,16 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                         print(f"\n[AI TOOL FIRING] {tool_name}({json.dumps(tool_args)})")
 
                                         if tool_name in ("highlight_element", "navigate_to_section", "zoom_view", "modify_element", "click_element"):
-                                            async with ws_lock:
-                                                await websocket.send_json({
-                                                    "type": "tool_action",
-                                                    "action": tool_name,
-                                                    "params": tool_args
-                                                })
+                                            tool_msg = {
+                                                "type": "tool_action",
+                                                "action": tool_name,
+                                                "params": tool_args
+                                            }
+                                            if eager_flushed.is_set():
+                                                async with ws_lock:
+                                                    await websocket.send_json(tool_msg)
+                                            else:
+                                                eager_buffer.append(tool_msg)
                                             # For click_element, provide richer feedback so AI can self-correct
                                             if tool_name == "click_element":
                                                 kw = tool_args.get("element_id", "")
@@ -1369,7 +1453,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                     try:
                         await session.send_client_content(
                             turns=[types.Content(parts=[types.Part.from_text(
-                                text="The user just joined the session. Begin your welcome and overview now."
+                                text="The user just joined the session. Begin your welcome and overview now. Start speaking IMMEDIATELY — do NOT use any tools (highlight, click, etc.) until AFTER you have finished your initial welcome greeting. Get your voice to the user as fast as possible."
                             )])]
                         )
                         print(f"[TIMING] T+{time.time()-t0:.3f}s: initial prompt sent")

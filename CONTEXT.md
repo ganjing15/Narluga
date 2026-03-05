@@ -78,9 +78,9 @@ The user adds one or more sources in the sidebar, and the app:
 4. **Backend** calls Gemini Pro to generate the interactive SVG + controls.
 5. **Backend** sends `interactive_svg` message with `svg_html`, `controls_html`, `title`, `subtitle`.
 6. **Frontend** automatically saves the received graphic payload to **Cloud Firestore** if the user is signed in.
-7. When the user starts a live conversation, frontend sends `start_live_session`.
-8. **Backend** connects to Gemini Live API for real-time voice interaction.
-9. Audio streams bidirectionally via the WebSocket (PCM ↔ base64).
+7. When the user starts a live conversation, frontend sends `start_live_session`. Backend immediately sends `phase:conversation` back (before Gemini connects), then connects to Gemini Live API.
+8. Audio streams bidirectionally via the WebSocket (PCM ↔ base64).
+9. When the user ends the conversation, frontend sends `end_live_session`. The **WebSocket stays open** — backend closes only the Gemini session and loops back to waiting for the next `start_live_session`. This allows fast reconnect on subsequent starts without WS/auth overhead.
 
 ---
 
@@ -150,8 +150,31 @@ Gemini Live Agent Challenge/
 - Supports interruptions and event-driven context updates
   - *Note*: The native-audio model handles Voice Activity Detection (VAD) automatically. Custom `RealtimeInputConfig` settings are not supported (causes 1008 API error).
   - During a voice interruption, **actionable tools** (`click_element`, `modify_element`, `fetch_more_detail`) are always executed to ensure responsiveness, while cosmetic tools (`highlight_element`, `zoom_view`) are skipped.
-- **Pre-connect optimization**: `live.connect()` is called immediately when `_run_live_session` starts (right after the graphic is ready), before the user clicks "Start". The `start_live_session` wait happens *inside* the already-open connection, hiding the ~1-2s Gemini handshake behind the user's reading time. `asyncio.sleep` before the initial prompt is 0.3s (down from 1.2s).
+- **Fast connection**: `phase:conversation` is sent to the frontend immediately upon receiving `start_live_session` (before Gemini connects), so the UI transitions instantly. The Gemini handshake (~0.3s) and initial prompt happen in parallel. No audio wait before sending the initial prompt — mic audio is already flowing from the frontend.
+- **Multi-session WebSocket**: The WebSocket between frontend and backend stays open after "End Conversation". The frontend sends `end_live_session` (instead of closing the WS), which closes the Gemini session but keeps the WS alive. The backend loops back to waiting for the next `start_live_session`. This means the second and subsequent conversations use the same fast path as the first (~3s to first AI audio), with no reconnect overhead.
+- **Mic prefetch removed**: The `onMouseEnter` hover prefetch on the "Start Live Conversation" button was removed. It caused the browser mic indicator to reappear after ending a conversation (the button re-rendered under the cursor, triggering mic re-acquisition). Mic is now acquired on-demand when the user clicks.
 - **Language lock**: The system instruction begins with an explicit `LANGUAGE RULE` — respond in the user's spoken language, never switch based on diagram content or source material. This prevents the AI from drifting into the language of the source content mid-conversation.
+
+#### Connection Timing (measured)
+| Step | Duration |
+|------|----------|
+| `start_live_session` received → `phase:conversation` sent | ~0ms |
+| Gemini `live.connect()` | ~0.2–0.3s |
+| Initial prompt sent | ~0ms |
+| First AI audio chunk arrives | ~2.5–3.2s total |
+
+#### WebSocket Message Protocol (live session)
+| Direction | Message type | Description |
+|-----------|-------------|-------------|
+| Frontend → Backend | `start_live_session` | User clicked Start; includes `pre_events` array |
+| Frontend → Backend | `end_live_session` | User clicked End; Gemini closes, WS stays open |
+| Frontend → Backend | `realtimeInput` | PCM audio chunk (base64) |
+| Frontend → Backend | `clientContent` | Text event (cursor position, interaction) |
+| Backend → Frontend | `phase` | Session phase change (`conversation`, `complete`, etc.) |
+| Backend → Frontend | `ready` | Gemini connected and ready |
+| Backend → Frontend | `audio` | 24kHz PCM audio chunk from Gemini |
+| Backend → Frontend | `tool_action` | AI tool call to execute in iframe |
+| Backend → Frontend | `clear` | Interrupt — stop playing queued audio |
 
 ### Agentic Tool Use (Live Session)
 The AI ("Narluga") proactively uses tools to manipulate the diagram inside the iframe sandbox while speaking:
@@ -245,8 +268,10 @@ npm run dev                        # Starts on port 5173
 
 1. **WebSocket-first architecture** — All session state flows through a single WebSocket connection, enabling real-time phase updates and bidirectional audio streaming without polling.
 
-2. **Source aggregation before generation** — All sources are concatenated with labeled sections before being sent to Gemini, allowing the model to synthesize across multiple inputs.
+2. **Persistent WebSocket for live sessions** — The WebSocket between frontend and backend is kept alive across multiple start/end conversation cycles. Only the Gemini session is torn down on "End Conversation"; the WS loops back to waiting for the next `start_live_session`. This avoids the ~5-7s reconnect overhead (new WS + auth token + restart context) on the second and subsequent sessions.
 
-3. **Embedded interactivity** — SVG graphics include inline `<script>` and `<style>` tags, making each generated graphic a self-contained interactive widget that also works as a standalone HTML file.
+3. **Source aggregation before generation** — All sources are concatenated with labeled sections before being sent to Gemini, allowing the model to synthesize across multiple inputs.
+
+4. **Embedded interactivity** — SVG graphics include inline `<script>` and `<style>` tags, making each generated graphic a self-contained interactive widget that also works as a standalone HTML file.
 
 4. **No transcript log** — The sidebar intentionally omits verbose AI response logs, showing only phase-based status indicators for a cleaner UX.
