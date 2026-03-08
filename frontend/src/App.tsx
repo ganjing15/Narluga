@@ -392,16 +392,16 @@ function App() {
         debounceTimer = setTimeout(() => {
           sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
           aiEventPending = false;
-        }, 200);
-        // Release the lock after 500ms in case no timer fires
-        setTimeout(() => { aiEventPending = false; }, 500);
+        }, 50);
+        // Release the lock after 200ms in case no timer fires
+        setTimeout(() => { aiEventPending = false; }, 200);
       } else if (data && data.type === 'INTERACTION_EVENT') {
         // Generic click event — skip if an AI_EVENT from the same click is pending
         if (aiEventPending) return;
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
-        }, 300);
+        }, 100);
       }
     };
 
@@ -1657,7 +1657,7 @@ function App() {
                      }, 100);
                      return; // Exit early since we're handling the postMessage in the timeout
                   }
-                }, 300);
+                }, 100);
                 clicked = true;
               }
             });

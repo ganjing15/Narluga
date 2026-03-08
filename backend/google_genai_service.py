@@ -800,8 +800,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     When relevant, naturally cite these sources (e.g. "According to Wikipedia...", "As reported by NASA..."). Do NOT re-fetch these with fetch_more_detail — the content is already in the diagram.
     </grounding_context>"""
     
+    # Cache controls inventory once at session start — reused for every click_element tool response
+    cached_controls_inv = controls_inventory or _extract_controls_inventory(svg_html, controls_html)
+
     system_instruction = f"""\
-    LANGUAGE RULE: Always respond in the same language the user is speaking. If the user speaks English, respond only in English — even if the diagram content, source material, or narration context is in another language. Never switch languages mid-conversation unless the user explicitly switches first.
+    LANGUAGE RULE: ALWAYS respond in English only. Never speak in any other language, regardless of what you hear or what language the source material is in.
 
     You are Narluga, an expert and charismatic Interactive Guide. You accompany the user as they explore an interactive, animated SVG diagram about: {source_desc}.
     
@@ -816,7 +819,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     Here are the ACTUAL interactive controls available in the diagram's control panel:
 
     <available_controls>
-    {controls_inventory or _extract_controls_inventory(svg_html, controls_html)}
+    {cached_controls_inv}
     </available_controls>
     
     YOUR BEHAVIOR:
@@ -849,6 +852,8 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
       - 'display' — hide elements (value 'none') or show them (value 'block').
       - 'filter' — add visual effects (e.g., 'blur(3px)', 'drop-shadow(0 0 10px #fff)').
     - For click_element, use the exact ID (e.g., 'playBtn') provided in <available_controls>. Only use button text if no ID is available.
+    
+    CRITICAL LANGUAGE REMINDER: ALWAYS speak in English only. Never switch to any other language under any circumstances.
     """
     
     # Define agentic tools for the Live API session
@@ -1284,7 +1289,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                                 with open("/tmp/click_debug.log", "a") as df:
                                                     df.write(f"CLICK_ELEMENT called with keyword: {kw}\n")
                                                     
-                                                controls_inv = _extract_controls_inventory(svg_html, controls_html)
+                                                controls_inv = cached_controls_inv
                                                 resp_msg = (
                                                     f"click_element dispatched with keyword '{kw}'. "
                                                     f"IMPORTANT: If the keyword does not exactly match a button below, the click will silently fail. "
