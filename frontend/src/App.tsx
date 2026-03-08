@@ -393,16 +393,15 @@ function App() {
         clearTimeout(hoverDebounceTimer);
         hoverDebounceTimer = setTimeout(() => {
           sendToVoiceAI(`[Cursor position: ${data.payload}]`);
-        }, 2000); // Long debounce to reduce context noise
+        }, 3000); // 3s debounce — active but limited to reduce context noise
       } else if (data && data.type === 'AI_EVENT') {
-        // State event from auto-play (e.g., "phase changed to X")
-        // Use a LONG debounce (5s) so we don't flood Gemini with every phase transition.
-        // Only the latest state update is sent, and button clicks cancel pending ones.
+        // Auto-play phase change — very long debounce (10s) since these flood context fast.
+        // Button clicks cancel these entirely (INTERACTION_EVENT covers the click action).
         if (buttonClickInProgress) return;
         clearTimeout(aiEventDebounceTimer);
         aiEventDebounceTimer = setTimeout(() => {
           sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
-        }, 5000);
+        }, 10000);
       } else if (data && data.type === 'INTERACTION_EVENT') {
         // Button click — HIGH PRIORITY, cancel any pending AI_EVENT
         clearTimeout(debounceTimer);

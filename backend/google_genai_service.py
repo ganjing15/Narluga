@@ -965,6 +965,11 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     
     # Shared mutable state for the session & reconnection signaling
     session_holder = {"session": None, "alive": True}
+    def _log(msg):
+        import datetime
+        with open('/tmp/session_lifecycle.log', 'a') as f:
+            f.write(f"{datetime.datetime.now().isoformat()} {msg}\n")
+    _log(f"=== _run_live_session START (eager={eager_connect}) ===")
     go_away_event = asyncio.Event()  # Set when server sends GoAway
     client_disconnected = asyncio.Event()  # Set when frontend WS closes
     audio_started = asyncio.Event()  # Set when first mic audio frame arrives
@@ -1128,6 +1133,8 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                             elif payload.get("type") == "end_live_session":
                                 print("[Receive Task] User ended session")
                                 session_holder["alive"] = False
+                                session_holder["reset_handle"] = True  # Signal: start next session fresh
+                                _log(f"end_live_session received — alive=False")
                                 return  # Exit relay — Gemini closes, WS stays open
 
                             elif "clientContent" in payload:
@@ -1443,10 +1450,19 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                     except Exception as e:
                         print(f"[Gemini] Error sending initial prompt: {e}")
 
+                _log(f"asyncio.wait starting")
                 done, pending = await asyncio.wait(
                     [receive_task, gemini_task, keepalive_task],
                     return_when=asyncio.FIRST_COMPLETED
                 )
+                done_names = []
+                for t in done:
+                    if t == receive_task: done_names.append('receive')
+                    elif t == gemini_task: done_names.append('gemini')
+                    elif t == keepalive_task: done_names.append('keepalive')
+                    ex = t.exception() if not t.cancelled() else 'CANCELLED'
+                    done_names.append(f'(ex={ex})')
+                _log(f"asyncio.wait completed. Done: {done_names}, Pending: {len(pending)}")
                 for task in pending:
                     task.cancel()
 
@@ -1459,12 +1475,29 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             if go_away_event.is_set() and resumption_handle:
                 go_away_event.clear()
                 print("[Gemini] Performing proactive GoAway reconnection...")
+                # If eager buffer hasn't been flushed yet, clear stale audio and
+                # reset prompt flag so the new session gets re-prompted
+                if not eager_flushed.is_set():
+                    old_count = len(eager_buffer)
+                    eager_buffer.clear()
+                    session_holder.pop("eager_audio_signaled", None)
+                    session_holder["prompted"] = False
+                    is_first_connection = True  # Force re-prompt on reconnect
+                    print(f"[Gemini] Cleared {old_count} stale eager buffer messages for clean reconnect")
                 await asyncio.sleep(0.2)  # Brief pause before reconnect
                 continue
             elif not session_holder["alive"] or client_disconnected.is_set():
                 break
             elif resumption_handle:
                 # Unexpected disconnect but we have a handle — try to resume
+                # Same eager buffer cleanup logic
+                if not eager_flushed.is_set():
+                    old_count = len(eager_buffer)
+                    eager_buffer.clear()
+                    session_holder.pop("eager_audio_signaled", None)
+                    session_holder["prompted"] = False
+                    is_first_connection = True
+                    print(f"[Gemini] Cleared {old_count} stale eager buffer messages for reconnect")
                 reconnect_count += 1
                 if reconnect_count > MAX_RECONNECT_ATTEMPTS:
                     print(f"[Gemini] Max reconnect attempts ({MAX_RECONNECT_ATTEMPTS}) exceeded. Ending session.")
@@ -1486,6 +1519,13 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
 
     # Return True if WS is still alive (user ended session), False if client disconnected
     ws_still_alive = not client_disconnected.is_set()
+    _log(f"_run_live_session RETURNING ws_alive={ws_still_alive} alive={session_holder['alive']}")
+    # If user explicitly ended the session, clear the resumption handle so the
+    # NEXT _run_live_session call starts a completely fresh Gemini session
+    # (no accumulated context/conversation history from this session).
+    if session_holder.get("reset_handle"):
+        resumption_handle = None
+        print("[Live Session] Resumption handle cleared — next session will start fresh.")
     if ws_still_alive:
         print("[Live Session] Session ended. WebSocket kept alive for fast reconnect.")
         # Send phase:complete so frontend shows "Start Live Conversation" button again
