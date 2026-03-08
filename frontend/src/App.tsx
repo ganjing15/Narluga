@@ -127,6 +127,15 @@ function App() {
   const sourceLabelsRef = useRef<string[]>([])
   const controlsInventoryRef = useRef<string>('')
 
+  // Session duration tracking (uttered_reference pattern)
+  const sessionStartTimeRef = useRef<number | null>(null)
+  const durationCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [sessionDuration, setSessionDuration] = useState(0) // seconds elapsed
+  const [showDurationWarning, setShowDurationWarning] = useState(false)
+
+  const MAX_SESSION_SECONDS = 20 * 60   // 20 minutes hard limit
+  const WARN_SESSION_SECONDS = 15 * 60  // 15 minutes → show warning banner
+
   // Refs
   const wsRef = useRef<WebSocket | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -422,10 +431,51 @@ function App() {
     };
   }, []);
 
+  // Stop the session duration timer
+  const stopDurationTimer = useCallback(() => {
+    if (durationCheckIntervalRef.current) {
+      clearInterval(durationCheckIntervalRef.current)
+      durationCheckIntervalRef.current = null
+    }
+  }, [])
+
+  // Start the session duration timer.
+  // If sessionStartTimeRef is already set (GoAway reconnect path), we keep the
+  // original start time so the 20-min wall clock is not reset by reconnections.
+  const startDurationTimer = useCallback(() => {
+    stopDurationTimer()
+    // Only record start time for brand-new sessions, not GoAway reconnects
+    if (!sessionStartTimeRef.current) {
+      sessionStartTimeRef.current = Date.now()
+      setSessionDuration(0)
+      setShowDurationWarning(false)
+    }
+    durationCheckIntervalRef.current = setInterval(() => {
+      if (!sessionStartTimeRef.current) return
+      const elapsed = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)
+      setSessionDuration(elapsed)
+      if (elapsed >= WARN_SESSION_SECONDS && elapsed < MAX_SESSION_SECONDS) {
+        setShowDurationWarning(true)
+      }
+      if (elapsed >= MAX_SESSION_SECONDS) {
+        // Hard limit reached — close the WS cleanly (prevents reconnection)
+        console.log('[SessionTimer] 20-min limit reached — closing session')
+        if (wsRef.current) {
+          wsRef.current.close(1000, 'Maximum session duration reached')
+        }
+      }
+    }, 1000)
+  }, [stopDurationTimer, WARN_SESSION_SECONDS, MAX_SESSION_SECONDS])
+
   // Disconnect cleanup
   const disconnect = useCallback(() => {
     micReadyRef.current = false
     hasStartedRef.current = false
+    // Stop and reset duration timer
+    stopDurationTimer()
+    sessionStartTimeRef.current = null
+    setSessionDuration(0)
+    setShowDurationWarning(false)
     // Note: don't reset _preConnectInFlight here — it's managed by preConnectForGalleryGraphic only
     // Tell backend to end Gemini session, but keep WS alive for fast reconnect
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -456,7 +506,7 @@ function App() {
       return 'idle'
     })
     setStatusMessage('')
-  }, [])
+  }, [stopDurationTimer])
 
   // Attach onmessage/onclose/onerror to a live-restart WebSocket.
   // Extracted so both startPresentation (Path B) and preConnectForGalleryGraphic can reuse it.
@@ -469,6 +519,7 @@ function App() {
         setSessionPhase(data.phase as SessionPhase)
       } else if (data.type === 'ready') {
         micReadyRef.current = true
+        startDurationTimer()  // Session is live — start 20-min wall clock
         setupMic()
       } else if (data.type === 'clear') {
         if (audioCtxRef.current) {
@@ -667,6 +718,7 @@ function App() {
         try { audioCtxRef.current.resume(); } catch (err) { }
       }
       setupMic()
+      startDurationTimer()  // Fast path: session live on click
     } else if (narrationContextRef.current) {
       // ===== SLOW PATH: no preconnect WS — create one fresh =====
       console.log('[startPresentation] No preconnect WS available — creating new connection')
@@ -705,6 +757,7 @@ function App() {
         }
 
         setupMic()
+        startDurationTimer()  // Slow path: session live on WS open
 
         newWs.send(JSON.stringify({
           type: "start_live_session",
@@ -813,6 +866,7 @@ function App() {
           setStatusMessage(data.message)
         } else if (data.type === 'ready') {
           micReadyRef.current = true
+          startDurationTimer()  // Session is live — start 20-min wall clock
         } else if (data.type === 'interactive_svg') {
           setCurrentSvg(data.svg_html)
           setCurrentControls(data.controls_html || null)
@@ -2189,7 +2243,28 @@ function App() {
           <div className="flex items-center gap-4">
             {sessionPhase === 'conversation' && (
               <div className="live-badge">
-                <span className="pulse-dot"></span> Live Chat
+                <span className="pulse-dot"></span>
+                {showDurationWarning
+                  ? `⚠️ ${Math.floor((MAX_SESSION_SECONDS - sessionDuration) / 60)}m left`
+                  : 'Live Chat'}
+              </div>
+            )}
+            {showDurationWarning && sessionPhase === 'conversation' && (
+              <div
+                style={{
+                  background: 'rgba(245,158,11,0.15)',
+                  border: '1px solid rgba(245,158,11,0.4)',
+                  borderRadius: '12px',
+                  padding: '4px 12px',
+                  fontSize: '12px',
+                  color: '#92400e',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                Session ends in {Math.ceil((MAX_SESSION_SECONDS - sessionDuration) / 60)} min
               </div>
             )}
             {isFirebaseConfigured && (
@@ -2694,14 +2769,14 @@ function App() {
                       <div className={getPhaseDotClass()}></div>
                       <div className="status-text">
                         <span className="status-phase-label">Live Conversation</span>
-                        <span className="status-detail">Ask questions about the graphic</span>
+                        <span className="status-detail">Use a mic for smoother experience</span>
                       </div>
                     </div>
 
                     <div className="conversation-hint">
                       <MicIcon className="w-8 h-8 opacity-30 mb-3" />
-                      <p>Speak to ask questions about any part of the graphic</p>
-                      <p className="text-xs opacity-60 mt-1">Click on elements in the graphic to explore</p>
+                      <p>Speak to ask questions about any part of the graphic, or ask Narluga to control interactions for you</p>
+                      <p className="text-xs opacity-60 mt-1">Click/hover on elements in the graphic to explore and listen to explanations</p>
                     </div>
 
                     <button

@@ -2,9 +2,32 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Uplo
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
+import time
+from collections import defaultdict
 from dotenv import load_dotenv
 from google_genai_service import handle_live_session, handle_live_restart, web_search_sources
 from auth import init_firebase, FirebaseAuthMiddleware, verify_ws_token
+
+# ---------------------------------------------------------------------------
+# Per-UID rate limiter (in-memory, resets on server restart)
+# Protects against public abuse while keeping costs bounded for the contest.
+# Judges can always get a fresh count if needed (just restart the backend).
+# ---------------------------------------------------------------------------
+_uid_session_timestamps: dict[str, list[float]] = defaultdict(list)
+SESSION_LIMIT_PER_UID_PER_DAY = 5   # max live sessions per user per 24h
+_SECONDS_IN_DAY = 86400
+
+def _check_rate_limit(uid: str) -> bool:
+    """Return True if user is within their daily session limit, False if exceeded."""
+    now = time.time()
+    cutoff = now - _SECONDS_IN_DAY
+    # Remove timestamps older than 24 h
+    _uid_session_timestamps[uid] = [t for t in _uid_session_timestamps[uid] if t > cutoff]
+    if len(_uid_session_timestamps[uid]) >= SESSION_LIMIT_PER_UID_PER_DAY:
+        return False
+    # Record this session start
+    _uid_session_timestamps[uid].append(now)
+    return True
 
 load_dotenv()
 
@@ -104,6 +127,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 print("[WebSocket] User is None, token verification failed. Returning.")
                 return  # Connection was closed by verify_ws_token
             print(f"[WebSocket] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
+            # --- Per-UID rate limit check ---
+            uid = user.get('uid', 'anonymous')
+            if not _check_rate_limit(uid):
+                print(f"[WebSocket] Rate limit exceeded for uid={uid}")
+                await websocket.send_json({"type": "error", "message": "Daily session limit reached (5 sessions/24h). Please try again tomorrow, or ask an admin to restart the server."})
+                await websocket.close()
+                return
         else:
             print("[WebSocket] Auth disabled.")
 
@@ -154,6 +184,13 @@ async def websocket_restart_endpoint(websocket: WebSocket):
             if user is None:
                 return
             print(f"[WebSocket Restart] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
+            # --- Per-UID rate limit check ---
+            uid = user.get('uid', 'anonymous')
+            if not _check_rate_limit(uid):
+                print(f"[WebSocket Restart] Rate limit exceeded for uid={uid}")
+                await websocket.send_json({"type": "error", "message": "Daily session limit reached (5 sessions/24h). Please try again tomorrow."})
+                await websocket.close()
+                return
         
         print(f"[WebSocket Restart] Connected. Waiting for restart context...")
         init_data = await websocket.receive_text()
