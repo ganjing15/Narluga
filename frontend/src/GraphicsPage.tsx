@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { XIcon, SparklesIcon, DisplayIcon, NarlugaLogo, RefreshIcon, YoutubeIcon, LinkIcon, FileUploadIcon, TextIcon } from './Icons'
+import { XIcon, SparklesIcon, DisplayIcon, NarlugaLogo, RefreshIcon } from './Icons'
 import { deleteGraphic, type User, type SavedGraphic } from './firebase'
 
 interface GraphicsPageProps {
@@ -11,13 +11,7 @@ interface GraphicsPageProps {
     onBack: () => void
 }
 
-const SourceTypeIcon = ({ label }: { label: string }) => {
-    const l = label.toLowerCase()
-    if (l.startsWith('youtube:')) return <YoutubeIcon className="w-3.5 h-3.5" />
-    if (l.startsWith('http')) return <LinkIcon className="w-3.5 h-3.5" />
-    if (l.startsWith('file:') || l.endsWith('.pdf') || l.endsWith('.txt')) return <FileUploadIcon className="w-3.5 h-3.5" />
-    return <TextIcon className="w-3.5 h-3.5" />
-}
+
 
 // Renders a live scaled-down preview of the SVG
 const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
@@ -166,43 +160,7 @@ export function GraphicsPage({ savedGraphics, galleryLoading, user, onOpenGraphi
                                         <h3 className="graphic-card-title">{g.title}</h3>
 
 
-                                        {g.source_labels?.length > 0 && (() => {
-                                            // Group labels by source type
-                                            const groups: Record<string, string[]> = {}
-                                            for (const label of g.source_labels) {
-                                                const l = label.toLowerCase()
-                                                const type = l.startsWith('youtube:') ? 'youtube'
-                                                    : l.startsWith('http') ? 'url'
-                                                        : (l.startsWith('file:') || l.endsWith('.pdf') || l.endsWith('.txt')) ? 'file'
-                                                            : 'text'
-                                                    ; (groups[type] ??= []).push(label)
-                                            }
-                                            return (
-                                                <div className="graphic-card-sources">
-                                                    {Object.entries(groups).map(([type, labels]) => {
-                                                        const first = labels[0]
-                                                        const count = labels.length
-                                                        const isYt = type === 'youtube'
-                                                        const singleHref = isYt && count === 1
-                                                            ? `https://youtube.com/watch?v=${first.replace(/^youtube:\s*/i, '')}`
-                                                            : undefined
-                                                        const tooltip = count === 1 ? first : `${count} ${type} sources`
-                                                        const Chip = singleHref ? 'a' : 'span'
-                                                        return (
-                                                            <Chip
-                                                                key={type}
-                                                                className="graphic-card-source-icon"
-                                                                title={tooltip}
-                                                                {...(singleHref ? { href: singleHref, target: '_blank', rel: 'noopener noreferrer', onClick: (e: React.MouseEvent) => e.stopPropagation() } : {})}
-                                                            >
-                                                                <SourceTypeIcon label={first} />
-                                                                {count > 1 && <span className="source-icon-count">{count}</span>}
-                                                            </Chip>
-                                                        )
-                                                    })}
-                                                </div>
-                                            )
-                                        })()}
+
 
 
 
