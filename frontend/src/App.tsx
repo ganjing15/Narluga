@@ -356,6 +356,7 @@ function App() {
     const sendToVoiceAI = (textPayload: string) => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         if (hasStartedRef.current) {
+          console.log(`[LATENCY] sendToVoiceAI at T=${Date.now()}: ${textPayload.slice(0, 80)}...`);
           wsRef.current.send(JSON.stringify({
             clientContent: {
               turns: [{ role: "user", parts: [{ text: textPayload }] }],
@@ -375,30 +376,37 @@ function App() {
       }, 300);
     };
 
-    let aiEventPending = false;
+    let buttonClickInProgress = false;
+    let aiEventDebounceTimer: ReturnType<typeof setTimeout>;
 
     const handleMessage = (event: MessageEvent) => {
       const data = event.data;
-      if (data && data.type === 'HOVER_EVENT') {
+      if (data && data.type === 'CLEAR_AUDIO') {
+        // A button was clicked — suppress AI_EVENTs and cancel any pending ones
+        buttonClickInProgress = true;
+        clearTimeout(debounceTimer);
+        clearTimeout(aiEventDebounceTimer);
+        console.log(`[LATENCY] CLEAR_AUDIO received at T=${Date.now()}`);
+        setTimeout(() => { buttonClickInProgress = false; }, 500);
+      } else if (data && data.type === 'HOVER_EVENT') {
+        if (buttonClickInProgress) return;
         clearTimeout(hoverDebounceTimer);
         hoverDebounceTimer = setTimeout(() => {
           sendToVoiceAI(`[Cursor position: ${data.payload}]`);
-        }, 300); // Small debounce for hover events
+        }, 2000); // Long debounce to reduce context noise
       } else if (data && data.type === 'AI_EVENT') {
-        // Explicit state event from generated code (e.g., "User paused flight animation")
-        // HIGH PRIORITY: cancel any pending INTERACTION_EVENT and block new ones briefly
-        aiEventPending = true;
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
+        // State event from auto-play (e.g., "phase changed to X")
+        // Use a LONG debounce (5s) so we don't flood Gemini with every phase transition.
+        // Only the latest state update is sent, and button clicks cancel pending ones.
+        if (buttonClickInProgress) return;
+        clearTimeout(aiEventDebounceTimer);
+        aiEventDebounceTimer = setTimeout(() => {
           sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
-          aiEventPending = false;
-        }, 50);
-        // Release the lock after 200ms in case no timer fires
-        setTimeout(() => { aiEventPending = false; }, 200);
+        }, 5000);
       } else if (data && data.type === 'INTERACTION_EVENT') {
-        // Generic click event — skip if an AI_EVENT from the same click is pending
-        if (aiEventPending) return;
+        // Button click — HIGH PRIORITY, cancel any pending AI_EVENT
         clearTimeout(debounceTimer);
+        clearTimeout(aiEventDebounceTimer);
         debounceTimer = setTimeout(() => {
           sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
         }, 100);

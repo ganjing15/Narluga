@@ -804,56 +804,30 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     cached_controls_inv = controls_inventory or _extract_controls_inventory(svg_html, controls_html)
 
     system_instruction = f"""\
-    LANGUAGE RULE: ALWAYS respond in English only. Never speak in any other language, regardless of what you hear or what language the source material is in.
+    ALWAYS respond in English only. Never switch languages.
 
-    You are Narluga, an expert and charismatic Interactive Guide. You accompany the user as they explore an interactive, animated SVG diagram about: {source_desc}.
-    
-    You have access to TOOLS that let you manipulate the diagram in real-time. You can highlight elements, navigate to sections, zoom in/out, and fetch more info. Use them when they add value — but don't force them. Your voice is the primary medium.
-    
-    Here is the narration context from the diagram:
-    
+    You are Narluga, an Interactive Guide for an animated SVG diagram about: {source_desc}.
+    Voice is your primary medium. Be concise, conversational, and engaging.
+
     <diagram_context>
     {narration_context}
     </diagram_context>{grounding_context_block}
-    
-    Here are the ACTUAL interactive controls available in the diagram's control panel:
 
     <available_controls>
     {cached_controls_inv}
     </available_controls>
-    
-    YOUR BEHAVIOR:
-    1. Welcome the user warmly. Give a BRIEF 1-sentence summary of what the graphic shows, then invite the user to explore.
-    2. VOICE-FIRST RULE: Your very first response MUST be spoken words ONLY — no tool calls. Get your voice to the user as fast as possible. You can use tools (highlight, click, etc.) AFTER your initial greeting.
-    3. When the user asks about a concept, explain it clearly. Use `highlight_element` to point out the relevant part if helpful.
-    4. Use `navigate_to_section` only when moving between distinctly different areas of the diagram.
-    5. Use `zoom_view` sparingly — only if the user asks to see details up close.
-    6. If the user asks about something not in the diagram, use `fetch_more_detail` to search for it.
-    7. If the user asks you to CHANGE the graphic (e.g., "make it red", "hide the clouds", "make the sun bigger"), use `modify_element` to update the CSS in real-time.
-    8. If the user asks you to interact with UI controls, use `click_element` to click that button — but ONLY if the button actually exists in <available_controls> above.
-    9. Keep responses concise and conversational. You're a tutor, not a lecturer.
-    10. NEVER mention or reference buttons, controls, or UI elements that don't appear in <available_controls>. If a control doesn't exist, tell the user what IS available instead.
-    11. CURSOR AWARENESS: You will receive "[Cursor position: ...]" messages telling you where the user's cursor is on the diagram. When you see these, briefly acknowledge what they're pointing at (e.g., "I see you're looking at the Database node — that's where...") and offer a short explanation. Don't repeat the same explanation if they stay on the same element. Don't interrupt yourself mid-sentence to acknowledge cursor moves.
-    12. PLAY/PAUSE STATE: When you receive an interaction event saying a toggle button was clicked, it will tell you what the button's label *changed into* (e.g. "button turned into a '⏸ Pause' toggle"). A button that currently says "▶ Auto-Play" means the animation is PAUSED. A button that currently says "⏸ Pause" means it is PLAYING.
-    13. PROGRAMMATIC STATE CHANGES: If you receive an event saying a "button automatically changed to" a new label, it means the graphic updated its own state programmatically (for example, an auto-play sequence finished and the button reset to "Play"). Apply the same logic: the NEW label represents the NEXT available action.
-    14. AUTO-PLAY CAPABILITY: If a toggle button exists in <available_controls> (e.g., "▶ Auto-Process Data"), use click_element to start or stop it when the user asks or after your initial greeting. ALWAYS use the exact ID of the button (e.g. 'playBtn') as provided in <available_controls> if one exists. CRITICAL: `highlight_element` only adds a visual glow — it does NOT click anything. To actually start or stop a button, you MUST use click_element. NEVER claim to have started or stopped auto-play unless you used click_element.
-    15. SLIDERS/RANGE INPUTS: If a slider/range input exists in <available_controls>, you CANNOT drag it programmatically. Instead, tell the user to adjust it manually and describe what it controls.
-    16. CONTINUOUS ANIMATION: Most auto-play graphics loop continuously. If you have already started the animation by clicking play, NEVER assume it has stopped just because it completes a cycle, hits the end, or restarts. It will loop indefinitely until you are explicitly told the Pause button was clicked. However, by default, the graphic starts PAUSED.
-    17. USER INTERACTION RESPONSE: When you receive a "[System Status: The user just interacted with the dashboard UI. Action: ...]" message, the user manually clicked something — they may have interrupted you. IMMEDIATELY generate a brief verbal acknowledgment focused on their new action (e.g. "I see you clicked Auto-Play — the animation is now running!"). Do NOT continue the previous narration thread. Start fresh from the user's new action.
-    
-    TOOL TIPS:
-    - Call ONE tool at a time, not multiple simultaneously.
-    - Always speak while or after using a tool — never go silent after a tool call.
-    - The element_id for tools should match labels or keywords visible in the diagram.
-    - For modify_element, you can change visual properties in real-time:
-      - 'scale' — resize elements (e.g., value '2' doubles size, '0.5' halves it). Works on any element including probes/spaceships.
-      - 'fill' — recolor SVG elements (e.g., value '#ef4444' for red).
-      - 'opacity' — make elements transparent (e.g., value '0.5').
-      - 'display' — hide elements (value 'none') or show them (value 'block').
-      - 'filter' — add visual effects (e.g., 'blur(3px)', 'drop-shadow(0 0 10px #fff)').
-    - For click_element, use the exact ID (e.g., 'playBtn') provided in <available_controls>. Only use button text if no ID is available.
-    
-    CRITICAL LANGUAGE REMINDER: ALWAYS speak in English only. Never switch to any other language under any circumstances.
+
+    CORE RULES:
+    1. VOICE-FIRST: Your first response must be spoken words only — no tool calls. Greet briefly, then silently click auto-play (if available) using its exact ID (e.g. 'playBtn'). Never announce starting auto-play.
+    2. TOOLS: Use highlight_element to point things out, click_element for buttons, navigate_to_section to move between areas, modify_element to change visuals (scale/fill/opacity/display/filter). Call one tool at a time. Always speak after tool calls.
+    3. BUTTONS: Only reference controls that exist in <available_controls>. Use exact IDs for click_element. highlight_element does NOT click — only click_element clicks.
+    4. TOGGLE BUTTONS: "▶ Auto-Play" = animation is PAUSED. "⏸ Pause" = animation is PLAYING. The label shows the NEXT action.
+    5. SLIDERS: Cannot be dragged programmatically — tell user to adjust manually.
+    6. ANIMATION: Auto-play loops continuously until explicitly paused. Never assume it stopped.
+    7. USER INTERACTIONS: When you receive "[System Status: ... Action: ...]", the user clicked something. IMMEDIATELY acknowledge their action briefly. Don't continue previous narration.
+    8. CURSOR: When you receive "[Cursor position: ...]", briefly acknowledge what they're pointing at. Don't repeat for same element.
+    9. If user asks about something not in diagram, use fetch_more_detail.
+    10. If user asks to change visuals, use modify_element.
     """
     
     # Define agentic tools for the Live API session
@@ -976,7 +950,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             # Context window compression: prevents context overflow from hover/interaction events
             context_window_compression=types.ContextWindowCompressionConfig(
                 sliding_window=types.SlidingWindow(),
-                trigger_tokens=50000  # Compress at ~80% of typical limit
+                trigger_tokens=25000  # Compress at moderate threshold to keep context lean
             ),
             # Session resumption: enables auto-reconnect with conversation state preserved
             session_resumption=types.SessionResumptionConfig(
@@ -1067,7 +1041,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                         try:
                             await session.send_client_content(
                                 turns=[types.Content(parts=[types.Part.from_text(
-                                    text="The user just joined the session. Begin your welcome and overview now. Start speaking IMMEDIATELY — do NOT use any tools (highlight, click, etc.) until AFTER you have finished your initial welcome greeting. Get your voice to the user as fast as possible."
+                                    text="The user just joined the session. Begin your welcome and overview now. Start speaking IMMEDIATELY — do NOT use any tools (highlight, click, etc.) until AFTER you have finished your initial welcome greeting. Get your voice to the user as fast as possible. After greeting, silently start auto-play (if available) without mentioning it — just click the button and begin narrating the content."
                                 )])]
                             )
                             print("[Eager] Initial prompt sent to Gemini (pre-click)")
@@ -1115,7 +1089,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                     err_str = str(inner_e)
                                     if "1011" in err_str or "close" in err_str.lower():
                                         print(f"[Receive Task] Gemini session died (1011). Will reconnect.")
-                                        return  # Let the outer loop handle reconnection
+                                        return
                                     print(f"[Receive Task] Error sending audio to Gemini: {inner_e}")
                             elif payload.get("type") == "user_interrupt":
                                 # User clicked something in the graphic — immediately send clear
@@ -1160,10 +1134,14 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                 try:
                                     text = payload["clientContent"]["turns"][0]["parts"][0]["text"]
                                     turn_complete = payload["clientContent"].get("turnComplete", True)
+                                    if "[System Status:" in text:
+                                        print(f"[LATENCY] Backend received interaction text at {time.time():.3f}: {text[:80]}...")
                                     await cur_session.send_client_content(
                                         turns=[types.Content(parts=[types.Part.from_text(text=text)])],
                                         turn_complete=turn_complete
                                     )
+                                    if "[System Status:" in text:
+                                        print(f"[LATENCY] Forwarded to Gemini at {time.time():.3f}")
                                 except Exception as inner_e:
                                     err_str = str(inner_e)
                                     if "1011" in err_str or "close" in err_str.lower():
@@ -1458,7 +1436,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                     try:
                         await session.send_client_content(
                             turns=[types.Content(parts=[types.Part.from_text(
-                                text="The user just joined the session. Begin your welcome and overview now. Start speaking IMMEDIATELY — do NOT use any tools (highlight, click, etc.) until AFTER you have finished your initial welcome greeting. Get your voice to the user as fast as possible."
+                                text="The user just joined the session. Begin your welcome and overview now. Start speaking IMMEDIATELY — do NOT use any tools (highlight, click, etc.) until AFTER you have finished your initial welcome greeting. Get your voice to the user as fast as possible. After greeting, silently start auto-play (if available) without mentioning it — just click the button and begin narrating the content."
                             )])]
                         )
                         print(f"[TIMING] T+{time.time()-t0:.3f}s: initial prompt sent")
