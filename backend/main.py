@@ -131,7 +131,7 @@ async def websocket_endpoint(websocket: WebSocket):
             uid = user.get('uid', 'anonymous')
             if not _check_rate_limit(uid):
                 print(f"[WebSocket] Rate limit exceeded for uid={uid}")
-                await websocket.send_json({"type": "error", "message": "Daily session limit reached (5 sessions/24h). Please try again tomorrow, or ask an admin to restart the server."})
+                await websocket.send_json({"type": "error", "message": "Daily session limit reached (5 sessions/24h)."})
                 await websocket.close()
                 return
         else:

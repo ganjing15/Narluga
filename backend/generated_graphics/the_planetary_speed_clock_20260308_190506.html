@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Planetary Speed Clock</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
+    <style>
+        .orbit-ring {
+            fill: none;
+            stroke: #cbd5e1;
+            stroke-width: 1.5;
+            stroke-dasharray: 4 6;
+        }
+        @keyframes pulseGlow {
+            0% { transform: scale(1); opacity: 0.4; }
+            50% { transform: scale(1.15); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 0.4; }
+        }
+        #sun-glow {
+            transform-origin: 300px 300px;
+            animation: pulseGlow 3.5s infinite ease-in-out;
+        }
+        .planet-body {
+            stroke: #ffffff;
+            stroke-width: 1.5;
+        }
+        .planet-label {
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            fill: #0f172a;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+    </style>
+
+    <g id="solar-system-center">
+        <!-- Sun Glow -->
+        <circle id="sun-glow" cx="300" cy="300" r="45" fill="#fcd34d" />
+        <!-- Sun Body -->
+        <circle id="sun-body" cx="300" cy="300" r="30" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
+        <text x="300" y="304" font-family="system-ui, sans-serif" font-size="14" font-weight="800" fill="#ffffff" text-anchor="middle">Sun</text>
+    </g>
+
+    <g id="orbits-group">
+        <circle id="orbit-mercury" class="orbit-ring" cx="300" cy="300" r="70" />
+        <circle id="orbit-venus" class="orbit-ring" cx="300" cy="300" r="120" />
+        <circle id="orbit-earth" class="orbit-ring" cx="300" cy="300" r="180" />
+        <circle id="orbit-mars" class="orbit-ring" cx="300" cy="300" r="250" />
+    </g>
+
+    <g id="planets-group">
+        <!-- Mercury -->
+        <g id="group-mercury">
+            <circle id="planet-mercury-body" class="planet-body" cx="300" cy="230" r="6" fill="#64748b"/>
+            <rect id="planet-mercury-label-bg" x="270" y="243" width="60" height="18" fill="rgba(248, 250, 252, 0.85)" rx="4"/>
+            <text id="planet-mercury-label" class="planet-label" x="300" y="255">Mercury</text>
+        </g>
+        
+        <!-- Venus -->
+        <g id="group-venus">
+            <circle id="planet-venus-body" class="planet-body" cx="300" cy="180" r="10" fill="#d97706"/>
+            <rect id="planet-venus-label-bg" x="276" y="193" width="48" height="18" fill="rgba(248, 250, 252, 0.85)" rx="4"/>
+            <text id="planet-venus-label" class="planet-label" x="300" y="205">Venus</text>
+        </g>
+        
+        <!-- Earth -->
+        <g id="group-earth">
+            <circle id="planet-earth-body" class="planet-body" cx="300" cy="120" r="11" fill="#3b82f6"/>
+            <rect id="planet-earth-label-bg" x="278" y="133" width="44" height="18" fill="rgba(248, 250, 252, 0.85)" rx="4"/>
+            <text id="planet-earth-label" class="planet-label" x="300" y="145">Earth</text>
+        </g>
+
+        <!-- Mars -->
+        <g id="group-mars">
+            <circle id="planet-mars-body" class="planet-body" cx="300" cy="50" r="8" fill="#ef4444"/>
+            <rect id="planet-mars-label-bg" x="280" y="63" width="40" height="18" fill="rgba(248, 250, 252, 0.85)" rx="4"/>
+            <text id="planet-mars-label" class="planet-label" x="300" y="75">Mars</text>
+        </g>
+    </g>
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>The Planetary Speed Clock</h2>
+        <p style="color: #64748b;">Use the controls on the right to watch the planets race around the Sun!</p>
+        <p style="font-size: 13px; margin-top: -8px;"><a href="https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG7iQbO0rZ6z7ZY6mO32Yfnr--40pJPS9ERx2yZFvIIBaRNSCWR4oi4p9400TvbrjzomAVkU8wNgwqzkiNog9id1-9lddORb3ZovBDAa50a9uxsD9QFniansQX3X3burxMrd" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p><p style="font-size: 13px; margin-top: -8px;"><a href="https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEDom1s9hduUHodbzZr-9dXpmaSFBvD-JXvpmSnP_Mq1SDc969Mp704f_HdbQxfsc88iLY1zWpNbJVMmJyFcL8Rbv_FYc7xYlBdsCU5gbMonjq64xGw4-AnKEpPO4NFmAs_f" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p><p style="font-size: 13px; margin-top: -8px;"><a href="https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGRo9XV2CmTMiRl1lPRfZDisx_rimX__NqY0UbCpqK8h0BXy7M3Gat_u2Kuq72XIDmDzUp2LT-VfL_CFJAdmVJHkFITxhar3WNdtBGrh0g5VBIo8ptnacGCx2F7bDvn93THx" target="_blank" style="color: #2563eb; text-decoration: none;">View Original Source ↗</a></p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div id="controls-wrapper" style="font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; gap: 20px; padding: 16px; width: 100%; box-sizing: border-box;">
+    
+    <div>
+        <h2 style="margin: 0 0 8px 0; font-size: 20px; color: #0f172a; font-weight: 700;">Time Control (Days)</h2>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <input type="range" id="timeSlider" min="0" max="730" step="any" value="0" style="flex-grow: 1; cursor: pointer; accent-color: #2563eb;">
+        </div>
+        <button id="playBtn" style="margin-top: 16px; width: 100%; padding: 12px; background: #2563eb; color: #ffffff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s;">▶ Auto-Play</button>
+    </div>
+
+    <div id="info-panel" style="padding: 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+        <div id="info-title" style="font-weight: 800; font-size: 18px; color: #0f172a; margin-bottom: 8px;">Day 0</div>
+        <div id="info-desc" style="font-size: 14px; color: #475569; line-height: 1.6;">Drag the slider or click Play to start the clock and watch the planets orbit!</div>
+    </div>
+
+    <div>
+        <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Orbits Completed</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid #64748b;">
+                <div style="font-size: 12px; color: #475569; font-weight: 600;">MERCURY (88d)</div>
+                <div id="stat-mercury" style="font-size: 20px; font-weight: 800; color: #0f172a;">0.0</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid #d97706;">
+                <div style="font-size: 12px; color: #475569; font-weight: 600;">VENUS (225d)</div>
+                <div id="stat-venus" style="font-size: 20px; font-weight: 800; color: #0f172a;">0.0</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                <div style="font-size: 12px; color: #475569; font-weight: 600;">EARTH (365d)</div>
+                <div id="stat-earth" style="font-size: 20px; font-weight: 800; color: #0f172a;">0.0</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                <div style="font-size: 12px; color: #475569; font-weight: 600;">MARS (687d)</div>
+                <div id="stat-mars" style="font-size: 20px; font-weight: 800; color: #0f172a;">0.0</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let isPlaying = false;
+let playInterval;
+
+function updatePlanet(planetId, radius, angleDeg) {
+    let rad = (angleDeg - 90) * (Math.PI / 180);
+    let x = 300 + radius * Math.cos(rad);
+    let y = 300 + radius * Math.sin(rad);
+
+    document.getElementById(`planet-${planetId}-body`).setAttribute(`cx`, x);
+    document.getElementById(`planet-${planetId}-body`).setAttribute(`cy`, y);
+
+    document.getElementById(`planet-${planetId}-label`).setAttribute(`x`, x);
+    document.getElementById(`planet-${planetId}-label`).setAttribute(`y`, y + 24);
+
+    let rectW = 40;
+    if (planetId === `mercury`) rectW = 60;
+    if (planetId === `venus`) rectW = 48;
+    if (planetId === `earth`) rectW = 44;
+
+    document.getElementById(`planet-${planetId}-label-bg`).setAttribute(`x`, x - (rectW / 2));
+    document.getElementById(`planet-${planetId}-label-bg`).setAttribute(`y`, y + 11);
+}
+
+function updateState(val) {
+    let days = Number(val);
+    
+    // Update planetary positions using accurate orbital periods
+    updatePlanet(`mercury`, 70, (days / 88) * 360);
+    updatePlanet(`venus`, 120, (days / 225) * 360);
+    updatePlanet(`earth`, 180, (days / 365) * 360);
+    updatePlanet(`mars`, 250, (days / 687) * 360);
+    
+    // Update statistical readouts
+    document.getElementById(`stat-mercury`).textContent = (days / 88).toFixed(1);
+    document.getElementById(`stat-venus`).textContent = (days / 225).toFixed(1);
+    document.getElementById(`stat-earth`).textContent = (days / 365).toFixed(1);
+    document.getElementById(`stat-mars`).textContent = (days / 687).toFixed(1);
+    
+    // Update dynamic narration
+    document.getElementById(`info-title`).textContent = `Day ${Math.floor(days)}`;
+    
+    let desc = `The planets are in motion!`;
+    if (days === 0) {
+        desc = `Drag the slider or click Play to start the clock.`;
+    } else if (days < 88) {
+        desc = `Mercury is racing ahead! It moves fastest and has the shortest path because it's closest to the Sun.`;
+    } else if (days < 225) {
+        desc = `Mercury has completed an orbit! Notice how Venus and Earth are moving much slower.`;
+    } else if (days < 365) {
+        desc = `Venus just completed its 225-day orbit. Earth is approaching the end of its first year.`;
+    } else if (days < 687) {
+        desc = `Happy New Year! Earth completed its 365-day orbit. Mars is only halfway through its long journey.`;
+    } else {
+        desc = `Mars completes a massive 687-day orbit. Mercury orbited nearly 8 times in the exact same span!`;
+    }
+    document.getElementById(`info-desc`).textContent = desc;
+
+    if (window.sendEventToAI && Math.floor(days) > 0 && Math.floor(days) % 180 === 0) {
+        window.sendEventToAI(`User reached day ${Math.floor(days)} in solar system simulation`);
+    }
+}
+
+function togglePlay() {
+    isPlaying = !isPlaying;
+    let btn = document.getElementById(`playBtn`);
+    let slider = document.getElementById(`timeSlider`);
+    
+    if (isPlaying) {
+        if (btn) {
+            btn.textContent = `⏸ Pause Auto-Play`;
+            btn.style.background = `#334155`;
+        }
+        clearInterval(playInterval);
+        playInterval = setInterval(() => {
+            let nextVal = Number(slider.value) + 2.5; 
+            if (nextVal > 730) nextVal = 0;
+            slider.value = nextVal;
+            updateState(nextVal);
+        }, 30);
+    } else {
+        if (btn) {
+            btn.textContent = `▶ Auto-Play`;
+            btn.style.background = `#2563eb`;
+        }
+        clearInterval(playInterval);
+    }
+}
+
+// Bind events securely in JS
+document.getElementById(`timeSlider`).addEventListener(`input`, function(e) {
+    updateState(e.target.value);
+});
+document.getElementById(`playBtn`).addEventListener(`click`, togglePlay);
+
+// Initialize graphic state on load
+updateState(0);
+</script>
+    </div>
+</body>
+</html>

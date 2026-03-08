@@ -1404,16 +1404,17 @@ function App() {
           const maxScore = Math.max(idScore, labelScore, sectionScore, classScore);
           
           if (maxScore > 0 && !isTooLarge(el)) {
-            // Boost score for visual elements (shapes) vs text/labels
+            // For animated SVGs, prefer groups over bare shapes.
+            // Groups carry the animation transform (e.g., translate(x,y)) and contain
+            // the full visual unit (planet dot + label). Highlighting a bare <circle>
+            // at its local (0,0) position can cause the glow to appear at the wrong spot.
             const isVisualElement = ['circle', 'ellipse', 'rect', 'path', 'polygon', 'line'].includes(el.tagName.toLowerCase());
             const isGroup = el.tagName.toLowerCase() === 'g';
-            
-            // Prefer actual shapes over groups (groups might contain multiple things)
             let finalScore = maxScore;
-            if (isVisualElement) {
-              finalScore = maxScore * 3; // Highest priority for actual shapes
-            } else if (isGroup) {
-              finalScore = maxScore * 1; // Lowest priority for groups
+            if (isGroup) {
+              finalScore = maxScore * 3; // Highest priority — logical animation unit
+            } else if (isVisualElement) {
+              finalScore = maxScore * 1; // Lowest — positioned relative to parent group
             } else {
               finalScore = maxScore * 2; // Medium priority for other elements
             }
@@ -1458,47 +1459,31 @@ function App() {
       };
 
       if (action === 'highlight_element') {
-        const elements = findElements(params.element_id || '');
+        // Only highlight the single best match — multiple matches cause
+        // false positives (orbit circles, legend entries near the Sun, etc.)
+        const elements = findElements(params.element_id || '').slice(0, 1);
         const color = params.color || '#3b82f6';
         elements.forEach(el => {
           const prev = el.style.cssText;
-          el.style.transition = 'all 0.4s ease';
+          // IMPORTANT: Only transition 'filter', not 'all'. 'transition: all' causes
+          // the browser to transition the 'transform' property between frames, which
+          // fights with the animation loop's setAttribute('transform', ...) updates
+          // and makes elements drift to stale positions.
+          el.style.transition = 'filter 0.4s ease';
           el.style.filter = "drop-shadow(0 0 16px " + color + ") drop-shadow(0 0 8px " + color + ")";
-          if (el instanceof SVGElement) {
-            // Only apply the scale bump if modify_element hasn't claimed this element's transform.
-            // dataset.originalTransform being set means modify_element owns the transform; touching
-            // it here and restoring after 4 s would undo the AI's persistent resize.
-            if (el.dataset.originalTransform === undefined) {
-              try {
-                const bbox = el.getBBox();
-                const cx = bbox.x + bbox.width / 2;
-                const cy = bbox.y + bbox.height / 2;
-                const existingTransform = el.getAttribute('transform') || '';
-                el.dataset.prevTransform = existingTransform;
-                const newTransform = (existingTransform + ' translate(' + cx + ', ' + cy + ') scale(1.03) translate(' + (-cx) + ', ' + (-cy) + ')').trim();
-                el.setAttribute('transform', newTransform);
-              } catch (e) {
-                el.style.transform = 'scale(1.03)';
-                el.style.transformOrigin = 'center';
-                el.style.transformBox = 'fill-box';
-              }
-            }
-          }
+          // NOTE: Do NOT set el.style.transform here. For SVG elements whose position
+          // is set via setAttribute('transform', 'translate(...)') by animation code,
+          // any CSS style.transform overrides the SVG transform attribute entirely,
+          // snapping the element to the origin and causing the "label drift" bug.
+          // The drop-shadow glow alone is a clear, sufficient highlight effect.
           setTimeout(() => {
+            el.style.transition = 'filter 0.4s ease';
             el.style.filter = '';
-            if (el instanceof SVGElement) {
-              // Only restore the pre-highlight transform if modify_element hasn't claimed ownership
-              if (el.dataset.prevTransform !== undefined && el.dataset.originalTransform === undefined) {
-                el.setAttribute('transform', el.dataset.prevTransform);
-              }
-              delete el.dataset.prevTransform;
-            } else {
-              el.style.transform = '';
-            }
             setTimeout(() => { el.style.cssText = prev; }, 400);
           }, 4000);
         });
-        if (elements.length > 0) elements[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        // NOTE: Removed scrollIntoView — for animated SVG elements, it scrolls to
+        // the element's layout-box position which may not match its visual position.
       } else if (action === 'navigate_to_section') {
         const elements = findElements(params.section || '');
         if (elements.length > 0) elements[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
@@ -1513,7 +1498,7 @@ function App() {
         const elements = findElements(params.topic || '');
         elements.forEach(el => {
           const prev = el.style.cssText;
-          el.style.transition = 'all 0.3s ease';
+          el.style.transition = 'filter 0.3s ease';
           el.style.filter = 'drop-shadow(0 0 12px #fbbf24)';
           setTimeout(() => { el.style.cssText = prev; }, 2000);
         });
@@ -1553,7 +1538,8 @@ function App() {
         }
         
         elements.forEach(el => {
-          el.style.transition = 'all 0.5s ease';
+          // Use specific property transitions to avoid interfering with animated SVG transforms
+          el.style.transition = 'filter 0.5s ease, fill 0.5s ease, stroke 0.5s ease, opacity 0.5s ease';
           if (el instanceof SVGElement && ['fill', 'stroke', 'opacity', 'stroke-width', 'r', 'cx', 'cy', 'x', 'y', 'width', 'height', 'display'].includes(prop)) {
             // Direct SVG attribute modification
             el.setAttribute(prop, val);
