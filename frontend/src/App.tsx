@@ -2737,12 +2737,13 @@ function App() {
                       </div>
                       <div className="button-group w-full">
                         <button
-                          className="btn-primary w-full justify-center"
+                          className="w-full py-3 px-6 bg-[var(--accent-primary)] hover:bg-[#0a48ad] text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
                           onClick={startSession}
                           disabled={isConnecting}
+                          style={isConnecting ? { opacity: 0.8 } : undefined}
                         >
                           {isConnecting
-                            ? <span className="spinner"></span>
+                            ? <span className="spinner" style={{ width: 18, height: 18 }}></span>
                             : <><SparklesIcon className="w-5 h-5" /> Create Interactive Graphic</>
                           }
                         </button>
