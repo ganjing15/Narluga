@@ -123,7 +123,7 @@ function App() {
   const [currentTitle, setCurrentTitle] = useState<string | null>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null)
   const [groundingSources, setGroundingSources] = useState<{ title: string, url: string }[]>([])
-  const [researchMode, setResearchMode] = useState<'off' | 'fast' | 'deep'>('fast')
+  const [researchMode, setResearchMode] = useState<'fast' | 'deep'>('fast')
   const narrationContextRef = useRef<string>('')
   const sourceLabelsRef = useRef<string[]>([])
   const controlsInventoryRef = useRef<string>('')
@@ -844,7 +844,7 @@ function App() {
         // Send the sources array as the first message
         ws.send(JSON.stringify({
           type: "init_sources",
-          research_mode: researchMode,
+          research_mode: 'fast',  // Always use fast grounding for generation
           sources: sources.map(s => ({
             type: s.type,
             content: s.content,
@@ -2353,17 +2353,17 @@ function App() {
                   {/* Phase: idle or complete — show source manager */}
                   {(sessionPhase === 'idle' || sessionPhase === 'complete') && !isProcessing && (
                     <div className="sidebar-input-area">
-                      {/* Web search input */}
+                      {/* Web search input — always visible */}
                       <form
-                        onSubmit={(e) => { e.preventDefault(); researchMode !== 'off' ? performSearch(searchQuery) : addSource(e) }}
+                        onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) performSearch(searchQuery) }}
                         className="url-form"
                       >
-                        <div className="url-input-wrapper shadow-none" style={{ alignItems: 'flex-start' }}>
+                        <div className="url-input-wrapper shadow-none" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
                           <textarea
-                            placeholder={researchMode !== 'off' ? 'Search the web for sources' : 'Paste a URL or YouTube video link'}
-                            value={researchMode !== 'off' ? searchQuery : inputValue}
+                            placeholder="Search the web for sources"
+                            value={searchQuery}
                             onChange={(e) => {
-                              researchMode !== 'off' ? setSearchQuery(e.target.value) : setInputValue(e.target.value)
+                              setSearchQuery(e.target.value)
                               // Auto-resize
                               e.target.style.height = 'auto'
                               e.target.style.height = e.target.scrollHeight + 'px'
@@ -2371,36 +2371,51 @@ function App() {
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && !e.shiftKey) {
                                 e.preventDefault()
-                                if (researchMode !== 'off') {
-                                  if (searchQuery.trim()) performSearch(searchQuery)
-                                } else {
-                                  if (inputValue.trim()) addSource()
-                                }
+                                if (searchQuery.trim()) performSearch(searchQuery)
                               }
                             }}
                             className="url-input"
-                            style={{ ...(researchMode !== 'off' ? { paddingLeft: 40 } : {}), resize: 'none', overflow: 'hidden', minHeight: 52 }}
+                            style={{ paddingLeft: 40, paddingBottom: 38, resize: 'none', overflow: 'hidden', minHeight: 52 }}
                             disabled={isConnecting || isSearching}
                             rows={1}
                           />
-                          {researchMode !== 'off' && (
-                            <span style={{ position: 'absolute', left: 13, top: 18, color: 'var(--text-tertiary)', pointerEvents: 'none', display: 'flex' }}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                              </svg>
-                            </span>
-                          )}
+                          <span style={{ position: 'absolute', left: 13, top: 18, color: 'var(--text-tertiary)', pointerEvents: 'none', display: 'flex' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                          </span>
                           {isSearching ? (
                             <span className="spinner" style={{ position: 'absolute', right: 14, top: 18 }} />
-                          ) : (researchMode !== 'off' ? searchQuery.trim() : inputValue.trim()) ? (
-                            <button type="submit" className="enter-icon-btn" title={researchMode !== 'off' ? 'Search' : 'Add source'}>
-                              {researchMode !== 'off' ? (
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-                              ) : (
-                                <PlusIcon className="w-4 h-4" />
-                              )}
+                          ) : (
+                            <button type="submit" className="enter-icon-btn" title="Search" disabled={!searchQuery.trim()} style={!searchQuery.trim() ? { background: '#c4c7cc', boxShadow: 'none' } : undefined}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
                             </button>
-                          ) : null}
+                          )}
+                          {/* Search depth toggle — inside input */}
+                          <div style={{ position: 'absolute', left: 8, bottom: 6, display: 'flex', gap: 2 }}>
+                            {(['fast', 'deep'] as const).map(mode => (
+                              <button
+                                key={mode}
+                                type="button"
+                                title={mode === 'fast' ? 'Quick search' : 'Thorough search with enrichment'}
+                                onClick={() => setResearchMode(mode)}
+                                style={{
+                                  padding: '2px 10px',
+                                  fontSize: '11px',
+                                  fontWeight: researchMode === mode ? 600 : 400,
+                                  color: researchMode === mode ? 'var(--accent-primary)' : '#64748b',
+                                  background: researchMode === mode ? 'rgba(11, 87, 208, 0.08)' : 'transparent',
+                                  border: 'none',
+                                  borderRadius: 'var(--radius-pill)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  lineHeight: '20px',
+                                }}
+                              >
+                                {mode === 'fast' ? 'Fast Research' : 'Deep Research'}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </form>
 
@@ -2711,30 +2726,6 @@ function App() {
                   {/* Idle + has sources: Research mode + Create button */}
                   {sources.length > 0 && sessionPhase === 'idle' && (
                     <div className="w-full flex flex-col gap-4">
-                      {/* Research mode segmented control */}
-                      <div className="research-mode-row" style={{ marginTop: 0 }}>
-                        <span className="research-mode-label">Research</span>
-                        <div className="research-mode-track">
-                          {(['off', 'fast', 'deep'] as const).map(mode => {
-                            const labels: Record<string, string> = { off: 'Off', fast: 'Fast', deep: 'Deep' }
-                            const tips: Record<string, string> = {
-                              off: 'Source-only — no web search. Strict fidelity to your sources.',
-                              fast: 'Google Search grounding during graphic generation.',
-                              deep: 'URL sources get a Gemini+Search enrichment pass before generation. Slower but more thorough.',
-                            }
-                            return (
-                              <button
-                                key={mode}
-                                title={tips[mode]}
-                                onClick={() => setResearchMode(mode)}
-                                className={`research-mode-btn mode-${mode}${researchMode === mode ? ' active' : ''}`}
-                              >
-                                {labels[mode]}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
                       <div className="button-group w-full">
                         <button
                           className="w-full py-3 px-6 bg-[var(--accent-primary)] hover:bg-[#0a48ad] text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
