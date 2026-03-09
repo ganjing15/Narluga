@@ -670,13 +670,54 @@ async def handle_live_session(websocket: WebSocket, sources: list, research_mode
 async def handle_live_restart(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", controls_inventory: str = ""):
     """
     Restart a live conversation on an existing graphic.
-    Skips graphic generation and goes straight to the Live API.
+    Skips graphic generation — waits for user intent signal before connecting to Gemini Live API.
+
+    Two-stage deferred connection (first session only):
+      Stage 1 (on gallery open): WS opens, restart context received — no Gemini cost yet.
+      Stage 2a (prepare_live): User hovered/touched Start button → eagerly connect to Gemini.
+      Stage 2b (start_live_session): User clicked Start without hover → connect non-eagerly.
+
+    Subsequent sessions (after End Conversation) use eager connect directly,
+    matching the old behavior and avoiding WebSocket recv conflicts.
     """
-    print(f"[Live Restart] Starting with {len(source_labels)} source label(s)")
-    while True:
-        ws_alive = await _run_live_session(websocket, narration_context, source_labels, svg_html, controls_html, controls_inventory=controls_inventory, eager_connect=True)
-        if not ws_alive:
-            break
+    print(f"[Live Restart] Starting with {len(source_labels)} source label(s) — waiting for user intent")
+
+    # First session: wait for user intent before spending Gemini Live API resources
+    eager_connect = True
+    try:
+        while True:
+            data = await websocket.receive_text()
+            payload = json.loads(data)
+            msg_type = payload.get("type")
+            if msg_type == "prepare_live":
+                # User showed intent (hover/touch) — eagerly connect to Gemini
+                print("[Live Restart] prepare_live received — eagerly connecting to Gemini")
+                eager_connect = True
+                break
+            elif msg_type == "start_live_session":
+                # User clicked Start directly (no hover) — connect non-eagerly
+                print("[Live Restart] start_live_session received (no prepare) — connecting to Gemini")
+                eager_connect = False
+                break
+            # Ignore other messages while waiting
+    except WebSocketDisconnect:
+        print("[Live Restart] Client disconnected before intent signal")
+        return
+
+    # First session with deferred connect settings
+    ws_alive = await _run_live_session(
+        websocket, narration_context, source_labels, svg_html, controls_html,
+        controls_inventory=controls_inventory, eager_connect=eager_connect,
+        start_immediately=not eager_connect
+    )
+
+    # Subsequent sessions: user already showed intent, use eager connect directly
+    # (avoids WebSocket recv conflicts with still-cancelling relay tasks)
+    while ws_alive:
+        ws_alive = await _run_live_session(
+            websocket, narration_context, source_labels, svg_html, controls_html,
+            controls_inventory=controls_inventory, eager_connect=True
+        )
 
 
 def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
@@ -777,7 +818,7 @@ def _extract_controls_inventory(svg_html: str, controls_html: str = "") -> str:
         return f"Could not parse controls: {e}"
 
 
-async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", grounding_sources: list[dict] | None = None, controls_inventory: str = "", eager_connect: bool = False):
+async def _run_live_session(websocket: WebSocket, narration_context: str, source_labels: list[str], svg_html: str, controls_html: str = "", grounding_sources: list[dict] | None = None, controls_inventory: str = "", eager_connect: bool = False, start_immediately: bool = False):
     """
     Shared Live API session logic. Handles system instruction, tool declarations,
     Gemini connection, and bidirectional audio/tool streaming.
@@ -990,20 +1031,23 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     is_first_connection = True
 
     if not eager_connect:
-        # Normal path: wait for user to click "Start Live Conversation" first
-        print("[WebSocket] Waiting for user to start presentation...")
-        try:
-            while True:
-                data = await websocket.receive_text()
-                payload = json.loads(data)
-                if payload.get("type") == "start_live_session":
-                    break
-        except WebSocketDisconnect:
-            print("[WebSocket] Client disconnected before starting session.")
-            return False
-        except Exception as e:
-            print(f"[WebSocket] Error while waiting to start: {e}")
-            return False
+        if not start_immediately:
+            # Normal path: wait for user to click "Start Live Conversation" first
+            print("[WebSocket] Waiting for user to start presentation...")
+            try:
+                while True:
+                    data = await websocket.receive_text()
+                    payload = json.loads(data)
+                    if payload.get("type") == "start_live_session":
+                        break
+            except WebSocketDisconnect:
+                print("[WebSocket] Client disconnected before starting session.")
+                return False
+            except Exception as e:
+                print(f"[WebSocket] Error while waiting to start: {e}")
+                return False
+        else:
+            print("[WebSocket] start_immediately=True — skipping wait for start_live_session")
 
         t0 = time.time()
         session_holder["t0"] = t0

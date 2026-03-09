@@ -132,6 +132,7 @@ function App() {
   const [isStartingConversation, setIsStartingConversation] = useState(false)
   const [eagerAudioReady, setEagerAudioReady] = useState(false)
   const isPreConnectRef = useRef(false)  // true while WS is a background pre-connect (suppress errors)
+  const prepareLiveSentRef = useRef(false)  // true once prepare_live sent (deferred eager connect)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [currentPage, setCurrentPage] = useState<'home' | 'gallery'>('home')
@@ -566,6 +567,7 @@ function App() {
     setIsStartingConversation(false)
     setHasStarted(false)
     setEagerAudioReady(false)
+    prepareLiveSentRef.current = false
     // If we're ending a conversation and have a graphic, go back to 'complete'
     setSessionPhase(prev => {
       if ((prev === 'conversation' || prev === 'complete') && currentSvgRef.current) {
@@ -736,6 +738,19 @@ function App() {
       // Pre-connect failed silently — startPresentation will fall back to Path B on click
       _preConnectInFlight = false
       wsRef.current = null
+    }
+  }
+
+  // Signal backend to eagerly connect to Gemini Live API (deferred pre-connect).
+  // Called on hover/pointerdown of the Start button — the WS is already open but
+  // Gemini isn't connected yet (saving cost while user is just browsing).
+  const prepareLive = () => {
+    if (prepareLiveSentRef.current) return  // Already sent
+    const ws = wsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN && !hasStartedRef.current) {
+      prepareLiveSentRef.current = true
+      ws.send(JSON.stringify({ type: "prepare_live" }))
+      console.log('[PrepareLive] Sent prepare_live — Gemini will connect eagerly')
     }
   }
 
@@ -2867,6 +2882,8 @@ function App() {
 
                       <button
                         onClick={startPresentation}
+                        onPointerEnter={prepareLive}
+                        onPointerDown={prepareLive}
                         disabled={isStartingConversation}
                         className={`w-full py-3 px-6 ${isStartingConversation ? 'bg-[#0a48ad] opacity-80' : 'bg-[var(--accent-primary)] hover:bg-[#0a48ad]'} text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md`}
                       >
