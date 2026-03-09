@@ -115,6 +115,7 @@ function App() {
   const [showTextArea, setShowTextArea] = useState(false)
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [textAreaValue, setTextAreaValue] = useState('')
+  const [editingTextSourceId, setEditingTextSourceId] = useState<string | null>(null)
 
   // Web search panel
   const [searchQuery, setSearchQuery] = useState('')
@@ -302,14 +303,11 @@ function App() {
     if (!trimmed) return
     setSources(prev => prev.map(s => {
       if (s.id !== id) return s
+      // For file sources, only update the label (preserve content and type)
+      if (s.type === 'file') return { ...s, label: trimmed }
       // Re-detect type from new value
       const { type } = detectInputType(trimmed)
-      const displayLabel = type === 'youtube'
-        ? trimmed
-        : type === 'url'
-          ? trimmed
-          : trimmed
-      return { ...s, type, content: trimmed, label: displayLabel }
+      return { ...s, type, content: trimmed, label: trimmed }
     }))
   }, [])
 
@@ -2704,14 +2702,29 @@ function App() {
                           <div className="flex gap-2 mt-2">
                             <button
                               className="btn-sm-primary"
-                              onClick={addTextSource}
+                              onClick={() => {
+                                if (editingTextSourceId) {
+                                  const trimmed = textAreaValue.trim()
+                                  if (!trimmed) return
+                                  setSources(prev => prev.map(s =>
+                                    s.id === editingTextSourceId
+                                      ? { ...s, content: trimmed, label: trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : '') }
+                                      : s
+                                  ))
+                                  setEditingTextSourceId(null)
+                                  setShowTextArea(false)
+                                  setTextAreaValue('')
+                                } else {
+                                  addTextSource()
+                                }
+                              }}
                               disabled={!textAreaValue.trim()}
                             >
-                              Add Text
+                              {editingTextSourceId ? 'Save' : 'Add Text'}
                             </button>
                             <button
                               className="btn-sm-secondary"
-                              onClick={() => { setShowTextArea(false); setTextAreaValue('') }}
+                              onClick={() => { setShowTextArea(false); setTextAreaValue(''); setEditingTextSourceId(null) }}
                             >
                               Cancel
                             </button>
@@ -2757,14 +2770,24 @@ function App() {
                                     autoFocus
                                   />
                                 ) : href ? (
-                                  <a href={href} target="_blank" rel="noopener noreferrer" className="source-item-label" style={{ color: 'var(--accent-primary)', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>{source.label}</a>
+                                  <a href={href} target="_blank" rel="noopener noreferrer" className="source-item-label" title={source.content} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>{source.label}</a>
                                 ) : (
-                                  <span className="source-item-label">{source.label}</span>
+                                  <span className="source-item-label" title={source.content || source.label}>{source.label}</span>
                                 )}
                                 {!isEditing && (source.type === 'text' || source.type === 'file') && (
                                   <button
                                     className="source-remove-btn"
-                                    onClick={() => { setEditingSourceId(source.id); setEditingValue(source.label) }}
+                                    onClick={() => {
+                                      if (source.type === 'text') {
+                                        setEditingTextSourceId(source.id)
+                                        setTextAreaValue(source.content)
+                                        setShowTextArea(true)
+                                        setShowUrlInput(false)
+                                      } else {
+                                        setEditingSourceId(source.id)
+                                        setEditingValue(source.label)
+                                      }
+                                    }}
                                     title="Edit source"
                                     style={{ marginRight: 2 }}
                                   >
