@@ -277,7 +277,7 @@ function App() {
             id: crypto.randomUUID(),
             type: 'file',
             content: data.content,
-            label: `📄 ${data.filename}`
+            label: data.filename
           }
           setSources(prev => [...prev, newSource])
         } else {
