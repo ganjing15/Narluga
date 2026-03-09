@@ -4,7 +4,7 @@ import { GraphicsPage } from './GraphicsPage'
 import {
   MicIcon, StopIcon, DisplayIcon, SparklesIcon,
   ChevronLeftIcon, ChevronRightIcon,
-  LinkIcon, YoutubeIcon, FileUploadIcon, TextIcon,
+  LinkIcon, YoutubeIcon, FileUploadIcon, TextIcon, SearchIcon,
   CheckCircleIcon, XIcon, RefreshIcon, PlusIcon, PencilIcon, NarlugaLogo
 } from './Icons'
 import {
@@ -48,7 +48,7 @@ const PCM_WORKLET_CODE = `
 `
 
 // Source types
-type SourceType = 'url' | 'youtube' | 'text' | 'file'
+type SourceType = 'url' | 'youtube' | 'text' | 'file' | 'search'
 type Source = {
   id: string
   type: SourceType
@@ -317,9 +317,9 @@ function App() {
     if (searchQuery.trim()) {
       newSources.unshift({
         id: crypto.randomUUID(),
-        type: 'text',
+        type: 'search',
         content: `Web Search Query: ${searchQuery.trim()}`,
-        label: `🔍 ${searchQuery.trim()}`
+        label: searchQuery.trim()
       });
     }
 
@@ -2165,6 +2165,7 @@ function App() {
       case 'url': return <LinkIcon className="w-4 h-4" />
       case 'file': return <FileUploadIcon className="w-4 h-4" />
       case 'text': return <TextIcon className="w-4 h-4" />
+      case 'search': return <SearchIcon className="w-4 h-4" />
     }
   }
 
@@ -2534,7 +2535,7 @@ function App() {
                             <div className="url-input-wrapper shadow-none">
                               <input
                                 type="text"
-                                placeholder="Paste a URL or YouTube video link"
+                                placeholder="Paste a website/YouTube link"
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 className="url-input"
