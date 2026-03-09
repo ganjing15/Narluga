@@ -9,7 +9,8 @@ import {
 } from './Icons'
 import {
   signInWithGoogle, firebaseSignOut, getIdToken, onAuthChange,
-  isFirebaseConfigured, saveGraphic, listGraphics,
+  isFirebaseConfigured, saveGraphic, listGraphics, patchGraphicsSvg,
+  listPublicExamples, publishToExamples, clearPublicExamples,
   type User, type SavedGraphic
 } from './firebase'
 
@@ -130,6 +131,7 @@ function App() {
   const [hasStarted, setHasStarted] = useState(false)
   const [isStartingConversation, setIsStartingConversation] = useState(false)
   const [eagerAudioReady, setEagerAudioReady] = useState(false)
+  const isPreConnectRef = useRef(false)  // true while WS is a background pre-connect (suppress errors)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [currentPage, setCurrentPage] = useState<'home' | 'gallery'>('home')
@@ -141,6 +143,9 @@ function App() {
   // Saved graphics gallery
   const [savedGraphics, setSavedGraphics] = useState<SavedGraphic[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
+
+  // Public curated examples (visible to all users including non-logged-in)
+  const [publicExamples, setPublicExamples] = useState<SavedGraphic[]>([])
 
   // SVG display state
   const [currentSvg, _setCurrentSvg] = useState<string | null>(null)
@@ -372,6 +377,30 @@ function App() {
   function is_youtube_url_ts(url: string): boolean {
     return /youtube\.com\/watch|youtu\.be\//.test(url)
   }
+
+  // Fetch public curated examples on mount (no auth required)
+  useEffect(() => {
+    if (!isFirebaseConfigured) return
+    listPublicExamples().then(setPublicExamples).catch(e =>
+      console.warn('[Examples] Failed to load public examples:', e)
+    )
+  }, [])
+
+  // Expose admin utilities on window for console use
+  useEffect(() => {
+    (window as any)._patchGraphics = (title: string, find: string, replace: string) => {
+      if (!user) { console.error('Not signed in'); return }
+      return patchGraphicsSvg(user.uid, title, find, replace)
+    }
+    ;(window as any)._publishExample = (graphicId: string, order: number) => {
+      if (!user) { console.error('Not signed in'); return }
+      return publishToExamples(user.uid, graphicId, order)
+    }
+    ;(window as any)._clearExamples = () => clearPublicExamples()
+    ;(window as any)._listGraphicIds = () => {
+      savedGraphics.forEach((g, i) => console.log(`${i}: ${g.id} — "${g.title}"`))
+    }
+  }, [user, savedGraphics])
 
   // Firebase auth state listener
   useEffect(() => {
@@ -615,11 +644,23 @@ function App() {
         setEagerAudioReady(true)
         console.log('[PreConnect] AI audio ready — click Start for instant playback')
       } else if (data.type === 'error') {
-        setError(data.message)
-        disconnect()
+        if (isPreConnectRef.current) {
+          // Pre-connect failed silently (e.g. rate limit) — user didn't ask for this
+          console.log('[PreConnect] Suppressed error:', data.message)
+          wsRef.current = null
+        } else {
+          setError(data.message)
+          disconnect()
+        }
       }
     }
     ws.onclose = (event) => {
+      if (isPreConnectRef.current) {
+        // Pre-connect closed silently — don't show errors to user
+        console.log('[PreConnect] Connection closed:', event.code)
+        wsRef.current = null
+        return
+      }
       if (event.code === 1000 && event.reason) {
         setStatusMessage(event.reason)
       } else if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
@@ -628,6 +669,11 @@ function App() {
       disconnect()
     }
     ws.onerror = () => {
+      if (isPreConnectRef.current) {
+        console.log('[PreConnect] Connection error suppressed')
+        wsRef.current = null
+        return
+      }
       setError('WebSocket connection error.')
       disconnect()
     }
@@ -642,6 +688,7 @@ function App() {
       return
     }
     _preConnectInFlight = true
+    isPreConnectRef.current = true
     // Always close old WS — it may be from /ws/live (graphic generation) not /ws/live-restart
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
       // Detach handlers so stale onclose doesn't call disconnect()
@@ -743,6 +790,7 @@ function App() {
 
     if (ws && ws.readyState === WebSocket.OPEN) {
       // ===== FAST PATH: preconnect WS is OPEN =====
+      isPreConnectRef.current = false  // User clicked Start — show errors from now on
       console.log('[startPresentation] Using fast path (preconnect WS)')
       ws.send(JSON.stringify({
         type: "start_live_session",
@@ -760,6 +808,7 @@ function App() {
       startDurationTimer()  // Fast path: session live on click
     } else if (narrationContextRef.current) {
       // ===== SLOW PATH: no preconnect WS — create one fresh =====
+      isPreConnectRef.current = false  // User-initiated — show errors
       console.log('[startPresentation] No preconnect WS available — creating new connection')
       setIsConnecting(true)
       setError('')
@@ -2894,38 +2943,45 @@ function App() {
                     </p>
                   </div>
                 </div>
-              ) : savedGraphics.length > 0 ? (
-                <div className="example-container">
-                  <div className="example-grid">
-                    {savedGraphics.slice(0, 9).map(g => (
-                      <div
-                        key={g.id}
-                        className="example-card"
-                        onClick={() => loadExample(g)}
-                      >
-                        <div className="example-card-preview">
-                          <SvgThumbnail svgHtml={g.svg_html} />
+              ) : (() => {
+                const userSlice = savedGraphics.slice(0, 9)
+                const filler = userSlice.length < 9 && userSlice.length > 0
+                  ? publicExamples.filter(pe => !userSlice.some(u => u.id === pe.id)).slice(0, 9 - userSlice.length)
+                  : []
+                const examples = userSlice.length > 0 ? [...userSlice, ...filler] : publicExamples
+                return examples.length > 0 ? (
+                  <div className="example-container">
+                    <div className="example-grid">
+                      {examples.map(g => (
+                        <div
+                          key={g.id}
+                          className="example-card"
+                          onClick={() => loadExample(g)}
+                        >
+                          <div className="example-card-preview">
+                            <SvgThumbnail svgHtml={g.svg_html} />
+                          </div>
+                          <div className="example-card-info">
+                            <h3 className="example-card-title">{g.title}</h3>
+                          </div>
                         </div>
-                        <div className="example-card-info">
-                          <h3 className="example-card-title">{g.title}</h3>
-                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 bg-transparent flex items-center justify-center p-8">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="w-12 h-12 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center">
+                        <SparklesIcon className="w-6 h-6 text-[var(--text-tertiary)]" />
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 bg-transparent flex items-center justify-center p-8">
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <div className="w-12 h-12 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center">
-                      <SparklesIcon className="w-6 h-6 text-[var(--text-tertiary)]" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-[var(--text-secondary)]">Add sources to generate an interactive graphic</p>
-                      <p className="text-xs text-[var(--text-tertiary)] mt-1">URLs, YouTube videos, text, or files</p>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">Add sources to generate an interactive graphic</p>
+                        <p className="text-xs text-[var(--text-tertiary)] mt-1">URLs, YouTube videos, text, or files</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           </section>
         </main>

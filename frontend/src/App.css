@@ -1465,10 +1465,10 @@ a.graphic-card-source-chip:hover {
   transform: scale(0.467);
 }
 
-/* Make sure the inner SVG fills its container */
-.svg-thumbnail-scaler svg {
+/* Make sure the inner SVG fills its container width, preserving aspect ratio */
+.svg-thumbnail-inner svg {
   width: 100% !important;
-  height: 100% !important;
+  height: auto !important;
   display: block;
 }
 

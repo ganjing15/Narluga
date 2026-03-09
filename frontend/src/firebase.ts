@@ -20,6 +20,7 @@ import {
     getDocs,
     getDoc,
     deleteDoc,
+    updateDoc,
     doc,
     query,
     orderBy,
@@ -134,4 +135,73 @@ export async function getGraphic(uid: string, graphicId: string): Promise<SavedG
 export async function deleteGraphic(uid: string, graphicId: string): Promise<void> {
     if (!db) return
     await deleteDoc(doc(db, 'users', uid, 'graphics', graphicId))
+}
+
+/** Update a field on a saved graphic (e.g. svg_html). */
+export async function updateGraphicField(uid: string, graphicId: string, field: string, value: string): Promise<void> {
+    if (!db) return
+    await updateDoc(doc(db, 'users', uid, 'graphics', graphicId), { [field]: value })
+}
+
+/**
+ * Patch all saved graphics matching a title: find/replace in svg_html.
+ * Call from browser console: window._patchGraphics('Macroscopic Quantum Tunnelling', 'font-size="11"', 'font-size="9"')
+ */
+export async function patchGraphicsSvg(uid: string, title: string, find: string, replace: string): Promise<number> {
+    const graphics = await listGraphics(uid)
+    let count = 0
+    for (const g of graphics) {
+        if (g.title.includes(title) && g.svg_html.includes(find)) {
+            const newSvg = g.svg_html.replaceAll(find, replace)
+            await updateGraphicField(uid, g.id, 'svg_html', newSvg)
+            count++
+            console.log(`[Patch] Updated graphic ${g.id} "${g.title}"`)
+        }
+    }
+    console.log(`[Patch] Done — updated ${count} graphic(s)`)
+    return count
+}
+
+// ─── Firestore: Public Curated Examples ──────────────────────────────────────
+
+/** List public curated examples (no auth required). */
+export async function listPublicExamples(): Promise<SavedGraphic[]> {
+    if (!db) return []
+    const col = collection(db, 'public_examples')
+    const q = query(col, orderBy('order', 'asc'))
+    const snap = await getDocs(q)
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedGraphic))
+}
+
+/** Copy a user's graphic into the public_examples collection. */
+export async function publishToExamples(uid: string, graphicId: string, order: number): Promise<string> {
+    if (!db) throw new Error('Firestore not initialized')
+    const graphic = await getGraphic(uid, graphicId)
+    if (!graphic) throw new Error(`Graphic ${graphicId} not found`)
+    const docRef = await addDoc(collection(db, 'public_examples'), {
+        title: graphic.title,
+        subtitle: graphic.subtitle,
+        svg_html: graphic.svg_html,
+        controls_html: graphic.controls_html,
+        narration_context: graphic.narration_context,
+        source_labels: graphic.source_labels,
+        order,
+        created_at: serverTimestamp(),
+    })
+    console.log(`[Publish] Published "${graphic.title}" as example #${order} (${docRef.id})`)
+    return docRef.id
+}
+
+/** Remove all public examples (for re-curating). */
+export async function clearPublicExamples(): Promise<number> {
+    if (!db) return 0
+    const col = collection(db, 'public_examples')
+    const snap = await getDocs(col)
+    let count = 0
+    for (const d of snap.docs) {
+        await deleteDoc(doc(db, 'public_examples', d.id))
+        count++
+    }
+    console.log(`[Publish] Cleared ${count} public example(s)`)
+    return count
 }

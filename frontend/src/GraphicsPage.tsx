@@ -16,23 +16,35 @@ interface GraphicsPageProps {
 // Renders a live scaled-down preview of the SVG
 export const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
     const wrapperRef = useRef<HTMLDivElement>(null)
-    const [scale, setScale] = useState(0.467)
-
-    useEffect(() => {
-        const el = wrapperRef.current
-        if (!el) return
-        const ro = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                const w = entry.contentRect.width
-                if (w > 0) setScale(w / 600)
-            }
-        })
-        ro.observe(el)
-        return () => ro.disconnect()
-    }, [])
+    const [transform, setTransform] = useState('scale(0.35)')
 
     // Extract only the <svg ...>...</svg> content, strip scripts for safety
     const svgMatch = svgHtml.match(/<svg[\s\S]*<\/svg>/i)
+
+    // Parse viewBox to get natural SVG dimensions (avoids DOM measurement issues)
+    const vbMatch = svgMatch?.[0].match(/viewBox=["']([^"']+)["']/i)
+    const vbParts = vbMatch?.[1].split(/[\s,]+/).map(Number)
+    const svgW = (vbParts && vbParts.length >= 4 && vbParts[2] > 0) ? vbParts[2] : 800
+    const svgH = (vbParts && vbParts.length >= 4 && vbParts[3] > 0) ? vbParts[3] : 500
+
+    useEffect(() => {
+        const wrapper = wrapperRef.current
+        if (!wrapper) return
+        const ro = new ResizeObserver(() => {
+            const wW = wrapper.clientWidth
+            const wH = wrapper.clientHeight
+            if (wW <= 0 || wH <= 0) return
+            // Scale to cover (fill) the thumbnail area like object-fit: cover
+            const s = Math.max(wW / svgW, wH / svgH)
+            // Center the scaled content
+            const offsetX = (wW - svgW * s) / 2
+            const offsetY = (wH - svgH * s) / 2
+            setTransform(`translate(${offsetX}px, ${offsetY}px) scale(${s})`)
+        })
+        ro.observe(wrapper)
+        return () => ro.disconnect()
+    }, [svgW, svgH])
+
     if (!svgMatch) return <SparklesIcon className="w-8 h-8 text-[var(--accent-primary)] opacity-30" />
 
     const safe = svgMatch[0]
@@ -43,15 +55,16 @@ export const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
     return (
         <div ref={wrapperRef} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
             <div
+                className="svg-thumbnail-inner"
                 style={{
                     pointerEvents: 'none',
-                    width: '600px',
-                    height: '400px',
+                    width: `${svgW}px`,
+                    height: `${svgH}px`,
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     transformOrigin: 'top left',
-                    transform: `scale(${scale})`,
+                    transform,
                 }}
                 dangerouslySetInnerHTML={{ __html: safe }}
             />

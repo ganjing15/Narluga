@@ -9,24 +9,37 @@ from google_genai_service import handle_live_session, handle_live_restart, web_s
 from auth import init_firebase, FirebaseAuthMiddleware, verify_ws_token
 
 # ---------------------------------------------------------------------------
-# Per-UID rate limiter (in-memory, resets on server restart)
+# Per-UID rate limiters (in-memory, resets on server restart)
 # Protects against public abuse while keeping costs bounded for the contest.
 # Judges can always get a fresh count if needed (just restart the backend).
 # ---------------------------------------------------------------------------
-_uid_session_timestamps: dict[str, list[float]] = defaultdict(list)
-SESSION_LIMIT_PER_UID_PER_DAY = 5   # max live sessions per user per 24h
 _SECONDS_IN_DAY = 86400
 
-def _check_rate_limit(uid: str) -> bool:
-    """Return True if user is within their daily session limit, False if exceeded."""
+# Graphic generations (/ws/live) — planning + SVG generation API calls
+_uid_graphic_timestamps: dict[str, list[float]] = defaultdict(list)
+GRAPHIC_LIMIT_PER_UID_PER_DAY = 5
+
+# Live sessions (/ws/live-restart) — Gemini Live API calls (pre-connects, restarts, gallery re-opens)
+_uid_live_timestamps: dict[str, list[float]] = defaultdict(list)
+LIVE_SESSION_LIMIT_PER_UID_PER_DAY = 20
+
+def _check_rate_limit(uid: str, bucket: str = "graphic") -> bool:
+    """Return True if user is within their daily limit, False if exceeded.
+    bucket: 'graphic' for /ws/live, 'live' for /ws/live-restart.
+    """
+    if bucket == "graphic":
+        timestamps = _uid_graphic_timestamps
+        limit = GRAPHIC_LIMIT_PER_UID_PER_DAY
+    else:
+        timestamps = _uid_live_timestamps
+        limit = LIVE_SESSION_LIMIT_PER_UID_PER_DAY
+
     now = time.time()
     cutoff = now - _SECONDS_IN_DAY
-    # Remove timestamps older than 24 h
-    _uid_session_timestamps[uid] = [t for t in _uid_session_timestamps[uid] if t > cutoff]
-    if len(_uid_session_timestamps[uid]) >= SESSION_LIMIT_PER_UID_PER_DAY:
+    timestamps[uid] = [t for t in timestamps[uid] if t > cutoff]
+    if len(timestamps[uid]) >= limit:
         return False
-    # Record this session start
-    _uid_session_timestamps[uid].append(now)
+    timestamps[uid].append(now)
     return True
 
 load_dotenv()
@@ -129,9 +142,9 @@ async def websocket_endpoint(websocket: WebSocket):
             print(f"[WebSocket] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
             # --- Per-UID rate limit check ---
             uid = user.get('uid', 'anonymous')
-            if not _check_rate_limit(uid):
-                print(f"[WebSocket] Rate limit exceeded for uid={uid}")
-                await websocket.send_json({"type": "error", "message": "Daily session limit reached (5 sessions/24h)."})
+            if not _check_rate_limit(uid, bucket="graphic"):
+                print(f"[WebSocket] Graphic generation limit exceeded for uid={uid}")
+                await websocket.send_json({"type": "error", "message": "Daily graphic generation limit reached (5/24h). You can still open existing graphics from your gallery."})
                 await websocket.close()
                 return
         else:
@@ -184,11 +197,11 @@ async def websocket_restart_endpoint(websocket: WebSocket):
             if user is None:
                 return
             print(f"[WebSocket Restart] Authenticated user: {user.get('email', user.get('uid', 'unknown'))}")
-            # --- Per-UID rate limit check ---
+            # Live session limit (separate from graphic generation limit)
             uid = user.get('uid', 'anonymous')
-            if not _check_rate_limit(uid):
-                print(f"[WebSocket Restart] Rate limit exceeded for uid={uid}")
-                await websocket.send_json({"type": "error", "message": "Daily session limit reached (5 sessions/24h). Please try again tomorrow."})
+            if not _check_rate_limit(uid, bucket="live"):
+                print(f"[WebSocket Restart] Live session limit exceeded for uid={uid}")
+                await websocket.send_json({"type": "error", "message": "Daily live session limit reached (20/24h). Please try again later."})
                 await websocket.close()
                 return
         
