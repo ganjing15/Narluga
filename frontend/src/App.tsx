@@ -2629,7 +2629,7 @@ function App() {
                                 ) : (
                                   <span className="source-item-label">{source.label}</span>
                                 )}
-                                {!isEditing && (
+                                {!isEditing && (source.type === 'text' || source.type === 'file') && (
                                   <button
                                     className="source-remove-btn"
                                     onClick={() => { setEditingSourceId(source.id); setEditingValue(source.label) }}
