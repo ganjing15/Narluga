@@ -74,6 +74,7 @@ function App() {
   const [editingValue, setEditingValue] = useState('')
   const [inputValue, setInputValue] = useState('')
   const [showTextArea, setShowTextArea] = useState(false)
+  const [showUrlInput, setShowUrlInput] = useState(false)
   const [textAreaValue, setTextAreaValue] = useState('')
 
   // Web search panel
@@ -2351,58 +2352,56 @@ function App() {
                   {/* Phase: idle or complete — show source manager */}
                   {(sessionPhase === 'idle' || sessionPhase === 'complete') && !isProcessing && (
                     <div className="sidebar-input-area">
-                      {/* Main URL input bar */}
-                      <form onSubmit={addSource} className="url-form">
-                        <div className="url-input-wrapper shadow-none">
-                          <input
-                            type="text"
-                            placeholder="Paste a URL or YouTube video link"
-                            value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
+                      {/* Web search input */}
+                      <form
+                        onSubmit={(e) => { e.preventDefault(); researchMode !== 'off' ? performSearch(searchQuery) : addSource(e) }}
+                        className="url-form"
+                      >
+                        <div className="url-input-wrapper shadow-none" style={{ alignItems: 'flex-start' }}>
+                          <textarea
+                            placeholder={researchMode !== 'off' ? 'Search the web for sources' : 'Paste a URL or YouTube video link'}
+                            value={researchMode !== 'off' ? searchQuery : inputValue}
+                            onChange={(e) => {
+                              researchMode !== 'off' ? setSearchQuery(e.target.value) : setInputValue(e.target.value)
+                              // Auto-resize
+                              e.target.style.height = 'auto'
+                              e.target.style.height = e.target.scrollHeight + 'px'
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                if (researchMode !== 'off') {
+                                  if (searchQuery.trim()) performSearch(searchQuery)
+                                } else {
+                                  if (inputValue.trim()) addSource()
+                                }
+                              }
+                            }}
                             className="url-input"
-                            disabled={isConnecting}
+                            style={{ ...(researchMode !== 'off' ? { paddingLeft: 40 } : {}), resize: 'none', overflow: 'hidden', minHeight: 52 }}
+                            disabled={isConnecting || isSearching}
+                            rows={1}
                           />
-                          {inputValue.trim() && (
-                            <button type="submit" className="enter-icon-btn" title="Add source">
-                              <PlusIcon className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </form>
-
-                      {/* Web search input — only shown for Fast / Deep research modes */}
-                      {researchMode !== 'off' && (
-                        <form
-                          onSubmit={(e) => { e.preventDefault(); performSearch(searchQuery) }}
-                          className="url-form"
-                          style={{ marginTop: 8 }}
-                        >
-                          <div className="url-input-wrapper shadow-none">
-                            <input
-                              type="text"
-                              placeholder="Search the web for sources…"
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              className="url-input"
-                              style={{ paddingLeft: 40 }}
-                              disabled={isSearching}
-                            />
-                            {/* Search icon on the left */}
-                            <span style={{ position: 'absolute', left: 13, color: 'var(--text-tertiary)', pointerEvents: 'none', display: 'flex' }}>
+                          {researchMode !== 'off' && (
+                            <span style={{ position: 'absolute', left: 13, top: 18, color: 'var(--text-tertiary)', pointerEvents: 'none', display: 'flex' }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                               </svg>
                             </span>
-                            {isSearching ? (
-                              <span className="spinner" style={{ position: 'absolute', right: 14 }} />
-                            ) : searchQuery.trim() ? (
-                              <button type="submit" className="enter-icon-btn" title="Search">
+                          )}
+                          {isSearching ? (
+                            <span className="spinner" style={{ position: 'absolute', right: 14, top: 18 }} />
+                          ) : (researchMode !== 'off' ? searchQuery.trim() : inputValue.trim()) ? (
+                            <button type="submit" className="enter-icon-btn" title={researchMode !== 'off' ? 'Search' : 'Add source'}>
+                              {researchMode !== 'off' ? (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-                              </button>
-                            ) : null}
-                          </div>
-                        </form>
-                      )}
+                              ) : (
+                                <PlusIcon className="w-4 h-4" />
+                              )}
+                            </button>
+                          ) : null}
+                        </div>
+                      </form>
 
                       {/* Search results panel */}
                       {showSearchPanel && (
@@ -2499,7 +2498,14 @@ function App() {
                       <div className="source-chips">
                         <button
                           className="source-chip"
-                          onClick={() => setShowTextArea(!showTextArea)}
+                          onClick={() => { setShowUrlInput(!showUrlInput); setShowTextArea(false) }}
+                          title="Add a URL or YouTube link"
+                        >
+                          <LinkIcon className="w-4 h-4" /> URL
+                        </button>
+                        <button
+                          className="source-chip"
+                          onClick={() => { setShowTextArea(!showTextArea); setShowUrlInput(false) }}
                           title="Add text/notes"
                         >
                           <TextIcon className="w-4 h-4" /> Text
@@ -2520,6 +2526,37 @@ function App() {
                           onChange={(e) => handleFileUpload(e.target.files)}
                         />
                       </div>
+
+                      {/* URL input (expanded) */}
+                      {showUrlInput && (
+                        <div className="text-source-area">
+                          <form onSubmit={(e) => { addSource(e); setShowUrlInput(false) }} className="url-form">
+                            <div className="url-input-wrapper shadow-none">
+                              <input
+                                type="text"
+                                placeholder="Paste a URL or YouTube video link"
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                className="url-input"
+                                disabled={isConnecting}
+                                autoFocus
+                              />
+                              {inputValue.trim() && (
+                                <button type="submit" className="enter-icon-btn" title="Add source">
+                                  <PlusIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </form>
+                          <button
+                            className="btn-sm-secondary mt-2"
+                            onClick={() => { setShowUrlInput(false); setInputValue('') }}
+                            style={{ alignSelf: 'flex-start' }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
 
                       {/* Text area (expanded) */}
                       {showTextArea && (
@@ -2619,7 +2656,7 @@ function App() {
 
 
                       {/* Empty state hint */}
-                      {sources.length === 0 && !showTextArea && (
+                      {sources.length === 0 && !showTextArea && !showUrlInput && (
                         <div className="empty-state-hint">
                           <DisplayIcon className="w-10 h-10 mb-3 opacity-20" />
                           <p>Add sources to generate an interactive graphic</p>

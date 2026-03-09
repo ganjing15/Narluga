@@ -159,7 +159,7 @@ body {
 
 .url-input {
   width: 100%;
-  padding: 16px 44px 16px 20px;
+  padding: 16px 52px 16px 20px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-highlight);
   background: rgba(255, 255, 255, 0.6);
@@ -187,6 +187,7 @@ body {
 .enter-icon-btn {
   position: absolute;
   right: 12px;
+  bottom: 8px;
   background: var(--accent-primary);
   color: white;
   border: none;
