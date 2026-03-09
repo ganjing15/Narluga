@@ -14,7 +14,7 @@ interface GraphicsPageProps {
 
 
 // Renders a live scaled-down preview of the SVG
-const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
+export const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
     const wrapperRef = useRef<HTMLDivElement>(null)
     const [scale, setScale] = useState(0.467)
 

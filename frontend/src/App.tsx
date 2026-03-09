@@ -1,6 +1,6 @@
 import { useState, useRef, type FormEvent, useEffect, useCallback, useMemo } from 'react'
 import './App.css'
-import { GraphicsPage } from './GraphicsPage'
+import { GraphicsPage, SvgThumbnail } from './GraphicsPage'
 import {
   MicIcon, StopIcon, DisplayIcon, SparklesIcon,
   ChevronLeftIcon, ChevronRightIcon,
@@ -63,6 +63,44 @@ type SearchResult = {
 
 // Session phases
 type SessionPhase = 'idle' | 'analyzing' | 'designing' | 'complete' | 'conversation'
+
+// Reconstruct a Source from a saved label string.
+// Labels are stored as the display label (e.g. "wikipedia.org", "The Solar System",
+// "https://example.com", "youtube:abc123", "file:report.pdf").
+function sourceFromLabel(rawLabel: string, index: number): Source {
+  // Strip leading emoji (e.g. "🔍 The Solar System" → "The Solar System")
+  const label = rawLabel.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\s*/u, '')
+  const l = label.toLowerCase()
+  let type: SourceType
+  let content: string
+  let displayLabel: string
+
+  if (l.startsWith('youtube:')) {
+    type = 'youtube'
+    content = label.replace(/^youtube:\s*/i, '')
+    displayLabel = `https://youtube.com/watch?v=${content}`
+  } else if (l.startsWith('http://') || l.startsWith('https://')) {
+    type = 'url'
+    content = label
+    displayLabel = label
+  } else if (l.startsWith('file:') || l.endsWith('.pdf') || l.endsWith('.txt')) {
+    type = 'file'
+    content = label.replace(/^file:\s*/i, '')
+    displayLabel = content
+  } else if (/^[a-z0-9-]+\.[a-z]{2,}(\.[a-z]{2,})*(\/|$)/i.test(label) || /^[a-z0-9-]+\.[a-z]{2,}$/i.test(label)) {
+    // Bare domain like "wikipedia.org", "study.com", "cnes.fr"
+    type = 'url'
+    content = `https://${label}`
+    displayLabel = label
+  } else {
+    // Plain text label → likely a search query
+    type = 'search'
+    content = `Web Search Query: ${label}`
+    displayLabel = label
+  }
+
+  return { id: `loaded-${index}`, type, content, label: displayLabel }
+}
 
 // Module-level guard to prevent duplicate preconnect (survives hot-reload)
 let _preConnectInFlight = false
@@ -1012,6 +1050,21 @@ function App() {
     setStatusMessage('')
     setError('')
   }, [disconnect])
+
+  // Load a saved graphic as an example (same logic as opening from gallery)
+  const loadExample = useCallback((g: SavedGraphic) => {
+    setCurrentSvg(g.svg_html)
+    setCurrentControls(g.controls_html || null)
+    setCurrentTitle(g.title)
+    setCurrentSubtitle(g.subtitle || null)
+    narrationContextRef.current = g.narration_context || ''
+    sourceLabelsRef.current = g.source_labels || []
+    controlsInventoryRef.current = ''
+    setSources((g.source_labels || []).map((label, i) => sourceFromLabel(label, i)))
+    setSessionPhase('complete')
+    _preConnectInFlight = false
+    preConnectForGalleryGraphic()
+  }, [])
 
   // Pre-load AudioWorklet module early (during designing phase) so it's ready
   // well before the user clicks "Start Live Conversation".
@@ -2198,18 +2251,7 @@ function App() {
             sourceLabelsRef.current = g.source_labels || []
             controlsInventoryRef.current = ''
             // Reconstruct sources so the left panel shows the original links
-            setSources((g.source_labels || []).map((label, i) => {
-              const l = label.toLowerCase()
-              const type: SourceType = l.startsWith('youtube:') ? 'youtube'
-                : l.startsWith('http') ? 'url'
-                  : (l.startsWith('file:') || l.endsWith('.pdf') || l.endsWith('.txt')) ? 'file'
-                    : 'text'
-              const content = label.replace(/^(youtube|url|file|text):\s*/i, '')
-              const displayLabel = type === 'youtube'
-                ? `https://youtube.com/watch?v=${content}`
-                : content
-              return { id: `loaded-${i}`, type, content, label: displayLabel }
-            }))
+            setSources((g.source_labels || []).map((label, i) => sourceFromLabel(label, i)))
             setSessionPhase('complete')
             setCurrentPage('home')
             // Reset guard so preconnect always fires for each gallery load
@@ -2814,17 +2856,19 @@ function App() {
             </div>
 
             {/* MIDDLE PANEL: Interactive Graphic */}
-            <div className="nblm-card flex-1 flex flex-col relative w-full h-full">
+            <div className={`flex-1 flex flex-col relative w-full h-full${(currentSvg || isProcessing) ? ' nblm-card' : ''}`}>
               {!isSidebarOpen && (
                 <button onClick={() => setIsSidebarOpen(true)} className="absolute top-[12px] left-[12px] w-8 h-8 bg-slate-100 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-600 z-10" title="Expand sidebar">
                   <ChevronRightIcon className="w-5 h-5" />
                 </button>
               )}
-              <div className="nblm-header flex items-center">
-                <span className={`flex items-center gap-2 text-[var(--accent-primary)] transition-all ${!isSidebarOpen ? 'ml-8' : ''}`}>
-                  <SparklesIcon className="w-5 h-5" /> Interactive Graphic
-                </span>
-              </div>
+              {(currentSvg || isProcessing) && (
+                <div className="nblm-header flex items-center">
+                  <span className={`flex items-center gap-2 text-[var(--accent-primary)] transition-all ${!isSidebarOpen ? 'ml-8' : ''}`}>
+                    <SparklesIcon className="w-5 h-5" /> Interactive Graphic
+                  </span>
+                </div>
+              )}
 
               {currentSvg ? (
                 <div className="flex-1 overflow-hidden bg-transparent relative w-full h-full">
@@ -2836,30 +2880,49 @@ function App() {
                     sandbox="allow-scripts allow-same-origin"
                   />
                 </div>
-              ) : (
-                <div className="flex-1 bg-transparent flex items-center justify-center">
+              ) : isProcessing ? (
+                <div className="flex-1 bg-transparent flex items-center justify-center p-8">
                   <div className="bg-white p-12 flex flex-col items-center justify-center text-center max-w-[400px]">
-                    {isProcessing ? (
-                      <>
-                        <div className="processing-spinner mb-6"></div>
-                        <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">
-                          {sessionPhase === 'analyzing' ? 'Analyzing Sources...' : 'Designing Interactive Graphic...'}
-                        </h3>
-                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                          {sessionPhase === 'analyzing'
-                            ? 'Reading and understanding your sources...'
-                            : 'This usually takes 30–60 seconds'}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <DisplayIcon className="w-16 h-16 mb-6 opacity-20 text-[var(--accent-primary)]" />
-                        <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">Interactive Graphic</h3>
-                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                          Add sources in the sidebar and click Generate. Interactive graphics will appear here.
-                        </p>
-                      </>
-                    )}
+                    <div className="processing-spinner mb-6"></div>
+                    <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">
+                      {sessionPhase === 'analyzing' ? 'Analyzing Sources...' : 'Designing Interactive Graphic...'}
+                    </h3>
+                    <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                      {sessionPhase === 'analyzing'
+                        ? 'Reading and understanding your sources...'
+                        : 'This usually takes 30–60 seconds'}
+                    </p>
+                  </div>
+                </div>
+              ) : savedGraphics.length > 0 ? (
+                <div className="example-container">
+                  <div className="example-grid">
+                    {savedGraphics.slice(0, 9).map(g => (
+                      <div
+                        key={g.id}
+                        className="example-card"
+                        onClick={() => loadExample(g)}
+                      >
+                        <div className="example-card-preview">
+                          <SvgThumbnail svgHtml={g.svg_html} />
+                        </div>
+                        <div className="example-card-info">
+                          <h3 className="example-card-title">{g.title}</h3>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 bg-transparent flex items-center justify-center p-8">
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    <div className="w-12 h-12 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center">
+                      <SparklesIcon className="w-6 h-6 text-[var(--text-tertiary)]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[var(--text-secondary)]">Add sources to generate an interactive graphic</p>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-1">URLs, YouTube videos, text, or files</p>
+                    </div>
                   </div>
                 </div>
               )}
