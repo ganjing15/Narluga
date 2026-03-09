@@ -105,16 +105,13 @@ export function GraphicsPage({ savedGraphics, galleryLoading, user, onOpenGraphi
         <div className="graphics-page">
             {/* Page header */}
             <div className="graphics-page-header">
-                <div className="flex items-center gap-3">
-                    <NarlugaLogo className="w-8 h-8" />
-                    <button
-                        onClick={onBack}
-                        className="text-sm text-slate-400 hover:text-[var(--accent-primary)] transition-colors font-medium"
-                    >
-                        Narluga
+                <div className="app-logo flex items-center gap-3">
+                    <button onClick={onBack} className="cursor-pointer hover:opacity-80 transition-opacity">
+                        <NarlugaLogo className="w-11 h-11 drop-shadow-sm" />
                     </button>
-                    <span className="text-slate-300">/</span>
-                    <span className="text-sm font-semibold text-slate-700">My Graphics</span>
+                    <span className="text-2xl font-extrabold tracking-tighter text-slate-800">
+                        My Graphics
+                    </span>
                 </div>
                 <button
                     onClick={onBack}

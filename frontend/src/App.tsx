@@ -1087,6 +1087,14 @@ function App() {
     currentSvgRef.current = null
     disconnect()
     _preConnectInFlight = false  // Allow preconnect for next gallery graphic
+    // Close preconnect WS so stale phase messages don't override idle state
+    if (wsRef.current) {
+      wsRef.current.onclose = null
+      wsRef.current.onerror = null
+      wsRef.current.onmessage = null
+      wsRef.current.close()
+      wsRef.current = null
+    }
     // Keep sources — only reset graphic state
     setCurrentSvg(null)
     setCurrentControls(null)
@@ -2314,7 +2322,10 @@ function App() {
       )}
       <div className="app-wrapper" style={{ display: currentPage === 'gallery' ? 'none' : undefined }}>
         <header className="app-header">
-          <div className="app-logo flex items-center gap-3">
+          <div
+            className="app-logo flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => { setSources([]); resetSession() }}
+          >
             <NarlugaLogo className="w-11 h-11 drop-shadow-sm" />
             <span className="text-2xl font-extrabold tracking-tighter text-slate-800">
               Narluga
