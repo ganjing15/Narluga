@@ -2550,8 +2550,16 @@ function App() {
                     {sources.length > 0 && (
                       <div className="source-roster">
                         <div className="source-roster-header">
-                          <span className="source-roster-title">Added Sources</span>
-                          <span className="source-count">{sources.length}</span>
+                          <span className="source-roster-title-group">
+                            <span className="source-roster-title">Added Sources</span>
+                            <span className="source-count">{sources.length}</span>
+                          </span>
+                          <button
+                            onClick={() => { setSources([]); resetSession() }}
+                            className="clear-all-sources-btn"
+                          >
+                            Clear All
+                          </button>
                         </div>
                         {sources.map(source => {
                           const isEditing = editingSourceId === source.id
@@ -2603,15 +2611,7 @@ function App() {
                       </div>
                     )}
 
-                    {/* Clear all sources */}
-                    {sources.length > 0 && (
-                      <button
-                        onClick={() => { setSources([]); resetSession() }}
-                        className="w-full mt-2 py-1.5 text-xs text-slate-400 hover:text-red-400 border border-dashed border-slate-200 hover:border-red-200 rounded-lg transition-colors"
-                      >
-                        Clear All Sources
-                      </button>
-                    )}
+
 
 
 
@@ -2715,7 +2715,7 @@ function App() {
 
                 {/* Phase: complete — show action buttons (hide when hasStarted, conversation UI takes over) */}
                 {sessionPhase === 'complete' && !hasStarted && (
-                  <div className="sidebar-actions-area">
+                  <div className="sidebar-actions-area" style={{ marginTop: 12 }}>
                     <div className="status-indicator mb-6">
                       <div className={getPhaseDotClass()}></div>
                       <div className="status-text">

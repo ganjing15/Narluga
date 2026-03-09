@@ -580,6 +580,12 @@ body {
   padding: 0 4px;
 }
 
+.source-roster-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .source-roster-title {
   font-family: var(--font-system);
   font-size: 0.78rem;
@@ -597,6 +603,22 @@ body {
   background: rgba(11, 87, 208, 0.08);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
+}
+
+.clear-all-sources-btn {
+  font-family: var(--font-system);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color 0.2s;
+}
+
+.clear-all-sources-btn:hover {
+  color: #ef4444;
 }
 
 .source-item {
