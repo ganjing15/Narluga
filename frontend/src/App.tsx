@@ -995,6 +995,8 @@ function App() {
 
   // Reset everything for a new graphic
   const resetSession = useCallback(() => {
+    // Clear SVG ref BEFORE disconnect so disconnect doesn't revert phase to 'complete'
+    currentSvgRef.current = null
     disconnect()
     _preConnectInFlight = false  // Allow preconnect for next gallery graphic
     // Keep sources — only reset graphic state
@@ -2343,388 +2345,394 @@ function App() {
               <button onClick={() => setIsSidebarOpen(false)} className="absolute top-[12px] right-[12px] w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors z-10" style={{ background: '#f1f5f9', color: '#475569' }} title="Collapse sidebar">
                 <ChevronLeftIcon className="w-5 h-5" />
               </button>
-              <div className="flex-1 overflow-auto flex flex-col p-4 relative">
+              <div className="flex-1 flex flex-col relative" style={{ minHeight: 0 }}>
+                <div className="flex-1 overflow-auto flex flex-col p-4 pb-0">
 
-                {/* Phase: idle or complete — show source manager */}
-                {(sessionPhase === 'idle' || sessionPhase === 'complete') && !isProcessing && (
-                  <div className="sidebar-input-area">
-                    {/* Main URL input bar */}
-                    <form onSubmit={addSource} className="url-form">
-                      <div className="url-input-wrapper shadow-none">
-                        <input
-                          type="text"
-                          placeholder="Paste a URL or YouTube video link"
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          className="url-input"
-                          disabled={isConnecting}
-                        />
-                        {inputValue.trim() && (
-                          <button type="submit" className="enter-icon-btn" title="Add source">
-                            <PlusIcon className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </form>
-
-                    {/* Web search input — only shown for Fast / Deep research modes */}
-                    {researchMode !== 'off' && (
-                      <form
-                        onSubmit={(e) => { e.preventDefault(); performSearch(searchQuery) }}
-                        className="url-form"
-                        style={{ marginTop: 8 }}
-                      >
+                  {/* Phase: idle or complete — show source manager */}
+                  {(sessionPhase === 'idle' || sessionPhase === 'complete') && !isProcessing && (
+                    <div className="sidebar-input-area">
+                      {/* Main URL input bar */}
+                      <form onSubmit={addSource} className="url-form">
                         <div className="url-input-wrapper shadow-none">
                           <input
                             type="text"
-                            placeholder="Search the web for sources…"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Paste a URL or YouTube video link"
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
                             className="url-input"
-                            style={{ paddingLeft: 40 }}
-                            disabled={isSearching}
-                          />
-                          {/* Search icon on the left */}
-                          <span style={{ position: 'absolute', left: 13, color: 'var(--text-tertiary)', pointerEvents: 'none', display: 'flex' }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                            </svg>
-                          </span>
-                          {isSearching ? (
-                            <span className="spinner" style={{ position: 'absolute', right: 14 }} />
-                          ) : searchQuery.trim() ? (
-                            <button type="submit" className="enter-icon-btn" title="Search">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-                            </button>
-                          ) : null}
-                        </div>
-                      </form>
-                    )}
-
-                    {/* Search results panel */}
-                    {showSearchPanel && (
-                      <div className="search-results-panel">
-                        <div className="search-results-header">
-                          <span className="search-results-title">
-                            {isSearching
-                              ? `${researchMode === 'deep' ? 'Deep' : 'Fast'} Research…`
-                              : `${researchMode === 'deep' ? 'Deep' : 'Fast'} Research · ${searchResults.length} source${searchResults.length !== 1 ? 's' : ''}`
-                            }
-                          </span>
-                          <button
-                            className="search-results-close"
-                            onClick={() => { setShowSearchPanel(false); setSearchResults([]); setSelectedSearchUrls(new Set()) }}
-                            title="Close"
-                          >
-                            <XIcon className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        {isSearching ? (
-                          <div className="search-results-loading">
-                            <span className="spinner" />
-                            <span>Searching with Gemini…</span>
-                          </div>
-                        ) : searchResults.length === 0 ? (
-                          <div className="search-results-empty">No results found. Try a different query.</div>
-                        ) : (
-                          <>
-                            <div className="search-results-list">
-                              {searchResults.map((result) => {
-                                const isSelected = selectedSearchUrls.has(result.url)
-                                // Derive favicon from URL
-                                let favicon = ''
-                                try { favicon = `https://www.google.com/s2/favicons?domain=${new URL(result.url).hostname}&sz=32` } catch { }
-                                return (
-                                  <label key={result.url} className={`search-result-item${isSelected ? ' selected' : ''}`}>
-                                    <input
-                                      type="checkbox"
-                                      className="search-result-checkbox"
-                                      checked={isSelected}
-                                      onChange={() => {
-                                        setSelectedSearchUrls(prev => {
-                                          const next = new Set(prev)
-                                          if (next.has(result.url)) next.delete(result.url)
-                                          else next.add(result.url)
-                                          return next
-                                        })
-                                      }}
-                                    />
-                                    <div className="search-result-body">
-                                      <div className="search-result-title-row">
-                                        {favicon && <img src={favicon} className="search-result-favicon" alt="" />}
-                                        <span className="search-result-title">{result.title}</span>
-                                      </div>
-                                      {result.snippet && (
-                                        <p className="search-result-snippet">{result.snippet}</p>
-                                      )}
-                                      <span className="search-result-url">{result.url.replace(/^https?:\/\//, '').slice(0, 60)}</span>
-                                    </div>
-                                  </label>
-                                )
-                              })}
-                            </div>
-
-                            {/* Footer actions */}
-                            <div className="search-results-footer">
-                              <button
-                                className="search-select-all-btn"
-                                onClick={() => {
-                                  if (selectedSearchUrls.size === searchResults.length) {
-                                    setSelectedSearchUrls(new Set())
-                                  } else {
-                                    setSelectedSearchUrls(new Set(searchResults.map(r => r.url)))
-                                  }
-                                }}
-                              >
-                                {selectedSearchUrls.size === searchResults.length ? 'Deselect all' : 'Select all'}
-                              </button>
-                              <button
-                                className="btn-sm-primary"
-                                onClick={addSelectedSearchSources}
-                                disabled={selectedSearchUrls.size === 0}
-                              >
-                                + Add {selectedSearchUrls.size > 0 ? selectedSearchUrls.size : ''} source{selectedSearchUrls.size !== 1 ? 's' : ''}
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Source type chips */}
-                    <div className="source-chips">
-                      <button
-                        className="source-chip"
-                        onClick={() => setShowTextArea(!showTextArea)}
-                        title="Add text/notes"
-                      >
-                        <TextIcon className="w-4 h-4" /> Text
-                      </button>
-                      <button
-                        className="source-chip"
-                        onClick={() => fileInputRef.current?.click()}
-                        title="Upload a file"
-                      >
-                        <FileUploadIcon className="w-4 h-4" /> Upload
-                      </button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".txt,.md,.pdf"
-                        multiple
-                        style={{ display: 'none' }}
-                        onChange={(e) => handleFileUpload(e.target.files)}
-                      />
-                    </div>
-
-                    {/* Text area (expanded) */}
-                    {showTextArea && (
-                      <div className="text-source-area">
-                        <textarea
-                          placeholder="Paste your notes, text content, or describe a topic..."
-                          value={textAreaValue}
-                          onChange={(e) => setTextAreaValue(e.target.value)}
-                          className="text-source-textarea"
-                          rows={4}
-                        />
-                        <div className="flex gap-2 mt-2">
-                          <button
-                            className="btn-sm-primary"
-                            onClick={addTextSource}
-                            disabled={!textAreaValue.trim()}
-                          >
-                            Add Text
-                          </button>
-                          <button
-                            className="btn-sm-secondary"
-                            onClick={() => { setShowTextArea(false); setTextAreaValue('') }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Source roster */}
-                    {sources.length > 0 && (
-                      <div className="source-roster">
-                        <div className="source-roster-header">
-                          <span className="source-roster-title-group">
-                            <span className="source-roster-title">Added Sources</span>
-                            <span className="source-count">{sources.length}</span>
-                          </span>
-                          <button
-                            onClick={() => { setSources([]); resetSession() }}
-                            className="clear-all-sources-btn"
-                          >
-                            Clear All
-                          </button>
-                        </div>
-                        {sources.map(source => {
-                          const isEditing = editingSourceId === source.id
-                          const href = !isEditing && (source.type === 'youtube' || source.type === 'url')
-                            ? source.label
-                            : undefined
-                          const saveEdit = () => {
-                            updateSource(source.id, editingValue)
-                            setEditingSourceId(null)
-                          }
-                          const cancelEdit = () => setEditingSourceId(null)
-                          return (
-                            <div key={source.id} className={`source-item${isEditing ? ' editing' : ''}`}>
-                              <div className="source-item-icon">{getSourceIcon(source.type)}</div>
-                              {isEditing ? (
-                                <input
-                                  className="source-item-edit-input"
-                                  value={editingValue}
-                                  onChange={e => setEditingValue(e.target.value)}
-                                  onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
-                                  onBlur={saveEdit}
-                                  autoFocus
-                                />
-                              ) : href ? (
-                                <a href={href} target="_blank" rel="noopener noreferrer" className="source-item-label" style={{ color: 'var(--accent-primary)', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>{source.label}</a>
-                              ) : (
-                                <span className="source-item-label">{source.label}</span>
-                              )}
-                              {!isEditing && (
-                                <button
-                                  className="source-remove-btn"
-                                  onClick={() => { setEditingSourceId(source.id); setEditingValue(source.label) }}
-                                  title="Edit source"
-                                  style={{ marginRight: 2 }}
-                                >
-                                  <PencilIcon className="w-3 h-3" />
-                                </button>
-                              )}
-                              <button
-                                className="source-remove-btn"
-                                onClick={() => isEditing ? cancelEdit() : removeSource(source.id)}
-                                title={isEditing ? 'Cancel' : 'Remove source'}
-                              >
-                                <XIcon className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-
-
-
-
-
-                    {/* Research mode toggle + Generate button */}
-                    {sources.length > 0 && sessionPhase === 'idle' && (
-                      <div className="w-full mt-4 flex flex-col gap-4">
-                        {/* Research mode segmented control */}
-                        <div className="research-mode-row">
-                          <span className="research-mode-label">Research</span>
-                          <div className="research-mode-track">
-                            {(['off', 'fast', 'deep'] as const).map(mode => {
-                              const labels: Record<string, string> = { off: 'Off', fast: 'Fast', deep: 'Deep' }
-                              const tips: Record<string, string> = {
-                                off: 'Source-only — no web search. Strict fidelity to your sources.',
-                                fast: 'Google Search grounding during graphic generation.',
-                                deep: 'URL sources get a Gemini+Search enrichment pass before generation. Slower but more thorough.',
-                              }
-                              return (
-                                <button
-                                  key={mode}
-                                  title={tips[mode]}
-                                  onClick={() => setResearchMode(mode)}
-                                  className={`research-mode-btn mode-${mode}${researchMode === mode ? ' active' : ''}`}
-                                >
-                                  {labels[mode]}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                        <div className="button-group w-full">
-                          <button
-                            className="btn-primary w-full justify-center"
-                            onClick={startSession}
                             disabled={isConnecting}
-                          >
-                            {isConnecting
-                              ? <span className="spinner"></span>
-                              : <><SparklesIcon className="w-5 h-5" /> Create Interactive Graphic</>
-                            }
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Empty state hint */}
-                    {sources.length === 0 && !showTextArea && (
-                      <div className="empty-state-hint">
-                        <DisplayIcon className="w-10 h-10 mb-3 opacity-20" />
-                        <p>Add sources to generate an interactive graphic</p>
-                        <p className="text-xs opacity-60 mt-1">URLs, YouTube videos, text, or files</p>
-                      </div>
-                    )}
-
-                    {error && <p className="text-red-500 mt-4 text-sm text-center">{error}</p>}
-                  </div>
-                )}
-
-                {/* Phase: analyzing or designing — show progress */}
-                {isProcessing && (
-                  <div className="sidebar-status-area">
-                    <div className="status-indicator">
-                      <div className={getPhaseDotClass()}></div>
-                      <div className="status-text">
-                        <span className="status-phase-label">
-                          {sessionPhase === 'analyzing' ? 'Analyzing Sources' : 'Designing Interactive Graphic'}
-                        </span>
-                        <span className="status-detail">
-                          {sessionPhase === 'analyzing'
-                            ? `Processing ${sources.length} source${sources.length !== 1 ? 's' : ''}…`
-                            : 'Takes ~30–60 seconds'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Source summary during processing */}
-                    <div className="source-roster mt-6">
-                      <div className="source-roster-header">
-                        <span className="source-roster-title">Sources</span>
-                        <span className="source-count">{sources.length}</span>
-                      </div>
-                      {sources.map(source => (
-                        <div key={source.id} className="source-item processing">
-                          <div className="source-item-icon">{getSourceIcon(source.type)}</div>
-                          <span className="source-item-label">{source.label}</span>
-                          {sessionPhase === 'designing' && (
-                            <CheckCircleIcon className="w-4 h-4 text-emerald-500 ml-auto shrink-0" />
+                          />
+                          {inputValue.trim() && (
+                            <button type="submit" className="enter-icon-btn" title="Add source">
+                              <PlusIcon className="w-4 h-4" />
+                            </button>
                           )}
                         </div>
-                      ))}
-                    </div>
+                      </form>
 
+                      {/* Web search input — only shown for Fast / Deep research modes */}
+                      {researchMode !== 'off' && (
+                        <form
+                          onSubmit={(e) => { e.preventDefault(); performSearch(searchQuery) }}
+                          className="url-form"
+                          style={{ marginTop: 8 }}
+                        >
+                          <div className="url-input-wrapper shadow-none">
+                            <input
+                              type="text"
+                              placeholder="Search the web for sources…"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="url-input"
+                              style={{ paddingLeft: 40 }}
+                              disabled={isSearching}
+                            />
+                            {/* Search icon on the left */}
+                            <span style={{ position: 'absolute', left: 13, color: 'var(--text-tertiary)', pointerEvents: 'none', display: 'flex' }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                              </svg>
+                            </span>
+                            {isSearching ? (
+                              <span className="spinner" style={{ position: 'absolute', right: 14 }} />
+                            ) : searchQuery.trim() ? (
+                              <button type="submit" className="enter-icon-btn" title="Search">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                              </button>
+                            ) : null}
+                          </div>
+                        </form>
+                      )}
+
+                      {/* Search results panel */}
+                      {showSearchPanel && (
+                        <div className="search-results-panel">
+                          <div className="search-results-header">
+                            <span className="search-results-title">
+                              {isSearching
+                                ? `${researchMode === 'deep' ? 'Deep' : 'Fast'} Research…`
+                                : `${researchMode === 'deep' ? 'Deep' : 'Fast'} Research · ${searchResults.length} source${searchResults.length !== 1 ? 's' : ''}`
+                              }
+                            </span>
+                            <button
+                              className="search-results-close"
+                              onClick={() => { setShowSearchPanel(false); setSearchResults([]); setSelectedSearchUrls(new Set()) }}
+                              title="Close"
+                            >
+                              <XIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {isSearching ? (
+                            <div className="search-results-loading">
+                              <span className="spinner" />
+                              <span>Searching with Gemini…</span>
+                            </div>
+                          ) : searchResults.length === 0 ? (
+                            <div className="search-results-empty">No results found. Try a different query.</div>
+                          ) : (
+                            <>
+                              <div className="search-results-list">
+                                {searchResults.map((result) => {
+                                  const isSelected = selectedSearchUrls.has(result.url)
+                                  // Derive favicon from URL
+                                  let favicon = ''
+                                  try { favicon = `https://www.google.com/s2/favicons?domain=${new URL(result.url).hostname}&sz=32` } catch { }
+                                  return (
+                                    <div key={result.url} className={`search-result-item${isSelected ? ' selected' : ''}`}>
+                                      <input
+                                        type="checkbox"
+                                        className="search-result-checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          setSelectedSearchUrls(prev => {
+                                            const next = new Set(prev)
+                                            if (next.has(result.url)) next.delete(result.url)
+                                            else next.add(result.url)
+                                            return next
+                                          })
+                                        }}
+                                      />
+                                      <div className="search-result-body">
+                                        <div className="search-result-title-row">
+                                          {favicon && <img src={favicon} className="search-result-favicon" alt="" />}
+                                          <a href={result.url} target="_blank" rel="noopener noreferrer" className="search-result-title" style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>{result.title}</a>
+                                        </div>
+                                        {result.snippet && (
+                                          <p className="search-result-snippet">{result.snippet}</p>
+                                        )}
+                                        <a href={result.url} target="_blank" rel="noopener noreferrer" className="search-result-url" style={{ textDecoration: 'none' }}>{result.url.replace(/^https?:\/\//, '').slice(0, 60)}</a>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+
+                              {/* Footer actions */}
+                              <div className="search-results-footer">
+                                <button
+                                  className="search-select-all-btn"
+                                  onClick={() => {
+                                    if (selectedSearchUrls.size === searchResults.length) {
+                                      setSelectedSearchUrls(new Set())
+                                    } else {
+                                      setSelectedSearchUrls(new Set(searchResults.map(r => r.url)))
+                                    }
+                                  }}
+                                >
+                                  {selectedSearchUrls.size === searchResults.length ? 'Deselect all' : 'Select all'}
+                                </button>
+                                <button
+                                  className="btn-sm-primary"
+                                  onClick={addSelectedSearchSources}
+                                  disabled={selectedSearchUrls.size === 0}
+                                >
+                                  + Add {selectedSearchUrls.size > 0 ? selectedSearchUrls.size : ''} source{selectedSearchUrls.size !== 1 ? 's' : ''}
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Source type chips */}
+                      <div className="source-chips">
+                        <button
+                          className="source-chip"
+                          onClick={() => setShowTextArea(!showTextArea)}
+                          title="Add text/notes"
+                        >
+                          <TextIcon className="w-4 h-4" /> Text
+                        </button>
+                        <button
+                          className="source-chip"
+                          onClick={() => fileInputRef.current?.click()}
+                          title="Upload a file"
+                        >
+                          <FileUploadIcon className="w-4 h-4" /> Upload
+                        </button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".txt,.md,.pdf"
+                          multiple
+                          style={{ display: 'none' }}
+                          onChange={(e) => handleFileUpload(e.target.files)}
+                        />
+                      </div>
+
+                      {/* Text area (expanded) */}
+                      {showTextArea && (
+                        <div className="text-source-area">
+                          <textarea
+                            placeholder="Paste your notes, text content, or describe a topic..."
+                            value={textAreaValue}
+                            onChange={(e) => setTextAreaValue(e.target.value)}
+                            className="text-source-textarea"
+                            rows={4}
+                          />
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              className="btn-sm-primary"
+                              onClick={addTextSource}
+                              disabled={!textAreaValue.trim()}
+                            >
+                              Add Text
+                            </button>
+                            <button
+                              className="btn-sm-secondary"
+                              onClick={() => { setShowTextArea(false); setTextAreaValue('') }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Source roster */}
+                      {sources.length > 0 && (
+                        <div className="source-roster">
+                          <div className="source-roster-header">
+                            <span className="source-roster-title-group">
+                              <span className="source-roster-title">Added Sources</span>
+                              <span className="source-count">{sources.length}</span>
+                            </span>
+                            <button
+                              onClick={() => { setSources([]); resetSession() }}
+                              className="clear-all-sources-btn"
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                          {sources.map(source => {
+                            const isEditing = editingSourceId === source.id
+                            const href = !isEditing && (source.type === 'youtube' || source.type === 'url')
+                              ? source.content
+                              : undefined
+                            const saveEdit = () => {
+                              updateSource(source.id, editingValue)
+                              setEditingSourceId(null)
+                            }
+                            const cancelEdit = () => setEditingSourceId(null)
+                            return (
+                              <div key={source.id} className={`source-item${isEditing ? ' editing' : ''}`}>
+                                <div className="source-item-icon">{getSourceIcon(source.type)}</div>
+                                {isEditing ? (
+                                  <input
+                                    className="source-item-edit-input"
+                                    value={editingValue}
+                                    onChange={e => setEditingValue(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                                    onBlur={saveEdit}
+                                    autoFocus
+                                  />
+                                ) : href ? (
+                                  <a href={href} target="_blank" rel="noopener noreferrer" className="source-item-label" style={{ color: 'var(--accent-primary)', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>{source.label}</a>
+                                ) : (
+                                  <span className="source-item-label">{source.label}</span>
+                                )}
+                                {!isEditing && (
+                                  <button
+                                    className="source-remove-btn"
+                                    onClick={() => { setEditingSourceId(source.id); setEditingValue(source.label) }}
+                                    title="Edit source"
+                                    style={{ marginRight: 2 }}
+                                  >
+                                    <PencilIcon className="w-3 h-3" />
+                                  </button>
+                                )}
+                                <button
+                                  className="source-remove-btn"
+                                  onClick={() => isEditing ? cancelEdit() : removeSource(source.id)}
+                                  title={isEditing ? 'Cancel' : 'Remove source'}
+                                >
+                                  <XIcon className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+
+
+
+
+                      {/* Empty state hint */}
+                      {sources.length === 0 && !showTextArea && (
+                        <div className="empty-state-hint">
+                          <DisplayIcon className="w-10 h-10 mb-3 opacity-20" />
+                          <p>Add sources to generate an interactive graphic</p>
+                          <p className="text-xs opacity-60 mt-1">URLs, YouTube videos, text, or files</p>
+                        </div>
+                      )}
+
+                      {error && <p className="text-red-500 mt-4 text-sm text-center">{error}</p>}
+                    </div>
+                  )}
+
+                  {/* Phase: analyzing or designing — show progress */}
+                  {isProcessing && (
+                    <div className="sidebar-status-area">
+                      <div className="status-indicator">
+                        <div className={getPhaseDotClass()}></div>
+                        <div className="status-text">
+                          <span className="status-phase-label">
+                            {sessionPhase === 'analyzing' ? 'Analyzing Sources' : 'Designing Interactive Graphic'}
+                          </span>
+                          <span className="status-detail">
+                            {sessionPhase === 'analyzing'
+                              ? `Processing ${sources.length} source${sources.length !== 1 ? 's' : ''}…`
+                              : 'Takes ~30–60 seconds'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Source summary during processing */}
+                      <div className="source-roster mt-6">
+                        <div className="source-roster-header">
+                          <span className="source-roster-title">Sources</span>
+                          <span className="source-count">{sources.length}</span>
+                        </div>
+                        {sources.map(source => (
+                          <div key={source.id} className="source-item processing">
+                            <div className="source-item-icon">{getSourceIcon(source.type)}</div>
+                            <span className="source-item-label">{source.label}</span>
+                            {sessionPhase === 'designing' && (
+                              <CheckCircleIcon className="w-4 h-4 text-emerald-500 ml-auto shrink-0" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ===== Pinned bottom actions ===== */}
+                <div className="sidebar-pinned-bottom">
+                  {/* Idle + has sources: Research mode + Create button */}
+                  {sources.length > 0 && sessionPhase === 'idle' && (
+                    <div className="w-full flex flex-col gap-4">
+                      {/* Research mode segmented control */}
+                      <div className="research-mode-row" style={{ marginTop: 0 }}>
+                        <span className="research-mode-label">Research</span>
+                        <div className="research-mode-track">
+                          {(['off', 'fast', 'deep'] as const).map(mode => {
+                            const labels: Record<string, string> = { off: 'Off', fast: 'Fast', deep: 'Deep' }
+                            const tips: Record<string, string> = {
+                              off: 'Source-only — no web search. Strict fidelity to your sources.',
+                              fast: 'Google Search grounding during graphic generation.',
+                              deep: 'URL sources get a Gemini+Search enrichment pass before generation. Slower but more thorough.',
+                            }
+                            return (
+                              <button
+                                key={mode}
+                                title={tips[mode]}
+                                onClick={() => setResearchMode(mode)}
+                                className={`research-mode-btn mode-${mode}${researchMode === mode ? ' active' : ''}`}
+                              >
+                                {labels[mode]}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <div className="button-group w-full">
+                        <button
+                          className="btn-primary w-full justify-center"
+                          onClick={startSession}
+                          disabled={isConnecting}
+                        >
+                          {isConnecting
+                            ? <span className="spinner"></span>
+                            : <><SparklesIcon className="w-5 h-5" /> Create Interactive Graphic</>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Processing: Cancel button */}
+                  {isProcessing && (
                     <button
                       onClick={() => { disconnect(); setSessionPhase('idle'); }}
-                      className="w-full mt-4 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all duration-200 text-sm font-medium"
+                      className="w-full py-2.5 px-4 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all duration-200 text-sm font-medium"
                     >
                       Cancel Generation
                     </button>
-                  </div>
-                )}
+                  )}
 
-                {/* Phase: complete — show action buttons (hide when hasStarted, conversation UI takes over) */}
-                {sessionPhase === 'complete' && !hasStarted && (
-                  <div className="sidebar-actions-area" style={{ marginTop: 12 }}>
-                    <div className="status-indicator mb-6">
-                      <div className={getPhaseDotClass()}></div>
-                      <div className="status-text">
-                        <span className="status-phase-label">Graphic Ready!</span>
-                        <span className="status-detail">Your interactive graphic is ready to explore</span>
+                  {/* Complete: Graphic Ready + Start Live + New Graphic */}
+                  {sessionPhase === 'complete' && !hasStarted && (
+                    <div className="sidebar-actions-area">
+                      <div className="status-indicator mb-4">
+                        <div className={getPhaseDotClass()}></div>
+                        <div className="status-text">
+                          <span className="status-phase-label">Graphic Ready!</span>
+                          <span className="status-detail">Your interactive graphic is ready to explore</span>
+                        </div>
                       </div>
-                    </div>
 
-                    {!hasStarted && (
                       <button
                         onClick={startPresentation}
                         disabled={isStartingConversation}
@@ -2736,44 +2744,42 @@ function App() {
                           <><MicIcon className="w-5 h-5" /> Start Live Conversation</>
                         )}
                       </button>
-                    )}
 
-                    <button
-                      onClick={resetSession}
-                      className="w-full py-2.5 px-6 mt-3 bg-white border border-slate-200 text-slate-600 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300"
-                    >
-                      <RefreshIcon className="w-4 h-4" /> New Graphic
-                    </button>
+                      <button
+                        onClick={resetSession}
+                        className="w-full py-2.5 px-6 mt-3 bg-white border border-slate-200 text-slate-600 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300"
+                      >
+                        <RefreshIcon className="w-4 h-4" /> New Graphic
+                      </button>
+                    </div>
+                  )}
 
-                  </div>
-                )}
-
-                {/* Phase: conversation — show live indicator (also show when hasStarted but phase hasn't transitioned yet) */}
-                {(sessionPhase === 'conversation' || (sessionPhase === 'complete' && hasStarted)) && (
-                  <div className="sidebar-actions-area">
-                    <div className="status-indicator mb-6">
-                      <div className={getPhaseDotClass()}></div>
-                      <div className="status-text">
-                        <span className="status-phase-label">Live Conversation</span>
-                        <span className="status-detail">Use a mic for smoother experience</span>
+                  {/* Conversation: Live indicator + End button */}
+                  {(sessionPhase === 'conversation' || (sessionPhase === 'complete' && hasStarted)) && (
+                    <div className="sidebar-actions-area">
+                      <div className="status-indicator mb-4">
+                        <div className={getPhaseDotClass()}></div>
+                        <div className="status-text">
+                          <span className="status-phase-label">Live Conversation</span>
+                          <span className="status-detail">Use a mic for smoother experience</span>
+                        </div>
                       </div>
+
+                      <div className="conversation-hint">
+                        <MicIcon className="w-8 h-8 opacity-30 mb-3" />
+                        <p>Speak to ask questions about any part of the graphic, or ask Narluga to control interactions for you</p>
+                        <p className="text-xs opacity-60 mt-1">Click/hover on elements in the graphic to explore and listen to explanations</p>
+                      </div>
+
+                      <button
+                        onClick={disconnect}
+                        className="w-full py-2.5 px-6 mt-3 bg-red-50 border border-red-200 text-red-500 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-red-100 hover:border-red-300"
+                      >
+                        <StopIcon className="w-4 h-4" /> End Conversation
+                      </button>
                     </div>
-
-                    <div className="conversation-hint">
-                      <MicIcon className="w-8 h-8 opacity-30 mb-3" />
-                      <p>Speak to ask questions about any part of the graphic, or ask Narluga to control interactions for you</p>
-                      <p className="text-xs opacity-60 mt-1">Click/hover on elements in the graphic to explore and listen to explanations</p>
-                    </div>
-
-                    <button
-                      onClick={disconnect}
-                      className="w-full py-2.5 px-6 mt-3 bg-red-50 border border-red-200 text-red-500 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-red-100 hover:border-red-300"
-                    >
-                      <StopIcon className="w-4 h-4" /> End Conversation
-                    </button>
-
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
