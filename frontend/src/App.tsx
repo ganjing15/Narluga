@@ -134,6 +134,7 @@ function App() {
   const [eagerAudioReady, setEagerAudioReady] = useState(false)
   const isPreConnectRef = useRef(false)  // true while WS is a background pre-connect (suppress errors)
   const prepareLiveSentRef = useRef(false)  // true once prepare_live sent (deferred eager connect)
+  const aiToolActionInProgressRef = useRef(false) // suppress events echoed back from AI tool actions
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [currentPage, setCurrentPage] = useState<'home' | 'gallery'>('home')
@@ -450,6 +451,7 @@ function App() {
     };
 
     (window as any).sendEventToAI = (textMessage: string) => {
+      if (aiToolActionInProgressRef.current) return; // Suppress echo from AI tool action
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${textMessage}]`);
@@ -469,7 +471,7 @@ function App() {
         console.log(`[LATENCY] CLEAR_AUDIO received at T=${Date.now()}`);
         setTimeout(() => { buttonClickInProgress = false; }, 500);
       } else if (data && data.type === 'HOVER_EVENT') {
-        if (buttonClickInProgress) return;
+        if (buttonClickInProgress || aiToolActionInProgressRef.current) return;
         clearTimeout(hoverDebounceTimer);
         hoverDebounceTimer = setTimeout(() => {
           sendToVoiceAI(`[Cursor position: ${data.payload}]`);
@@ -477,12 +479,13 @@ function App() {
       } else if (data && data.type === 'AI_EVENT') {
         // Auto-play phase change — very long debounce (10s) since these flood context fast.
         // Button clicks cancel these entirely (INTERACTION_EVENT covers the click action).
-        if (buttonClickInProgress) return;
+        if (buttonClickInProgress || aiToolActionInProgressRef.current) return;
         clearTimeout(aiEventDebounceTimer);
         aiEventDebounceTimer = setTimeout(() => {
           sendToVoiceAI(`[System Status: The user just interacted with the dashboard UI. Action: ${data.payload}]`);
         }, 10000);
       } else if (data && data.type === 'INTERACTION_EVENT') {
+        if (aiToolActionInProgressRef.current) return; // Suppress echo from AI tool action
         // Button click — HIGH PRIORITY, cancel any pending AI_EVENT
         clearTimeout(debounceTimer);
         clearTimeout(aiEventDebounceTimer);
@@ -639,6 +642,9 @@ function App() {
         }
         if (iframeRef.current && iframeRef.current.contentWindow && iframeReadyRef.current) {
           console.log('[Parent] Forwarding to iframe:', iframeRef.current.contentWindow);
+          // Suppress interaction events echoed back from this AI-initiated action
+          aiToolActionInProgressRef.current = true;
+          setTimeout(() => { aiToolActionInProgressRef.current = false; }, 800);
           iframeRef.current.contentWindow.postMessage({ type: 'TOOL_ACTION', action, params }, '*')
         } else {
           console.warn('[Parent] Iframe not ready, queuing tool_action:', action);
@@ -1060,6 +1066,9 @@ function App() {
           // Forward ALL tool actions into the iframe where the SVG elements actually live
           if (iframeRef.current && iframeRef.current.contentWindow && iframeReadyRef.current) {
             console.log('[Parent] Forwarding to iframe:', action);
+            // Suppress interaction events echoed back from this AI-initiated action
+            aiToolActionInProgressRef.current = true;
+            setTimeout(() => { aiToolActionInProgressRef.current = false; }, 800);
             iframeRef.current.contentWindow.postMessage(
               { type: 'TOOL_ACTION', action, params }, '*'
             )
