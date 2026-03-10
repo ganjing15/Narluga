@@ -2470,7 +2470,7 @@ function App() {
                 <div className="flex-1 overflow-auto flex flex-col p-4 pb-0">
 
                   {/* Phase: idle or complete — show source manager */}
-                  {(sessionPhase === 'idle' || sessionPhase === 'complete') && !isProcessing && (
+                  {(sessionPhase === 'idle' || (sessionPhase === 'complete' && !hasStarted)) && !isProcessing && (
                     <div className="sidebar-input-area">
                       {/* Web search input — always visible */}
                       <form
@@ -2864,9 +2864,24 @@ function App() {
                     </div>
                   )}
 
-                  {/* Conversation phase: show sources in the empty area */}
+                  {/* Conversation phase: show status + sources in the scrollable area */}
                   {(sessionPhase === 'conversation' || (sessionPhase === 'complete' && hasStarted)) && (
                     <div className="flex flex-col gap-4">
+                      {/* Live status + mic hint */}
+                      <div className="status-indicator">
+                        <div className={getPhaseDotClass()}></div>
+                        <div className="status-text">
+                          <span className="status-phase-label">Live Conversation</span>
+                          <span className="status-detail">Use a mic for smoother experience</span>
+                        </div>
+                      </div>
+
+                      <div className="conversation-hint">
+                        <MicIcon className="w-8 h-8 opacity-30 mb-3" />
+                        <p>Speak to ask questions about any part of the graphic, or ask Narluga to control interactions for you</p>
+                        <p className="text-xs opacity-60 mt-1">Click/hover on elements in the graphic to explore and listen to explanations</p>
+                      </div>
+
                       {/* Grounding sources from the AI */}
                       {groundingSources.length > 0 && (
                         <div className="source-roster">
@@ -2973,30 +2988,14 @@ function App() {
                     </div>
                   )}
 
-                  {/* Conversation: Live indicator + End button */}
+                  {/* Conversation: End button only */}
                   {(sessionPhase === 'conversation' || (sessionPhase === 'complete' && hasStarted)) && (
-                    <div className="sidebar-actions-area">
-                      <div className="status-indicator mb-4">
-                        <div className={getPhaseDotClass()}></div>
-                        <div className="status-text">
-                          <span className="status-phase-label">Live Conversation</span>
-                          <span className="status-detail">Use a mic for smoother experience</span>
-                        </div>
-                      </div>
-
-                      <div className="conversation-hint">
-                        <MicIcon className="w-8 h-8 opacity-30 mb-3" />
-                        <p>Speak to ask questions about any part of the graphic, or ask Narluga to control interactions for you</p>
-                        <p className="text-xs opacity-60 mt-1">Click/hover on elements in the graphic to explore and listen to explanations</p>
-                      </div>
-
-                      <button
-                        onClick={disconnect}
-                        className="w-full py-2.5 px-6 mt-3 bg-red-50 border border-red-200 text-red-500 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-red-100 hover:border-red-300"
-                      >
-                        <StopIcon className="w-4 h-4" /> End Conversation
-                      </button>
-                    </div>
+                    <button
+                      onClick={disconnect}
+                      className="w-full py-2.5 px-6 bg-red-50 border border-red-200 text-red-500 rounded-full font-medium transition-all flex items-center justify-center gap-2 hover:bg-red-100 hover:border-red-300"
+                    >
+                      <StopIcon className="w-4 h-4" /> End Conversation
+                    </button>
                   )}
                 </div>
               </div>
