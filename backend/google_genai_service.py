@@ -987,20 +987,20 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             response_modalities=["AUDIO"],
             system_instruction=types.Content(parts=[types.Part.from_text(text=system_instruction)]),
             tools=agent_tools,
-            # --- STABILITY FEATURES ---
             # Context window compression: prevents context overflow from hover/interaction events
             context_window_compression=types.ContextWindowCompressionConfig(
                 sliding_window=types.SlidingWindow(),
-                trigger_tokens=25000  # Compress at moderate threshold to keep context lean
+                trigger_tokens=25000
             ),
             # Session resumption: enables auto-reconnect with conversation state preserved
             session_resumption=types.SessionResumptionConfig(
-                handle=handle  # None for new sessions, token string for resuming
+                handle=handle
             ),
         )
-    
+
     config = _build_config()
-    
+    welcome_sent = False  # Track whether user has already heard the welcome greeting
+
     # WebSocket collision lock to prevent Starlette RuntimeError
     ws_lock = asyncio.Lock()
     
@@ -1069,8 +1069,10 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
             config = _build_config(handle=resumption_handle)
             print(f"[Gemini] Reconnecting with resumption handle...")
         elif not is_first_connection:
-            print("[Gemini] No resumption handle available, cannot reconnect.")
-            break
+            # No handle — rebuild a fresh config and re-prompt
+            config = _build_config()
+            is_first_connection = True
+            print("[Gemini] No resumption handle — starting fresh session...")
 
         try:
             print(f"[TIMING] T+{time.time()-t0:.3f}s: connecting to Gemini Live API...")
@@ -1082,11 +1084,23 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 if is_first_connection:
                     is_first_connection = False
 
-                    if eager_connect:
+                    if welcome_sent:
+                        # Reconnection after 1008 (no handle) — don't repeat the welcome
+                        print("[Gemini] Reconnected (fresh session) — sending continuation prompt...")
+                        try:
+                            await session.send_client_content(
+                                turns=[types.Content(parts=[types.Part.from_text(
+                                    text="The session was briefly interrupted. Continue your narration where you left off. Resume speaking now."
+                                )])]
+                            )
+                        except Exception as e:
+                            print(f"[Gemini] Error sending continuation prompt: {e}")
+                    elif eager_connect:
                         # Eager path: send initial prompt NOW and start buffering Gemini responses.
                         # The receive_from_client task will handle start_live_session and flush.
                         print("[Eager] Gemini pre-connected. Sending initial prompt eagerly...")
                         session_holder["prompted"] = True
+                        welcome_sent = True
                         try:
                             await session.send_client_content(
                                 turns=[types.Content(parts=[types.Part.from_text(
@@ -1106,7 +1120,15 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                             await websocket.send_json({"type": "ready"})
                         print(f"[TIMING] T+{time.time()-t0:.3f}s: ready sent to frontend")
                 else:
-                    print("[Gemini] Session resumed successfully — conversation continues seamlessly.")
+                    print("[Gemini] Session resumed — sending continue-narration prompt...")
+                    try:
+                        await session.send_client_content(
+                            turns=[types.Content(parts=[types.Part.from_text(
+                                text="The session was briefly interrupted. Continue your narration where you left off. Resume speaking now."
+                            )])]
+                        )
+                    except Exception as e:
+                        print(f"[Gemini] Error sending resume prompt: {e}")
 
                 # ------------------------------------------------------------------
                 # CLIENT → GEMINI relay
@@ -1142,20 +1164,12 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                     print(f"[Receive Task] Error sending audio to Gemini: {inner_e}")
                             elif payload.get("type") == "user_interrupt":
                                 # User clicked something in the graphic — immediately send clear
-                                # so the frontend can reset audio muting and play new audio ASAP
+                                # so the frontend can reset audio muting and play new audio ASAP.
+                                # Don't send anything to Gemini here — the interaction text that
+                                # follows (clientContent with turn_complete=True) will naturally
+                                # interrupt Gemini and provide the actual context.
                                 async with ws_lock:
                                     await websocket.send_json({"type": "clear"})
-                                # Immediately interrupt Gemini's current generation.
-                                # turn_complete=False = "more context coming, stop talking but don't respond yet"
-                                try:
-                                    await cur_session.send_client_content(
-                                        turns=[types.Content(parts=[types.Part.from_text(
-                                            text="[The user is interacting with the graphic right now]"
-                                        )])],
-                                        turn_complete=False
-                                    )
-                                except Exception:
-                                    pass
 
                             elif payload.get("type") == "start_live_session":
                                 # Eager path: user clicked Start — flush buffered Gemini responses
@@ -1428,13 +1442,14 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                             print(f"[Gemini Task] Warning: Failed to send tool response: {e}")
 
                         except APIError as e:
-                            if "1011" in str(e):
+                            err_str = str(e)
+                            if "1011" in err_str or "1008" in err_str:
                                 error_1011_count += 1
-                                print(f"[Gemini Task] Trapped 1011 APIError ({error_1011_count}/3). Resuming...")
+                                print(f"[Gemini Task] Trapped retryable APIError ({error_1011_count}/3): {e}")
                                 interrupted = False
                                 if error_1011_count >= 3:
-                                    print("[Gemini Task] Too many 1011 errors, ending session.")
-                                    break
+                                    print("[Gemini Task] Too many retryable errors, triggering reconnection.")
+                                    break  # Break to outer reconnection loop
                                 await asyncio.sleep(0.5)
                                 continue
                             else:
@@ -1483,6 +1498,7 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 # before start_live_session is sent), so no need to wait.
                 if not session_holder.get("prompted"):
                     session_holder["prompted"] = True
+                    welcome_sent = True
                     print(f"[TIMING] T+{time.time()-t0:.3f}s: sending initial prompt to Gemini")
                     try:
                         await session.send_client_content(
@@ -1532,9 +1548,8 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 continue
             elif not session_holder["alive"] or client_disconnected.is_set():
                 break
-            elif resumption_handle:
-                # Unexpected disconnect but we have a handle — try to resume
-                # Same eager buffer cleanup logic
+            elif resumption_handle or session_holder["alive"]:
+                # Unexpected disconnect — try to resume (with handle) or start fresh
                 if not eager_flushed.is_set():
                     old_count = len(eager_buffer)
                     eager_buffer.clear()
@@ -1542,6 +1557,10 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                     session_holder["prompted"] = False
                     is_first_connection = True
                     print(f"[Gemini] Cleared {old_count} stale eager buffer messages for reconnect")
+                if not resumption_handle:
+                    # No handle — start a completely fresh session
+                    is_first_connection = True
+                    print("[Gemini] No resumption handle — will start fresh session")
                 reconnect_count += 1
                 if reconnect_count > MAX_RECONNECT_ATTEMPTS:
                     print(f"[Gemini] Max reconnect attempts ({MAX_RECONNECT_ATTEMPTS}) exceeded. Ending session.")
