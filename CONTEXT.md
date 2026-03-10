@@ -169,6 +169,7 @@ Gemini Live Agent Challenge/
 | Frontend → Backend | `start_live_session` | User clicked Start; includes `pre_events` array |
 | Frontend → Backend | `end_live_session` | User clicked End; Gemini closes, WS stays open |
 | Frontend → Backend | `realtimeInput` | PCM audio chunk (base64) |
+| Frontend → Backend | `user_interrupt` | User interacted with graphic — backend sends `clear` + `turn_complete=False` to Gemini |
 | Frontend → Backend | `clientContent` | Text event (cursor position, interaction) |
 | Backend → Frontend | `phase` | Session phase change (`conversation`, `complete`, etc.) |
 | Backend → Frontend | `ready` | Gemini connected and ready |
@@ -186,6 +187,17 @@ The AI ("Narluga") proactively uses tools to manipulate the diagram inside the i
 - **`fetch_more_detail`** — Query Google Search for supplementary info when the user asks beyond the diagram's scope
 
 Tools are called autonomously by Gemini during conversation — the AI decides when to highlight, navigate, change attributes, or click controls as it explains concepts.
+
+#### Tool Safety & Reliability (Backend)
+The backend applies several safeguards before forwarding tool calls to the frontend:
+
+- **Auto-correct**: If the AI calls `highlight_element` targeting a button keyword (e.g. `play`, `pause`, `stop`, `autoplay`, `playBtn`), the backend silently converts it to `click_element('playBtn')`. This handles the case where the native-audio model incorrectly uses the highlight tool instead of click when asked to start/pause animations. The tool response explicitly tells the AI what happened ("The animation state was TOGGLED. Tell the user what you did.").
+
+- **Batch dedup**: Within a single Gemini `tool_call` response (which may contain multiple `function_calls`), duplicate `click_element` calls on the same element are skipped. Prevents the double-toggle bug where the model starts then immediately stops the animation in one response.
+
+- **Session-level click cooldown**: A 3-second cooldown is enforced between `click_element` calls on the same element across separate Gemini responses. Prevents rapid re-toggling when the model sends two back-to-back tool_call responses both targeting the play button (e.g. when starting auto-play on session init).
+
+- **`user_interrupt` → Gemini pause signal**: When the user interacts with the graphic (triggering `user_interrupt`), the backend sends `turn_complete=False` to Gemini in addition to sending `clear` to the frontend. This signals Gemini to stop its current generation and wait for the next turn, making it responsive to the user's following voice request rather than continuing its previous narration.
 
 ### Sidebar UI
 - Phase-based status indicators: `Analyzing` → `Designing` → `Complete` → `Conversation`
