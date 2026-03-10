@@ -21,7 +21,7 @@ GRAPHIC_LIMIT_PER_UID_PER_DAY = 5
 
 # Live sessions (/ws/live-restart) — Gemini Live API calls (pre-connects, restarts, gallery re-opens)
 _uid_live_timestamps: dict[str, list[float]] = defaultdict(list)
-LIVE_SESSION_LIMIT_PER_UID_PER_DAY = 20
+LIVE_SESSION_LIMIT_PER_UID_PER_DAY = 10
 
 def _check_rate_limit(uid: str, bucket: str = "graphic") -> bool:
     """Return True if user is within their daily limit, False if exceeded.

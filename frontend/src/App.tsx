@@ -2836,7 +2836,7 @@ function App() {
                           <span className="status-detail">
                             {sessionPhase === 'analyzing'
                               ? `Processing ${sources.length} source${sources.length !== 1 ? 's' : ''}…`
-                              : 'Takes ~30–60 seconds'}
+                              : 'Takes a couple minutes'}
                           </span>
                         </div>
                       </div>
@@ -2863,13 +2863,19 @@ function App() {
 
                 {/* ===== Pinned bottom actions ===== */}
                 <div className="sidebar-pinned-bottom">
-                  {/* Idle + has sources: Research mode + Create button */}
-                  {sources.length > 0 && sessionPhase === 'idle' && (
+                  {/* Idle: Create button (always visible) */}
+                  {sessionPhase === 'idle' && (
                     <div className="w-full flex flex-col gap-4">
                       <div className="button-group w-full">
                         <button
                           className="w-full py-3 px-6 bg-[var(--accent-primary)] hover:bg-[#0a48ad] text-white rounded-full font-semibold transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
-                          onClick={startSession}
+                          onClick={() => {
+                            if (sources.length === 0) {
+                              setError('Add at least one source first.')
+                              return
+                            }
+                            startSession()
+                          }}
                           disabled={isConnecting}
                           style={isConnecting ? { opacity: 0.8 } : undefined}
                         >

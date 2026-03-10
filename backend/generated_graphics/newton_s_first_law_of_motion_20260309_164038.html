@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Newton's First Law of Motion</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <style>
+    .pulse-anim {
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0% { opacity: 0.4; }
+        50% { opacity: 1; }
+        100% { opacity: 0.4; }
+    }
+    .fade-transition {
+        transition: opacity 0.3s ease;
+    }
+    text {
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+</style>
+<svg id="newtons-law-svg" viewBox="0 0 800 400" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <!-- Arrowhead Markers -->
+        <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#10b981" />
+        </marker>
+        <marker id="arrowhead-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
+        </marker>
+        <marker id="arrowhead-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
+        </marker>
+        
+        <!-- Subtle Pattern for Track -->
+        <pattern id="gridPattern" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 40 40" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+        </pattern>
+    </defs>
+
+    <!-- Background -->
+    <rect width="100%" height="100%" fill="#ffffff" />
+
+    <!-- Environment Elements -->
+    <g id="environment-group">
+        <rect id="floor" x="0" y="300" width="800" height="100" fill="#f8fafc" />
+        <rect id="floor-grid" x="0" y="300" width="800" height="100" fill="url(#gridPattern)" />
+        <line id="track-line" x1="0" y1="300" x2="800" y2="300" stroke="#94a3b8" stroke-width="4" />
+        
+        <!-- Track Tick Marks -->
+        <path d="M 50 300 L 50 315 M 200 300 L 200 310 M 350 300 L 350 310 M 500 300 L 500 310 M 650 300 L 650 315" stroke="#cbd5e1" stroke-width="2" />
+        
+        <text x="50" y="335" fill="#64748b" font-size="12" text-anchor="middle" font-weight="600">START</text>
+        <text x="650" y="335" fill="#64748b" font-size="12" text-anchor="middle" font-weight="600">END</text>
+    </g>
+
+    <!-- Initial Push Force (Only visible at t=0) -->
+    <g id="push-force" class="pulse-anim fade-transition" opacity="1">
+        <path d="M 10 260 L 40 260" stroke="#f59e0b" stroke-width="6" stroke-dasharray="4" marker-end="url(#arrowhead-orange)"/>
+        <text x="25" y="245" fill="#f59e0b" text-anchor="middle" font-weight="bold" font-size="14">Initial Push</text>
+    </g>
+
+    <!-- Moving Mass Group -->
+    <g id="mass-group" transform="translate(0, 0)">
+        <!-- The Mass Block -->
+        <rect id="mass-block" x="50" y="220" width="80" height="80" rx="12" fill="#2563eb" />
+        <text x="90" y="265" fill="#ffffff" font-weight="bold" font-size="18" text-anchor="middle">MASS</text>
+
+        <!-- Velocity Arrow -->
+        <g id="vel-container" transform="translate(140, 260)" class="fade-transition" opacity="0">
+            <g id="vel-scale" transform="scale(1, 1)">
+                <path d="M 0 0 L 80 0" stroke="#10b981" stroke-width="6" marker-end="url(#arrowhead-green)"/>
+                
+                <!-- Label Background for Readability -->
+                <rect x="15" y="-22" width="60" height="18" fill="rgba(255,255,255,0.85)" rx="4" />
+                <text x="45" y="-8" fill="#059669" text-anchor="middle" font-weight="bold" font-size="13">Velocity</text>
+            </g>
+        </g>
+
+        <!-- Friction Arrow -->
+        <g id="fric-container" transform="translate(40, 280)" class="fade-transition" opacity="0">
+            <g id="fric-scale">
+                <path d="M 0 0 L -80 0" stroke="#ef4444" stroke-width="6" marker-end="url(#arrowhead-red)"/>
+                
+                <!-- Label Background -->
+                <rect x="-75" y="-22" width="60" height="18" fill="rgba(255,255,255,0.85)" rx="4" />
+                <text x="-45" y="-8" fill="#dc2626" text-anchor="middle" font-weight="bold" font-size="13">Friction</text>
+            </g>
+        </g>
+    </g>
+
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>Newton's First Law of Motion</h2>
+        <p style="color: #64748b;">Use the controls on the right to explore how an object behaves with and without friction.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <style>
+    .cp-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        width: 100%;
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+    .cp-title {
+        margin: 0;
+        font-size: 20px;
+        color: #0f172a;
+        font-weight: 700;
+    }
+    .env-btns {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+    }
+    .env-btn {
+        flex: 1;
+        padding: 12px;
+        border: 2px solid transparent;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 14px;
+    }
+    .env-btn.active {
+        background: #2563eb;
+        color: #ffffff;
+        border-color: #1d4ed8;
+    }
+    .env-btn.inactive {
+        background: #f1f5f9;
+        color: #475569;
+        border-color: #e2e8f0;
+    }
+    .env-btn.inactive:hover {
+        background: #e2e8f0;
+    }
+    .slider-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .slider-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: #334155;
+        display: flex;
+        justify-content: space-between;
+    }
+    input[type=range] {
+        width: 100%;
+        cursor: pointer;
+        accent-color: #2563eb;
+    }
+    .play-btn {
+        padding: 14px;
+        background: #0f172a;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.2s;
+    }
+    .play-btn:hover {
+        background: #1e293b;
+    }
+    .info-card {
+        padding: 16px;
+        background: #f8fafc;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+    }
+    .info-title {
+        font-weight: 700;
+        font-size: 16px;
+        color: #0f172a;
+        margin-bottom: 8px;
+    }
+    .info-desc {
+        font-size: 14px;
+        color: #475569;
+        line-height: 1.5;
+    }
+</style>
+
+<div class="cp-wrapper">
+    <h2 class="cp-title">System Control</h2>
+    
+    <!-- Environment Toggle -->
+    <div class="env-btns">
+        <button id="btn-space" class="env-btn active" onclick="setEnvironment(false)">🌌 Space (No Friction)</button>
+        <button id="btn-earth" class="env-btn inactive" onclick="setEnvironment(true)">🌍 Earth (Friction)</button>
+    </div>
+    
+    <!-- Time Slider -->
+    <div class="slider-container">
+        <div class="slider-label">
+            <span>Time (t)</span>
+            <span id="time-display">0.0</span>
+        </div>
+        <input type="range" id="timeSlider" min="0" max="100" step="any" value="0" oninput="handleSliderChange(this.value)">
+    </div>
+    
+    <!-- Auto-Play -->
+    <button id="playBtn" class="play-btn" onclick="togglePlay()">▶ Auto-Play</button>
+    
+    <!-- Info Panel -->
+    <div class="info-card">
+        <div id="info-title" class="info-title">At Rest</div>
+        <div id="info-desc" class="info-desc">The mass is ready to receive an initial push force.</div>
+    </div>
+</div>
+
+<script>
+    let isPlaying = false;
+    let playInterval;
+    let hasFriction = false;
+
+    function setEnvironment(frictionOn) {
+        hasFriction = frictionOn;
+        
+        let btnSpace = document.getElementById(`btn-space`);
+        let btnEarth = document.getElementById(`btn-earth`);
+        
+        if (frictionOn) {
+            btnEarth.className = `env-btn active`;
+            btnSpace.className = `env-btn inactive`;
+        } else {
+            btnSpace.className = `env-btn active`;
+            btnEarth.className = `env-btn inactive`;
+        }
+
+        if (window.sendEventToAI) { 
+            window.sendEventToAI(`User switched environment to ${frictionOn ? `Earth (Friction)` : `Space (No Friction)`}`); 
+        }
+
+        let slider = document.getElementById(`timeSlider`);
+        updateState(Number(slider.value));
+    }
+
+    function handleSliderChange(val) {
+        let numVal = Number(val);
+        updateState(numVal);
+        
+        if (isPlaying) {
+            togglePlay(); // Pause if user manually scrubs while playing
+        }
+    }
+
+    function updateState(val) {
+        let x = 0;       // Position offset
+        let v = 0;       // Velocity (0 to 100 scale)
+        let f = 0;       // Friction force active (boolean logic)
+        
+        // Physics Simulation Logic
+        if (!hasFriction) {
+            // Constant velocity in frictionless space
+            x = val * 6;     // Max distance 600px
+            v = 100;         // Velocity is constant maximum
+            f = 0;           // No friction
+        } else {
+            // Decelerating on Earth due to kinetic friction
+            if (val < 60) {
+                // Ease-out quadratic models constant deceleration perfectly
+                let t_norm = val / 60;
+                x = 450 * (t_norm * (2 - t_norm)); 
+                v = 100 * (1 - t_norm); // Velocity drops to 0 at t=60
+                f = 1;                  // Friction is actively opposing motion
+            } else {
+                // Object has come to a complete stop
+                x = 450;
+                v = 0;
+                f = 0; // Friction stops acting once object is at rest
+            }
+        }
+
+        // 1. Move the Mass Block visually
+        document.getElementById(`mass-group`).setAttribute(`transform`, `translate(${x}, 0)`);
+
+        // 2. Update the Initial Push Indicator
+        let pushForce = document.getElementById(`push-force`);
+        if (val === 0) {
+            pushForce.setAttribute(`opacity`, `1`);
+        } else {
+            pushForce.setAttribute(`opacity`, `0`);
+        }
+
+        // 3. Update the Velocity Arrow (Green)
+        let velContainer = document.getElementById(`vel-container`);
+        let velScale = document.getElementById(`vel-scale`);
+        if (v > 0 && val > 0) {
+            velContainer.setAttribute(`opacity`, `1`);
+            velScale.setAttribute(`transform`, `scale(${v/100}, 1)`);
+        } else {
+            velContainer.setAttribute(`opacity`, `0`);
+        }
+
+        // 4. Update the Friction Arrow (Red)
+        let fricContainer = document.getElementById(`fric-container`);
+        if (f > 0 && val > 0) {
+            fricContainer.setAttribute(`opacity`, `1`);
+        } else {
+            fricContainer.setAttribute(`opacity`, `0`);
+        }
+
+        // 5. Update Time Display
+        document.getElementById(`time-display`).textContent = val.toFixed(1);
+
+        // 6. Update Info Panel Text
+        let title = document.getElementById(`info-title`);
+        let desc = document.getElementById(`info-desc`);
+
+        if (val === 0) {
+            title.textContent = `Start Position`;
+            desc.textContent = `The mass is ready. The yellow arrow represents an unbalanced force (a push) about to act on the object.`;
+        } else if (!hasFriction) {
+            title.textContent = `Constant Velocity (Newton's 1st Law)`;
+            desc.textContent = `In motion, it stays in motion. Without friction to act as an opposing force, the object glides forward endlessly at a constant speed.`;
+        } else {
+            if (val < 60) {
+                title.textContent = `Deceleration due to Friction`;
+                desc.textContent = `The surface creates kinetic friction. This unbalanced opposing force causes the object to lose velocity over time.`;
+            } else {
+                title.textContent = `State of Rest`;
+                desc.textContent = `The friction has removed all kinetic energy. The mass is now at rest, and will remain at rest until a new force acts upon it.`;
+            }
+        }
+    }
+
+    function togglePlay() {
+        isPlaying = !isPlaying;
+        let btn = document.getElementById(`playBtn`);
+        
+        if (isPlaying) {
+            if (btn) btn.innerHTML = `⏸ Pause Auto-Play`;
+            clearInterval(playInterval);
+            
+            // Loop animation logic
+            playInterval = setInterval(() => {
+                let slider = document.getElementById(`timeSlider`);
+                let nextVal = Number(slider.value) + 0.5;
+                
+                if (nextVal > 100) {
+                    nextVal = 0;
+                }
+                
+                slider.value = nextVal;
+                updateState(nextVal);
+            }, 20); // 50 updates per second for smooth animation
+            
+            if (window.sendEventToAI) { window.sendEventToAI(`User pressed play`); }
+            
+        } else {
+            if (btn) btn.innerHTML = `▶ Auto-Play`;
+            clearInterval(playInterval);
+        }
+    }
+
+    // Initialize state on load
+    updateState(0);
+</script>
+    </div>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { XIcon, SparklesIcon, DisplayIcon, NarlugaLogo, RefreshIcon } from './Icons'
 import { deleteGraphic, type User, type SavedGraphic } from './firebase'
 
@@ -13,62 +13,39 @@ interface GraphicsPageProps {
 
 
 
-// Renders a live scaled-down preview of the SVG
+// Renders a live scaled-down preview of the SVG using <img> + object-fit: cover
 export const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
-    const wrapperRef = useRef<HTMLDivElement>(null)
-    const [transform, setTransform] = useState('scale(0.35)')
-
     // Extract only the <svg ...>...</svg> content, strip scripts for safety
     const svgMatch = svgHtml.match(/<svg[\s\S]*<\/svg>/i)
 
-    // Parse viewBox to get natural SVG dimensions (avoids DOM measurement issues)
-    const vbMatch = svgMatch?.[0].match(/viewBox=["']([^"']+)["']/i)
-    const vbParts = vbMatch?.[1].split(/[\s,]+/).map(Number)
-    const svgW = (vbParts && vbParts.length >= 4 && vbParts[2] > 0) ? vbParts[2] : 800
-    const svgH = (vbParts && vbParts.length >= 4 && vbParts[3] > 0) ? vbParts[3] : 500
-
-    useEffect(() => {
-        const wrapper = wrapperRef.current
-        if (!wrapper) return
-        const ro = new ResizeObserver(() => {
-            const wW = wrapper.clientWidth
-            const wH = wrapper.clientHeight
-            if (wW <= 0 || wH <= 0) return
-            // Scale to cover (fill) the thumbnail area like object-fit: cover
-            const s = Math.max(wW / svgW, wH / svgH)
-            // Center the scaled content
-            const offsetX = (wW - svgW * s) / 2
-            const offsetY = (wH - svgH * s) / 2
-            setTransform(`translate(${offsetX}px, ${offsetY}px) scale(${s})`)
-        })
-        ro.observe(wrapper)
-        return () => ro.disconnect()
-    }, [svgW, svgH])
-
     if (!svgMatch) return <SparklesIcon className="w-8 h-8 text-[var(--accent-primary)] opacity-30" />
 
-    const safe = svgMatch[0]
+    let safe = svgMatch[0]
         .replace(/<script[\s\S]*?<\/script>/gi, '')   // strip scripts
         .replace(/\son\w+="[^"]*"/gi, '')              // strip inline handlers
         .replace(/\son\w+='[^']*'/gi, '')
 
+    // Ensure xmlns is present (required for standalone SVG in <img> data URIs)
+    if (!/\sxmlns\s*=/i.test(safe)) {
+        safe = safe.replace(/<svg/, '<svg xmlns="http://www.w3.org/2000/svg"')
+    }
+
+    // Encode SVG as a data URI and render via <img> with object-fit: cover.
+    const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(safe)}`
+
     return (
-        <div ref={wrapperRef} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
-            <div
-                className="svg-thumbnail-inner"
-                style={{
-                    pointerEvents: 'none',
-                    width: `${svgW}px`,
-                    height: `${svgH}px`,
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    transformOrigin: 'top left',
-                    transform,
-                }}
-                dangerouslySetInnerHTML={{ __html: safe }}
-            />
-        </div>
+        <img
+            src={dataUri}
+            alt=""
+            style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                objectPosition: 'center',
+                pointerEvents: 'none',
+                display: 'block',
+            }}
+        />
     )
 }
 
