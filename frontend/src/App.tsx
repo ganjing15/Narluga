@@ -199,6 +199,7 @@ function App() {
   const nextPlayTimeRef = useRef<number>(0)
   const activeAudioNodesRef = useRef<AudioBufferSourceNode[]>([])
   const audioMutedUntilRef = useRef<number>(0)
+  const cancelPendingEventsRef = useRef<(() => void) | null>(null)
 
 
   // Detect input type from text
@@ -461,6 +462,14 @@ function App() {
     let buttonClickInProgress = false;
     let aiEventDebounceTimer: ReturnType<typeof setTimeout>;
 
+    // Expose cancellation so the `clear` handler (in attachRestartHandlers) can
+    // cancel stale text events before Gemini processes a voice command.
+    cancelPendingEventsRef.current = () => {
+      clearTimeout(debounceTimer)
+      clearTimeout(aiEventDebounceTimer)
+      clearTimeout(hoverDebounceTimer)
+    }
+
     const handleMessage = (event: MessageEvent) => {
       const data = event.data;
       if (data && data.type === 'CLEAR_AUDIO') {
@@ -596,7 +605,14 @@ function App() {
         micReadyRef.current = true
         startDurationTimer()  // Session is live — start 20-min wall clock
         setupMic()
+        // Suppress graphic init events (e.g. default "Earth selected") for 3s so they
+        // don't reach Gemini before the user gets a chance to speak.
+        aiToolActionInProgressRef.current = true
+        cancelPendingEventsRef.current?.()
+        setTimeout(() => { aiToolActionInProgressRef.current = false; }, 3000)
       } else if (data.type === 'clear') {
+        // Voice interrupted — cancel any pending text events so they don't override the voice command
+        cancelPendingEventsRef.current?.()
         if (audioCtxRef.current) {
           activeAudioNodesRef.current.forEach(node => { try { node.stop() } catch (e) { } })
           activeAudioNodesRef.current = []
@@ -644,6 +660,7 @@ function App() {
           console.log('[Parent] Forwarding to iframe:', iframeRef.current.contentWindow);
           // Suppress interaction events echoed back from this AI-initiated action
           aiToolActionInProgressRef.current = true;
+          cancelPendingEventsRef.current?.()  // Cancel any in-flight debounce timers immediately
           setTimeout(() => { aiToolActionInProgressRef.current = false; }, 800);
           iframeRef.current.contentWindow.postMessage({ type: 'TOOL_ACTION', action, params }, '*')
         } else {
@@ -1068,6 +1085,7 @@ function App() {
             console.log('[Parent] Forwarding to iframe:', action);
             // Suppress interaction events echoed back from this AI-initiated action
             aiToolActionInProgressRef.current = true;
+            cancelPendingEventsRef.current?.()  // Cancel any in-flight debounce timers immediately
             setTimeout(() => { aiToolActionInProgressRef.current = false; }, 800);
             iframeRef.current.contentWindow.postMessage(
               { type: 'TOOL_ACTION', action, params }, '*'
@@ -1349,8 +1367,10 @@ function App() {
         // The backend's 'clear' response resets this to 0 almost immediately (~10ms);
         // 400ms is just a fallback in case 'clear' is delayed.
         audioMutedUntilRef.current = Date.now() + 400;
-        // Tell backend immediately so it can send 'clear' back and reset the muting
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        // Tell backend immediately so it can send 'clear' back and reset the muting.
+        // Skip if an AI tool action triggered this click — avoid the echo loop where
+        // AI's own click_element fires CLEAR_AUDIO → user_interrupt → Gemini does more tools.
+        if (!aiToolActionInProgressRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ type: "user_interrupt" }));
         }
       }

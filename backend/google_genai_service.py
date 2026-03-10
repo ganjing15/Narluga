@@ -1015,6 +1015,10 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
     client_disconnected = asyncio.Event()  # Set when frontend WS closes
     audio_started = asyncio.Event()  # Set when first mic audio frame arrives
 
+    # Session-level click cooldown: prevent rapid double-toggle across separate Gemini responses
+    click_cooldown: dict[str, float] = {}  # element_id → last click timestamp
+    CLICK_COOLDOWN_SECONDS = 3.0  # Minimum seconds between clicks on same element
+
     # Eager-connect buffering: buffer Gemini responses until user clicks Start
     eager_buffer = []              # Queued messages (audio, tool_action, clear) before user clicks
     eager_flushed = asyncio.Event()
@@ -1165,11 +1169,22 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                             elif payload.get("type") == "user_interrupt":
                                 # User clicked something in the graphic — immediately send clear
                                 # so the frontend can reset audio muting and play new audio ASAP.
-                                # Don't send anything to Gemini here — the interaction text that
-                                # follows (clientContent with turn_complete=True) will naturally
-                                # interrupt Gemini and provide the actual context.
                                 async with ws_lock:
                                     await websocket.send_json({"type": "clear"})
+                                # Tell Gemini to stop talking and wait for more input.
+                                # turn_complete=False = "more context coming, hold on"
+                                # Safe now: aiToolActionInProgressRef on frontend suppresses
+                                # echoed INTERACTION_EVENTs for 800ms after AI tool actions,
+                                # so this won't cause the old echo loop.
+                                try:
+                                    await cur_session.send_client_content(
+                                        turns=[types.Content(parts=[types.Part.from_text(
+                                            text="[The user is interacting with the graphic right now]"
+                                        )])],
+                                        turn_complete=False
+                                    )
+                                except Exception:
+                                    pass
 
                             elif payload.get("type") == "start_live_session":
                                 # Eager path: user clicked Start — flush buffered Gemini responses
@@ -1309,12 +1324,46 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                         interrupted = False
 
                                     func_responses = []
+                                    # Track clicked elements within this batch to prevent double-toggle
+                                    clicked_elements_in_batch = set()
                                     for func_call in response.tool_call.function_calls:
                                         tool_name = func_call.name
                                         tool_args = dict(func_call.args) if func_call.args else {}
                                         print(f"\n[AI TOOL FIRING] {tool_name}({json.dumps(tool_args)})")
 
+                                        # Auto-correct: if highlight_element targets a button, convert to click_element
+                                        auto_corrected_click = False
+                                        if tool_name == "highlight_element":
+                                            eid = (tool_args.get("element_id") or "").lower()
+                                            # Check if the element_id matches a known button keyword
+                                            button_keywords = {"playbtn", "play", "pause", "auto-play", "autoplay", "start", "stop"}
+                                            if eid in button_keywords or any(bk in eid for bk in button_keywords):
+                                                print(f"[AI TOOL AUTO-CORRECT] highlight_element('{eid}') → click_element('playBtn')")
+                                                tool_name = "click_element"
+                                                tool_args = {"element_id": "playBtn"}
+                                                auto_corrected_click = True
+
                                         if tool_name in ("highlight_element", "navigate_to_section", "zoom_view", "modify_element", "click_element"):
+                                            # Deduplicate click_element: both within batch AND across responses (cooldown)
+                                            if tool_name == "click_element":
+                                                kw = tool_args.get("element_id", "")
+                                                kw_lower = kw.lower()
+                                                now = time.time()
+                                                last_click = click_cooldown.get(kw_lower, 0)
+                                                if kw_lower in clicked_elements_in_batch or (now - last_click < CLICK_COOLDOWN_SECONDS):
+                                                    reason = "same batch" if kw_lower in clicked_elements_in_batch else f"cooldown ({now - last_click:.1f}s < {CLICK_COOLDOWN_SECONDS}s)"
+                                                    print(f"[AI TOOL SKIPPED] Duplicate click_element('{kw}') — {reason}")
+                                                    func_responses.append(
+                                                        types.FunctionResponse(
+                                                            name=func_call.name,
+                                                            id=func_call.id,
+                                                            response={"result": "skipped", "message": f"Already clicked '{kw}' recently. The button was already toggled — do NOT click again."}
+                                                        )
+                                                    )
+                                                    continue
+                                                clicked_elements_in_batch.add(kw_lower)
+                                                click_cooldown[kw_lower] = now
+
                                             tool_msg = {
                                                 "type": "tool_action",
                                                 "action": tool_name,
@@ -1328,16 +1377,20 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                                             # For click_element, provide richer feedback so AI can self-correct
                                             if tool_name == "click_element":
                                                 kw = tool_args.get("element_id", "")
-                                                # DEBUG LOG to see exactly what AI is sending
-                                                with open("/tmp/click_debug.log", "a") as df:
-                                                    df.write(f"CLICK_ELEMENT called with keyword: {kw}\n")
-                                                    
-                                                controls_inv = cached_controls_inv
-                                                resp_msg = (
-                                                    f"click_element dispatched with keyword '{kw}'. "
-                                                    f"IMPORTANT: If the keyword does not exactly match a button below, the click will silently fail. "
-                                                    f"Available controls:\n{controls_inv}"
-                                                )
+                                                if auto_corrected_click:
+                                                    # Tell the AI clearly what happened since it thought it called highlight_element
+                                                    resp_msg = (
+                                                        f"AUTO-CORRECTED: Your highlight_element was converted to click_element('playBtn') because you targeted a button. "
+                                                        f"The play/pause button was CLICKED and the animation state was TOGGLED. "
+                                                        f"Tell the user what you did — if the animation was paused, it is now PLAYING. If it was playing, it is now PAUSED."
+                                                    )
+                                                else:
+                                                    controls_inv = cached_controls_inv
+                                                    resp_msg = (
+                                                        f"click_element dispatched with keyword '{kw}'. "
+                                                        f"IMPORTANT: If the keyword does not exactly match a button below, the click will silently fail. "
+                                                        f"Available controls:\n{controls_inv}"
+                                                    )
                                                 tool_response_body = {"result": "dispatched", "message": resp_msg}
                                             else:
                                                 tool_response_body = {"result": "ok", "message": f"{tool_name} executed on the user's screen."}
