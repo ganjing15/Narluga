@@ -10,7 +10,7 @@ import {
 import {
   signInWithGoogle, firebaseSignOut, getIdToken, onAuthChange,
   isFirebaseConfigured, saveGraphic, listGraphics, patchGraphicsSvg,
-  listPublicExamples, publishToExamples, clearPublicExamples,
+  listPublicExamples, publishToExamples, clearPublicExamples, patchPublicExamplesSvg, inspectPublicExampleSvg,
   type User, type SavedGraphic
 } from './firebase'
 
@@ -396,6 +396,10 @@ function App() {
       return publishToExamples(user.uid, graphicId, order)
     }
     ;(window as any)._clearExamples = () => clearPublicExamples()
+    ;(window as any)._patchPublicExamples = (title: string, find: string, replace: string) =>
+      patchPublicExamplesSvg(title, find, replace)
+    ;(window as any)._inspectPublicExample = (title: string, keyword: string) =>
+      inspectPublicExampleSvg(title, keyword)
     ;(window as any)._listGraphicIds = () => {
       savedGraphics.forEach((g, i) => console.log(`${i}: ${g.id} — "${g.title}"`))
     }

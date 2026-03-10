@@ -192,6 +192,44 @@ export async function publishToExamples(uid: string, graphicId: string, order: n
     return docRef.id
 }
 
+/** Patch public examples: find/replace in svg_html by title. */
+export async function patchPublicExamplesSvg(title: string, find: string, replace: string): Promise<number> {
+    if (!db) return 0
+    const col = collection(db, 'public_examples')
+    const snap = await getDocs(col)
+    let count = 0
+    for (const d of snap.docs) {
+        const data = d.data() as SavedGraphic
+        if (data.title?.includes(title) && data.svg_html?.includes(find)) {
+            const newSvg = data.svg_html.replaceAll(find, replace)
+            await updateDoc(doc(db, 'public_examples', d.id), { svg_html: newSvg })
+            count++
+            console.log(`[Patch] Updated public example ${d.id} "${data.title}"`)
+        }
+    }
+    console.log(`[Patch] Done — updated ${count} public example(s)`)
+    return count
+}
+
+/** Inspect svg_html snippet around a keyword for all public examples matching a title. */
+export async function inspectPublicExampleSvg(title: string, keyword: string): Promise<void> {
+    if (!db) return
+    const col = collection(db, 'public_examples')
+    const snap = await getDocs(col)
+    for (const d of snap.docs) {
+        const data = d.data() as SavedGraphic
+        if (data.title?.includes(title)) {
+            const idx = data.svg_html?.indexOf(keyword) ?? -1
+            if (idx >= 0) {
+                console.log(`[${d.id}] "${data.title}" — snippet:`)
+                console.log(data.svg_html.slice(Math.max(0, idx - 80), idx + 80))
+            } else {
+                console.log(`[${d.id}] "${data.title}" — keyword NOT FOUND`)
+            }
+        }
+    }
+}
+
 /** Remove all public examples (for re-curating). */
 export async function clearPublicExamples(): Promise<number> {
     if (!db) return 0
