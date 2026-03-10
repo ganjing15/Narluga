@@ -146,9 +146,6 @@ export function GraphicsPage({ savedGraphics, galleryLoading, user, onOpenGraphi
                     </div>
                 ) : (
                     <>
-                        <div className="graphics-page-count">
-                            {savedGraphics.length} graphic{savedGraphics.length !== 1 ? 's' : ''}
-                        </div>
                         <div className="graphics-grid">
                             {savedGraphics.map(g => (
                                 <div

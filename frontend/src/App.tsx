@@ -2859,6 +2859,43 @@ function App() {
                       </div>
                     </div>
                   )}
+
+                  {/* Conversation phase: show sources in the empty area */}
+                  {(sessionPhase === 'conversation' || (sessionPhase === 'complete' && hasStarted)) && (
+                    <div className="flex flex-col gap-4">
+                      {/* Grounding sources from the AI */}
+                      {groundingSources.length > 0 && (
+                        <div className="source-roster">
+                          <div className="source-roster-header">
+                            <span className="source-roster-title">References</span>
+                            <span className="source-count">{groundingSources.length}</span>
+                          </div>
+                          {groundingSources.slice(0, 12).map((s, i) => (
+                            <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="source-item" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+                              <div className="source-item-icon"><LinkIcon className="w-4 h-4" /></div>
+                              <span className="source-item-label" style={{ color: 'var(--accent-primary)' }}>{s.title.length > 45 ? s.title.slice(0, 43) + '…' : s.title}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Original sources */}
+                      {sources.length > 0 && (
+                        <div className="source-roster">
+                          <div className="source-roster-header">
+                            <span className="source-roster-title">Your Sources</span>
+                            <span className="source-count">{sources.length}</span>
+                          </div>
+                          {sources.map(source => (
+                            <div key={source.id} className="source-item">
+                              <div className="source-item-icon">{getSourceIcon(source.type)}</div>
+                              <span className="source-item-label">{source.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* ===== Pinned bottom actions ===== */}
