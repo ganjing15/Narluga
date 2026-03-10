@@ -1464,6 +1464,13 @@ a.graphic-card-source-chip:hover {
   transform: scale(0.467);
 }
 
+/* Inline SVG fallback: scale to cover the container */
+.svg-thumbnail-inner svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
 /* ── Curated Example Cards ────────────────────────────────── */
 .example-container {
   flex: 1;

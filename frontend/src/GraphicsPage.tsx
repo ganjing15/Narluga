@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { XIcon, SparklesIcon, DisplayIcon, NarlugaLogo, RefreshIcon } from './Icons'
 import { deleteGraphic, type User, type SavedGraphic } from './firebase'
 
@@ -12,39 +12,62 @@ interface GraphicsPageProps {
 }
 
 
-
-// Renders a live scaled-down preview of the SVG using <img> + object-fit: cover
-export const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
-    // Extract only the <svg ...>...</svg> content, strip scripts for safety
+function sanitizeSvg(svgHtml: string): string | null {
     const svgMatch = svgHtml.match(/<svg[\s\S]*<\/svg>/i)
-
-    if (!svgMatch) return <SparklesIcon className="w-8 h-8 text-[var(--accent-primary)] opacity-30" />
-
-    let safe = svgMatch[0]
-        .replace(/<script[\s\S]*?<\/script>/gi, '')   // strip scripts
-        .replace(/\son\w+="[^"]*"/gi, '')              // strip inline handlers
+    if (!svgMatch) return null
+    return svgMatch[0]
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/\son\w+="[^"]*"/gi, '')
         .replace(/\son\w+='[^']*'/gi, '')
+}
 
-    // Ensure xmlns is present (required for standalone SVG in <img> data URIs)
-    if (!/\sxmlns\s*=/i.test(safe)) {
-        safe = safe.replace(/<svg/, '<svg xmlns="http://www.w3.org/2000/svg"')
+// Renders a live scaled-down preview of the SVG.
+// Uses <img> + object-fit:cover for proper centering, with inline SVG fallback
+// for SVGs that aren't valid standalone XML (missing xmlns, foreignObject, etc.)
+export const SvgThumbnail = ({ svgHtml }: { svgHtml: string }) => {
+    const [imgFailed, setImgFailed] = useState(false)
+
+    const safe = useMemo(() => sanitizeSvg(svgHtml), [svgHtml])
+    if (!safe) return <SparklesIcon className="w-8 h-8 text-[var(--accent-primary)] opacity-30" />
+
+    // Primary: <img> data URI with object-fit: cover (proper centering)
+    if (!imgFailed) {
+        let standalone = safe
+        if (!/\sxmlns\s*=/i.test(standalone)) {
+            standalone = standalone.replace(/<svg/, '<svg xmlns="http://www.w3.org/2000/svg"')
+        }
+        const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(standalone)}`
+        return (
+            <img
+                src={dataUri}
+                alt=""
+                onError={() => setImgFailed(true)}
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: 'center',
+                    pointerEvents: 'none',
+                    display: 'block',
+                }}
+            />
+        )
     }
 
-    // Encode SVG as a data URI and render via <img> with object-fit: cover.
-    const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(safe)}`
-
+    // Fallback: inline SVG (works with any SVG content)
     return (
-        <img
-            src={dataUri}
-            alt=""
+        <div
+            className="svg-thumbnail-inner"
             style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
-                objectPosition: 'center',
+                overflow: 'hidden',
                 pointerEvents: 'none',
-                display: 'block',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
             }}
+            dangerouslySetInnerHTML={{ __html: safe }}
         />
     )
 }

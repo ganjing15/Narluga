@@ -201,7 +201,7 @@ async def websocket_restart_endpoint(websocket: WebSocket):
             uid = user.get('uid', 'anonymous')
             if not _check_rate_limit(uid, bucket="live"):
                 print(f"[WebSocket Restart] Live session limit exceeded for uid={uid}")
-                await websocket.send_json({"type": "error", "message": "Daily live session limit reached (20/24h). Please try again later."})
+                await websocket.send_json({"type": "error", "message": "Daily live session limit reached. Please try again later."})
                 await websocket.close()
                 return
         
