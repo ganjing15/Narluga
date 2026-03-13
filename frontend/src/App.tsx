@@ -131,7 +131,7 @@ function App() {
   const [error, setError] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
   const [isStartingConversation, setIsStartingConversation] = useState(false)
-  const [eagerAudioReady, setEagerAudioReady] = useState(false)
+  const [_eagerAudioReady, setEagerAudioReady] = useState(false)
   const isPreConnectRef = useRef(false)  // true while WS is a background pre-connect (suppress errors)
   const prepareLiveSentRef = useRef(false)  // true once prepare_live sent (deferred eager connect)
   const aiToolActionInProgressRef = useRef(false) // suppress events echoed back from AI tool actions
@@ -759,7 +759,7 @@ function App() {
         console.log('[PreConnect] Gallery graphic WS ready — next click will use fast path')
       }
       attachRestartHandlers(ws)
-    } catch (err) {
+    } catch (_err) {
       // Pre-connect failed silently — startPresentation will fall back to Path B on click
       _preConnectInFlight = false
       wsRef.current = null
@@ -842,7 +842,7 @@ function App() {
       micReadyRef.current = true
       eventQueueRef.current = []
       if (audioCtxRef.current.state === 'suspended') {
-        try { audioCtxRef.current.resume(); } catch (err) { }
+        try { audioCtxRef.current.resume(); } catch { }
       }
       setupMic()
       startDurationTimer()  // Fast path: session live on click
@@ -881,7 +881,7 @@ function App() {
         eventQueueRef.current = []
 
         if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-          try { audioCtxRef.current.resume(); } catch (err) { }
+          try { audioCtxRef.current.resume(); } catch { }
         }
 
         setupMic()
@@ -1407,7 +1407,7 @@ function App() {
     // 4. AI-generated code needs to run for graphics to be interactive
 
     // Only remove javascript: URLs (minimal sanitization)
-    let sanitized = controlsHtml.replace(/javascript:/gi, '');
+    const sanitized = controlsHtml.replace(/javascript:/gi, '');
 
     return sanitized;
   }, []);
