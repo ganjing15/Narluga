@@ -790,7 +790,7 @@ function App() {
       ? Promise.resolve(streamRef.current)
       : navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      }).catch((err: any) => {
+      }).catch((_err: any) => {
         setIsStartingConversation(false)
         setSessionPhase('complete')
         setError("Microphone permission is required to converse with the AI.")
