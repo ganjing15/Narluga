@@ -1578,6 +1578,9 @@ async def _run_live_session(websocket: WebSocket, narration_context: str, source
                 _log(f"asyncio.wait completed. Done: {done_names}, Pending: {len(pending)}")
                 for task in pending:
                     task.cancel()
+                # Await cancellations so old tasks don't overlap with the next session
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
 
                 # Clear session reference while reconnecting
                 session_holder["session"] = None

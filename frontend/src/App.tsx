@@ -169,6 +169,7 @@ function App() {
   const [currentTitle, setCurrentTitle] = useState<string | null>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null)
   const [groundingSources, setGroundingSources] = useState<{ title: string, url: string }[]>([])
+  const [iframeResetKey, setIframeResetKey] = useState(0) // Incremented on disconnect to force iframe recreation
   const [researchMode, setResearchMode] = useState<'fast' | 'deep'>('fast')
   const narrationContextRef = useRef<string>('')
   const sourceLabelsRef = useRef<string[]>([])
@@ -559,20 +560,41 @@ function App() {
     sessionStartTimeRef.current = null
     setSessionDuration(0)
     setShowDurationWarning(false)
-    // Note: don't reset _preConnectInFlight here — it's managed by preConnectForGalleryGraphic only
-    // Tell backend to end Gemini session, but keep WS alive for fast reconnect
+    // Tell backend to end Gemini session, then close WS entirely.
+    // This ensures the backend's handle_live_restart while loop exits cleanly
+    // instead of eagerly starting a second _run_live_session that would overlap
+    // with the fresh preConnectForGalleryGraphic() WS created for session 2.
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "end_live_session" }))
+      // Detach handlers so onclose doesn't re-enter disconnect()
+      wsRef.current.onclose = null
+      wsRef.current.onerror = null
+      wsRef.current.close()
+      wsRef.current = null
     }
+    // Reset preconnect guard so preConnectForGalleryGraphic() can create a fresh WS
+    _preConnectInFlight = false
     if (audioWorkletNodeRef.current) {
       audioWorkletNodeRef.current.disconnect()
       audioWorkletNodeRef.current = null
     }
-    // Keep micAudioCtxRef alive with worklet loaded — setupMic() reuses it (fast path)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
     }
+    // Close mic AudioContext so session 2 gets a fresh context + worklet registration.
+    // Without this, the old (disconnected) AudioWorkletNode keeps its process() running,
+    // and when micReadyRef becomes true again it sends stale/silent audio to the backend
+    // alongside session 2's real mic audio, confusing Gemini's VAD.
+    // The preload useEffect re-runs automatically after disconnect (phase → 'complete'),
+    // so the worklet is pre-loaded before the user clicks Start for session 2.
+    if (micAudioCtxRef.current) {
+      micAudioCtxRef.current.close()
+      micAudioCtxRef.current = null
+    }
+    workletPreloadedRef.current = false
+    activeAudioNodesRef.current = []
+    audioMutedUntilRef.current = 0
     if (audioCtxRef.current) {
       audioCtxRef.current.close()
       audioCtxRef.current = null
@@ -582,7 +604,14 @@ function App() {
     setHasStarted(false)
     setEagerAudioReady(false)
     prepareLiveSentRef.current = false
+    // Force iframe to recreate from scratch — resets all interactive state
+    // (button labels, animation timers, slider positions) so session 2
+    // looks identical to session 1 (fresh page load).
+    setIframeResetKey(k => k + 1)
+    iframeReadyRef.current = false
+    pendingToolActionsRef.current = []
     // If we're ending a conversation and have a graphic, go back to 'complete'
+    // and pre-connect a fresh WS so the next "Start Live Conversation" click is fast.
     setSessionPhase(prev => {
       if ((prev === 'conversation' || prev === 'complete') && currentSvgRef.current) {
         return 'complete'
@@ -590,6 +619,10 @@ function App() {
       return 'idle'
     })
     setStatusMessage('')
+    // Pre-connect fresh WS for the next session (only if there's a graphic to restart on)
+    if (currentSvgRef.current) {
+      preConnectForGalleryGraphic()
+    }
   }, [stopDurationTimer])
 
   // Attach onmessage/onclose/onerror to a live-restart WebSocket.
@@ -3048,6 +3081,7 @@ function App() {
               {currentSvg ? (
                 <div className="flex-1 overflow-hidden bg-transparent relative w-full h-full">
                   <iframe
+                    key={iframeResetKey}
                     ref={iframeRef}
                     srcDoc={iframeSrcDoc}
                     title="Interactive Graphic"
