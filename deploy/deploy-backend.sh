@@ -35,8 +35,12 @@ fi
 
 # ── 2. Copy backend source to VM ────────────────────────────────────────────
 echo "📦 Copying backend source to VM..."
+gcloud compute ssh "${VM_NAME}" \
+  --zone "${ZONE}" \
+  --project "${PROJECT}" \
+  --command "rm -rf ~/backend"
 gcloud compute scp --recurse \
-  "${REPO_ROOT}/backend/" \
+  "${REPO_ROOT}/backend" \
   "${VM_NAME}:~/backend" \
   --zone "${ZONE}" \
   --project "${PROJECT}"

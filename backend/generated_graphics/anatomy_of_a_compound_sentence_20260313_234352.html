@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Anatomy of a Compound Sentence</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 24px; padding: 24px; background: #f0f4f9; height: 100vh; margin: 0; box-sizing: border-box; }
+        .svg-container { flex: 1; background: white; border-radius: 24px; padding: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .controls-container { width: 380px; background: white; border-radius: 24px; padding: 32px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg viewBox="0 0 800 500" width="100%" height="100%" style="background-color: #f8fafc; overflow: hidden; font-family: system-ui, -apple-system, sans-serif;">
+  <defs>
+    <style>
+      .grammar-box { transition: all 0.4s ease; stroke-width: 2.5; rx: 12; ry: 12; }
+      .grammar-text { font-size: 15px; font-weight: 600; pointer-events: none; transition: fill 0.3s ease; text-anchor: middle; alignment-baseline: middle; }
+      .grammar-label { font-size: 11px; font-weight: 800; letter-spacing: 0.5px; transition: fill 0.3s ease; text-anchor: middle; }
+      .grammar-connection { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 4; fill: none; transition: stroke 0.4s ease; }
+      
+      .spin-slow { animation: spin 15s linear infinite; transform-box: fill-box; transform-origin: center; }
+      .float-down { animation: float-down 2s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+      .pulse-ring { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; transform-box: fill-box; transform-origin: center; }
+      
+      @keyframes spin { 100% { transform: rotate(360deg); } }
+      @keyframes float-down { 100% { transform: translateY(10px); } }
+      @keyframes pulse { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.6); } }
+    </style>
+    
+    <!-- Sun Gradient -->
+    <radialGradient id="sun-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="100%" stop-color="#eab308"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Title / Top Section -->
+  <text x="400" y="40" font-size="20" font-weight="700" fill="#0f172a" text-anchor="middle">Anatomy of a Compound Sentence</text>
+  <text x="400" y="65" font-size="14" font-weight="500" fill="#64748b" text-anchor="middle">Connecting the grammar to the physical action.</text>
+
+  <!-- Visual Connections (Lines from grammar boxes to the scene) -->
+  <path id="conn-condition" d="M 160 170 L 160 210 Q 160 230 200 230" class="grammar-connection" />
+  <path id="conn-subject" d="M 330 170 L 330 350 L 380 350" class="grammar-connection" />
+  <path id="conn-action1" d="M 455 170 L 455 250 L 420 280" class="grammar-connection" />
+  <path id="conn-action2" d="M 640 170 L 640 350 L 420 350" class="grammar-connection" />
+
+  <!-- GRAMMAR ZONES -->
+  <!-- 1. Condition (Adverbial Phrase) -->
+  <g id="node-box-condition">
+    <text id="label-condition" x="160" y="105" class="grammar-label" fill="#94a3b8">THE SETUP (CONDITION)</text>
+    <rect id="box-condition" x="40" y="115" width="240" height="55" class="grammar-box" fill="#ffffff" stroke="#cbd5e1" />
+    <text id="text-condition" x="160" y="145" class="grammar-text" fill="#475569">Given moisture and warmth,</text>
+  </g>
+
+  <!-- 2. Subject -->
+  <g id="node-box-subject">
+    <text id="label-subject" x="330" y="105" class="grammar-label" fill="#94a3b8">SUBJECT</text>
+    <rect id="box-subject" x="290" y="115" width="80" height="55" class="grammar-box" fill="#ffffff" stroke="#cbd5e1" />
+    <text id="text-subject" x="330" y="145" class="grammar-text" fill="#475569">a seed</text>
+  </g>
+
+  <!-- 3. Action 1 -->
+  <g id="node-box-action1">
+    <text id="label-action1" x="455" y="105" class="grammar-label" fill="#94a3b8">PREDICATE 1 (ACTION)</text>
+    <rect id="box-action1" x="380" y="115" width="150" height="55" class="grammar-box" fill="#ffffff" stroke="#cbd5e1" />
+    <text id="text-action1" x="455" y="145" class="grammar-text" fill="#475569">absorbs water</text>
+  </g>
+
+  <!-- 4. Action 2 -->
+  <g id="node-box-action2">
+    <text id="label-action2" x="640" y="105" class="grammar-label" fill="#94a3b8">LINK + PREDICATE 2</text>
+    <rect id="box-action2" x="540" y="115" width="220" height="55" class="grammar-box" fill="#ffffff" stroke="#cbd5e1" />
+    <text id="text-action2" x="650" y="145" class="grammar-text" fill="#475569">and begins to swell slightly.</text>
+  </g>
+
+  <!-- VISUAL METAPHOR SCENE -->
+  
+  <!-- Ground -->
+  <path d="M 0 380 Q 400 360 800 380 L 800 500 L 0 500 Z" fill="#fcd34d" opacity="0.4" />
+  <path d="M 0 380 Q 400 360 800 380" fill="none" stroke="#d97706" stroke-width="4" stroke-dasharray="8 8" opacity="0.6"/>
+
+  <!-- Phase 1: Condition (Sun and Rain) -->
+  <g id="scene-condition" opacity="0" style="transition: opacity 0.5s ease;">
+    <!-- Sun -->
+    <g transform="translate(230, 240)">
+      <g class="spin-slow">
+        <circle cx="0" cy="0" r="30" fill="url(#sun-grad)" />
+        <path d="M 0 -40 L 0 -50 M 0 40 L 0 50 M -40 0 L -50 0 M 40 0 L 50 0 M -28 -28 L -35 -35 M 28 28 L 35 35 M -28 28 L -35 35 M 28 -28 L 35 -35" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" />
+      </g>
+    </g>
+    <!-- Raindrop -->
+    <g transform="translate(150, 230)" class="float-down">
+      <path d="M 0 -20 Q 15 5 15 15 A 15 15 0 0 1 -15 15 Q -15 5 0 -20 Z" fill="#60a5fa" />
+      <path d="M -5 10 A 5 5 0 0 0 0 15" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+    </g>
+  </g>
+
+  <!-- Phase 3: Action 1 (Water Absorption Arrows) -->
+  <g id="scene-action1" opacity="0" style="transition: opacity 0.5s ease;">
+    <g transform="translate(400, 360)">
+      <!-- Arrows pointing IN -->
+      <path d="M -50 -50 L -25 -25 M -25 -25 L -35 -25 M -25 -25 L -25 -35" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 50 -50 L 25 -25 M 25 -25 L 35 -25 M 25 -25 L 25 -35" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M -50 50 L -25 25 M -25 25 L -35 25 M -25 25 L -25 35" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 50 50 L 25 25 M 25 25 L 35 25 M 25 25 L 25 35" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <!-- Phase 4: Action 2 (Swelling Rings) -->
+  <g id="scene-action2" opacity="0" style="transition: opacity 0.5s ease;">
+    <g transform="translate(400, 360)">
+      <ellipse cx="0" cy="0" rx="35" ry="25" fill="none" stroke="#a855f7" stroke-width="3" class="pulse-ring" />
+      <ellipse cx="0" cy="0" rx="45" ry="32" fill="none" stroke="#d8b4fe" stroke-width="2" class="pulse-ring" style="animation-delay: 1s;" />
+    </g>
+  </g>
+
+  <!-- Phase 2: Subject (The Seed) -->
+  <g id="scene-subject" transform="translate(400, 360) scale(0)">
+    <!-- Main Seed Body -->
+    <ellipse id="seed-body" cx="0" cy="0" rx="25" ry="16" fill="#854d0e" stroke="#713f12" stroke-width="3" />
+    <path d="M -15 -5 Q 0 10 15 -5" fill="none" stroke="#a16207" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+</svg>
+    </div>
+    <div class="controls-container">
+        <h2>Anatomy of a Compound Sentence</h2>
+        <p style="color: #64748b;">Use the controls on the right to build the sentence and watch the seed react!</p>
+        
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+        <div id="controls-panel" style="display: flex; flex-direction: column; height: 100%; width: 100%; padding: 24px; box-sizing: border-box; background: #ffffff; color: #0f172a; font-family: system-ui, -apple-system, sans-serif;">
+  
+  <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #1e293b;">Sentence Builder</h2>
+  <p style="margin: 0 0 24px 0; font-size: 14px; color: #64748b; line-height: 1.5;">Drag the slider to build the sentence step-by-step and watch how the grammatical structure matches the physical action of the seed.</p>
+
+  <!-- Controls -->
+  <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <label for="timeSlider" style="font-size: 14px; font-weight: 600;">Sentence Progress:</label>
+      <span id="progressText" style="font-size: 14px; font-weight: 700; color: #3b82f6;">0%</span>
+    </div>
+    
+    <input type="range" id="timeSlider" min="0" max="100" step="any" value="0" style="width: 100%; cursor: pointer; accent-color: #3b82f6;" oninput="updateState(this.value)">
+    
+    <button id="playBtn" onclick="togglePlay()" style="width: 100%; padding: 12px; font-size: 15px; font-weight: 600; color: white; background: #3b82f6; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s ease;">▶ Auto-Play Animation</button>
+  </div>
+
+  <!-- Dynamic Info Panel -->
+  <div id="info-panel" style="margin-top: auto; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; border-left: 4px solid #cbd5e1; transition: border-color 0.3s ease;">
+    <div id="info-phase" style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 8px;">Phase 0: Base</div>
+    <div id="info-title" style="font-weight: 700; font-size: 16px; color: #0f172a; margin-bottom: 8px;">Empty Soil</div>
+    <div id="info-desc" style="font-size: 14px; color: #475569; line-height: 1.6;">Move the slider or press Auto-Play to begin constructing the sentence.</div>
+  </div>
+</div>
+
+<script>
+  let isPlaying = false;
+  let playInterval;
+
+  function setStyles(id, bg, border, textColor, labelColor) {
+    const box = document.getElementById(`box-` + id);
+    const text = document.getElementById(`text-` + id);
+    const label = document.getElementById(`label-` + id);
+    const conn = document.getElementById(`conn-` + id);
+    if(box) { box.setAttribute(`fill`, bg); box.setAttribute(`stroke`, border); }
+    if(text) text.setAttribute(`fill`, textColor);
+    if(label) label.setAttribute(`fill`, labelColor);
+    if(conn) conn.setAttribute(`stroke`, border);
+  }
+
+  function updateState(val) {
+    const v = Number(val);
+    document.getElementById(`progressText`).textContent = Math.round(v) + `%`;
+
+    // 1. Condition logic (20% to 40%)
+    const conditionActive = v >= 20;
+    if(conditionActive) setStyles(`condition`, `#eff6ff`, `#3b82f6`, `#1e40af`, `#2563eb`);
+    else setStyles(`condition`, `#ffffff`, `#cbd5e1`, `#475569`, `#94a3b8`);
+    document.getElementById(`scene-condition`).setAttribute(`opacity`, Math.max(0, Math.min(1, (v - 10) / 10)));
+
+    // 2. Subject logic (40% to 60%)
+    const subjectActive = v >= 40;
+    if(subjectActive) setStyles(`subject`, `#fefce8`, `#eab308`, `#854d0e`, `#ca8a04`);
+    else setStyles(`subject`, `#ffffff`, `#cbd5e1`, `#475569`, `#94a3b8`);
+    const seedScale = Math.max(0, Math.min(1, (v - 30) / 10));
+    
+    // Seed swells in Phase 4 (>80)
+    const swellAmount = v >= 80 ? (v - 80) / 20 * 0.4 : 0;
+    document.getElementById(`scene-subject`).setAttribute(`transform`, `translate(400, 360) scale(${seedScale + swellAmount})`);
+
+    // 3. Action 1 logic (60% to 80%)
+    const action1Active = v >= 60;
+    if(action1Active) setStyles(`action1`, `#f0fdf4`, `#22c55e`, `#166534`, `#16a34a`);
+    else setStyles(`action1`, `#ffffff`, `#cbd5e1`, `#475569`, `#94a3b8`);
+    document.getElementById(`scene-action1`).setAttribute(`opacity`, Math.max(0, Math.min(1, (v - 50) / 10)));
+
+    // 4. Action 2 logic (80% to 100%)
+    const action2Active = v >= 80;
+    if(action2Active) setStyles(`action2`, `#faf5ff`, `#a855f7`, `#6b21a8`, `#9333ea`);
+    else setStyles(`action2`, `#ffffff`, `#cbd5e1`, `#475569`, `#94a3b8`);
+    document.getElementById(`scene-action2`).setAttribute(`opacity`, Math.max(0, Math.min(1, (v - 75) / 5)));
+
+    // Update Info Panel Context
+    const panel = document.getElementById(`info-panel`);
+    const phase = document.getElementById(`info-phase`);
+    const title = document.getElementById(`info-title`);
+    const desc = document.getElementById(`info-desc`);
+
+    if (v < 20) {
+      panel.style.borderColor = `#cbd5e1`; panel.style.backgroundColor = `#f8fafc`;
+      phase.textContent = `Phase 0: Base`;
+      title.textContent = `Empty Soil`;
+      title.style.color = `#0f172a`;
+      desc.textContent = `Move the slider to begin constructing the sentence.`;
+    } else if (v >= 20 && v < 40) {
+      panel.style.borderColor = `#3b82f6`; panel.style.backgroundColor = `#eff6ff`;
+      phase.textContent = `Phase 1: The Setup`;
+      title.textContent = `Adverbial Phrase`;
+      title.style.color = `#1e40af`;
+      desc.textContent = `“Given moisture and warmth,” acts as an adverb. It tells us the condition required for the rest of the sentence to happen.`;
+    } else if (v >= 40 && v < 60) {
+      panel.style.borderColor = `#eab308`; panel.style.backgroundColor = `#fefce8`;
+      phase.textContent = `Phase 2: The Star`;
+      title.textContent = `Simple Subject`;
+      title.style.color = `#854d0e`;
+      desc.textContent = `“a seed” is the simple subject. It is the noun that performs the actions in the sentence.`;
+    } else if (v >= 60 && v < 80) {
+      panel.style.borderColor = `#22c55e`; panel.style.backgroundColor = `#f0fdf4`;
+      phase.textContent = `Phase 3: The First Action`;
+      title.textContent = `Predicate Part 1`;
+      title.style.color = `#166534`;
+      desc.textContent = `“absorbs water” is the first part of the compound predicate. The subject (seed) performs this verb first.`;
+    } else {
+      panel.style.borderColor = `#a855f7`; panel.style.backgroundColor = `#faf5ff`;
+      phase.textContent = `Phase 4: The Second Action`;
+      title.textContent = `Conjunction + Predicate Part 2`;
+      title.style.color = `#6b21a8`;
+      desc.textContent = `“and begins to swell slightly.” The conjunction “and” links the first action to this second action, completing the compound predicate.`;
+    }
+
+    // Telemetry
+    if (window.sendEventToAI && (Math.round(v) % 20 === 0)) {
+      window.sendEventToAI(`User moved sentence grammar builder to ${Math.round(v)}%`);
+    }
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    const btn = document.getElementById(`playBtn`);
+    
+    if (isPlaying) {
+      btn.innerHTML = `⏸ Pause Animation`;
+      btn.style.background = `#0f172a`;
+      clearInterval(playInterval);
+      playInterval = setInterval(() => {
+        let slider = document.getElementById(`timeSlider`);
+        let nextVal = Number(slider.value) + 0.3;
+        if (nextVal > 100) nextVal = 0;
+        slider.value = nextVal;
+        updateState(nextVal);
+      }, 30);
+    } else {
+      btn.innerHTML = `▶ Auto-Play Animation`;
+      btn.style.background = `#3b82f6`;
+      clearInterval(playInterval);
+    }
+  }
+
+  // Init state
+  updateState(0);
+</script>
+    </div>
+</body>
+</html>

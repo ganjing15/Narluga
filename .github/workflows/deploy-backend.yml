@@ -34,13 +34,12 @@ jobs:
           gcloud compute ssh ${{ secrets.VM_NAME || 'narluga-vm' }} \
             --zone ${{ secrets.VM_ZONE || 'us-central1-a' }} \
             --project ${{ secrets.GCP_PROJECT_ID }} \
-            --tunnel-through-iap \
             --command="echo 'SSH Keys Configured'"
 
       - name: Create Backend Environment File
         run: |
           mkdir -p backend
-          cat << EOF > backend/.env
+          cat << 'EOF' > backend/.env
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           SUPADATA_API_KEY=${{ secrets.SUPADATA_API_KEY }}
           GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}

@@ -394,18 +394,18 @@ function App() {
       if (!user) { console.error('Not signed in'); return }
       return patchGraphicsSvg(user.uid, title, find, replace)
     }
-    ;(window as any)._publishExample = (graphicId: string, order: number) => {
-      if (!user) { console.error('Not signed in'); return }
-      return publishToExamples(user.uid, graphicId, order)
-    }
-    ;(window as any)._clearExamples = () => clearPublicExamples()
-    ;(window as any)._patchPublicExamples = (title: string, find: string, replace: string) =>
-      patchPublicExamplesSvg(title, find, replace)
-    ;(window as any)._inspectPublicExample = (title: string, keyword: string) =>
-      inspectPublicExampleSvg(title, keyword)
-    ;(window as any)._listGraphicIds = () => {
-      savedGraphics.forEach((g, i) => console.log(`${i}: ${g.id} — "${g.title}"`))
-    }
+      ; (window as any)._publishExample = (graphicId: string, order: number) => {
+        if (!user) { console.error('Not signed in'); return }
+        return publishToExamples(user.uid, graphicId, order)
+      }
+      ; (window as any)._clearExamples = () => clearPublicExamples()
+      ; (window as any)._patchPublicExamples = (title: string, find: string, replace: string) =>
+        patchPublicExamplesSvg(title, find, replace)
+      ; (window as any)._inspectPublicExample = (title: string, keyword: string) =>
+        inspectPublicExampleSvg(title, keyword)
+      ; (window as any)._listGraphicIds = () => {
+        savedGraphics.forEach((g, i) => console.log(`${i}: ${g.id} — "${g.title}"`))
+      }
   }, [user, savedGraphics])
 
   // Firebase auth state listener
@@ -2902,7 +2902,7 @@ function App() {
                           <span className="status-detail">
                             {sessionPhase === 'analyzing'
                               ? `Processing ${sources.length} source${sources.length !== 1 ? 's' : ''}…`
-                              : 'Takes a couple minutes'}
+                              : 'Takes a couple of minutes'}
                           </span>
                         </div>
                       </div>
@@ -3099,7 +3099,7 @@ function App() {
                     <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
                       {sessionPhase === 'analyzing'
                         ? 'Reading and understanding your sources...'
-                        : 'This usually takes 30–60 seconds'}
+                        : 'This usually takes a couple of minutes'}
                     </p>
                   </div>
                 </div>
