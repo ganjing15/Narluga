@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "gen-lang-client-0129909190"
-  }
+  },
+  "targets": {
+    "gen-lang-client-0129909190": {
+      "hosting": {
+        "narluga": [
+          "narluga"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
