@@ -50,7 +50,7 @@ gcloud compute scp \
   --project "${PROJECT}"
 
 # ── 4. Build Docker image + start container ─────────────────────────────────
-ALLOWED_ORIGINS="https://${DOMAIN},https://${PROJECT}.web.app,https://${PROJECT}.firebaseapp.com,http://localhost:5173"
+ALLOWED_ORIGINS="https://${DOMAIN},https://narluga.web.app,https://narluga.firebaseapp.com,https://${PROJECT}.web.app,https://${PROJECT}.firebaseapp.com,http://localhost:5173"
 
 echo "🐳 Building Docker image and starting container..."
 gcloud compute ssh "${VM_NAME}" \
