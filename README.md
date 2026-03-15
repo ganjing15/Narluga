@@ -10,6 +10,25 @@ Built for the **Live Agents** category of the [Gemini Live Agent Challenge](http
 
 > **Live app**: [https://narluga.web.app](https://narluga.web.app)
 
+## Try It (Testing Instructions for Judges)
+
+**Option A — Use the live app (recommended):**
+
+1. Go to [narluga.web.app](https://narluga.web.app)
+2. Browse the **Examples** gallery to see pre-built interactive diagrams instantly
+3. To generate your own:
+   - Paste a URL (e.g. a Wikipedia article) or type a short note in the sidebar
+   - Click **Generate** and wait a couple minutes for the diagram to appear
+4. Click **Start Live Conversation** (requires microphone permission)
+   - Listen to the AI explain the diagram — watch it highlight elements and toggle animations as it speaks
+   - Try interrupting by clicking a control mid-conversation — the AI will pause and adapt
+   - Ask something beyond the source material (e.g. "Can you find out more about X?") to see Google Search grounding in action
+5. Click **End Conversation** when done
+
+**Option B — Run locally:**
+
+Follow the [Getting Started](#getting-started) instructions below. Set `DISABLE_AUTH=true` in `backend/.env` to skip authentication.
+
 ## How It Works
 
 1. **Add sources** — Paste URLs (websites, YouTube), type notes, upload files, or run a web search
