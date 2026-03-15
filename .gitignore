@@ -24,5 +24,11 @@ debug_svg.xml
 # Reference code (not part of the app)
 uttered_reference/
 
+# Blog post (published externally)
+blog-post.md
+
+# Security docs (internal only)
+SECURITY.md
+
 # OS
 .DS_Store

@@ -22,8 +22,8 @@ The AI doesn't just talk — it **acts**. During conversation it autonomously hi
 
 ```mermaid
 graph TB
-    subgraph "Frontend — Firebase Hosting"
-        SPA["React SPA<br/>(TypeScript + Vite)"]
+    subgraph "Frontend"
+        SPA["React SPA<br/>(Firebase Hosting)"]
         AUTH["Firebase Auth<br/>(Google Sign-In)"]
         FS["Cloud Firestore<br/>(Saved Graphics)"]
     end
@@ -99,8 +99,6 @@ sequenceDiagram
 ### Live Voice Conversation
 - Real-time bidirectional audio via Gemini 2.5 Flash Native Audio
 - Natural interruption handling — interact with the diagram mid-conversation and the AI pauses to listen
-- Language-aware — responds in whatever language you speak, regardless of source content language
-
 ### Agentic Diagram Control
 The AI autonomously manipulates the diagram while speaking:
 - **Highlight** elements with animated glow effects
