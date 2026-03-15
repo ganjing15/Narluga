@@ -1037,6 +1037,8 @@ function App() {
           if (data.narration_context) narrationContextRef.current = data.narration_context
           if (data.source_labels) sourceLabelsRef.current = data.source_labels
           if (data.controls_inventory) controlsInventoryRef.current = data.controls_inventory
+          // Push history state so browser back returns to homepage
+          window.history.pushState({ page: 'graphic' }, '')
           // Improvement C: store generation-time grounding citations
           setGroundingSources(data.grounding_sources || [])
 
@@ -1185,6 +1187,41 @@ function App() {
     setError('')
   }, [disconnect])
 
+  // Browser history management — tag initial state and handle back button
+  useEffect(() => {
+    window.history.replaceState({ page: 'home' }, '')
+    const handlePopState = () => {
+      // Back button pressed — return to homepage
+      if (currentSvgRef.current) {
+        // Currently viewing a graphic — reset to homepage grid
+        setSources([])
+        currentSvgRef.current = null
+        disconnect()
+        _preConnectInFlight = false
+        if (wsRef.current) {
+          wsRef.current.onclose = null
+          wsRef.current.onerror = null
+          wsRef.current.onmessage = null
+          wsRef.current.close()
+          wsRef.current = null
+        }
+        setCurrentSvg(null)
+        setCurrentControls(null)
+        setCurrentTitle(null)
+        setCurrentSubtitle(null)
+        setGroundingSources([])
+        narrationContextRef.current = ''
+        sourceLabelsRef.current = []
+        setSessionPhase('idle')
+        setStatusMessage('')
+        setError('')
+      }
+      setCurrentPage('home')
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [disconnect])
+
   // Load a saved graphic as an example (same logic as opening from gallery)
   const loadExample = useCallback((g: SavedGraphic) => {
     setCurrentSvg(g.svg_html)
@@ -1198,6 +1235,7 @@ function App() {
     setSessionPhase('complete')
     _preConnectInFlight = false
     preConnectForGalleryGraphic()
+    window.history.pushState({ page: 'graphic' }, '')
   }, [])
 
   // Pre-load AudioWorklet module early (during designing phase) so it's ready
@@ -2394,6 +2432,7 @@ function App() {
             _preConnectInFlight = false
             // Pre-connect WS so the first "Start Live Conversation" click uses the fast path
             preConnectForGalleryGraphic()
+            window.history.pushState({ page: 'graphic' }, '')
           }}
           onDeleteGraphic={(id) => setSavedGraphics(prev => prev.filter(x => x.id !== id))}
           onBack={() => setCurrentPage('home')}
@@ -2472,7 +2511,7 @@ function App() {
                       {/* My Graphics nav link */}
                       <div className="px-2 py-2">
                         <button
-                          onClick={() => { setCurrentPage('gallery'); setShowAccountMenu(false) }}
+                          onClick={() => { setCurrentPage('gallery'); setShowAccountMenu(false); window.history.pushState({ page: 'gallery' }, '') }}
                           className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700 font-medium group"
                         >
                           <span>My Graphics</span>

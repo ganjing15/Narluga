@@ -27,6 +27,9 @@ uttered_reference/
 # Blog post (published externally)
 blog-post.md
 
+# Generated images (for Devpost upload, not repo)
+architecture-diagram.png
+
 # Security docs (internal only)
 SECURITY.md
 
