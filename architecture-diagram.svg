@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.12"/>
+    </filter>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#5E97F6"/>
+    </linearGradient>
+    <linearGradient id="geminiGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FBBC04"/>
+      <stop offset="100%" stop-color="#F9AB00"/>
+    </linearGradient>
+    <linearGradient id="backendGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#34A853"/>
+      <stop offset="100%" stop-color="#2E9B4B"/>
+    </linearGradient>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4285F4"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34A853"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#F9AB00"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#5F6368"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#EA4335"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="820" fill="#F8F9FA" rx="12"/>
+
+  <!-- Title -->
+  <text x="600" y="42" text-anchor="middle" font-size="24" font-weight="700" fill="#202124">Narluga — System Architecture</text>
+  <text x="600" y="65" text-anchor="middle" font-size="13" fill="#5F6368">Gemini Live Agent Challenge — Live Agents Category</text>
+
+  <!-- ============ USER ============ -->
+  <g transform="translate(80, 120)">
+    <!-- User icon -->
+    <circle cx="30" cy="20" r="16" fill="#E8EAED" stroke="#5F6368" stroke-width="1.5"/>
+    <circle cx="30" cy="14" r="6" fill="#5F6368"/>
+    <path d="M18 28 Q30 36 42 28" stroke="#5F6368" stroke-width="2" fill="none"/>
+    <text x="30" y="52" text-anchor="middle" font-size="13" font-weight="600" fill="#202124">User</text>
+    <text x="30" y="67" text-anchor="middle" font-size="10" fill="#5F6368">Voice + Interaction</text>
+  </g>
+
+  <!-- ============ FRONTEND GROUP ============ -->
+  <rect x="200" y="90" width="340" height="280" rx="12" fill="#E8F0FE" stroke="#4285F4" stroke-width="1.5" stroke-dasharray="6,3" filter="url(#shadow)"/>
+  <rect x="200" y="90" width="340" height="32" rx="12" fill="url(#headerGrad)"/>
+  <rect x="200" y="110" width="340" height="12" fill="url(#headerGrad)"/>
+  <text x="370" y="112" text-anchor="middle" font-size="13" font-weight="600" fill="white">Frontend — Firebase Hosting</text>
+
+  <!-- React SPA box -->
+  <rect x="220" y="138" width="300" height="52" rx="8" fill="white" stroke="#4285F4" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="370" y="160" text-anchor="middle" font-size="13" font-weight="600" fill="#1A73E8">React SPA</text>
+  <text x="370" y="178" text-anchor="middle" font-size="10" fill="#5F6368">TypeScript + Vite + Tailwind CSS</text>
+
+  <!-- Sandboxed Iframe -->
+  <rect x="220" y="200" width="145" height="52" rx="8" fill="white" stroke="#4285F4" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="292" y="222" text-anchor="middle" font-size="11" font-weight="600" fill="#1A73E8">Sandboxed Iframe</text>
+  <text x="292" y="238" text-anchor="middle" font-size="10" fill="#5F6368">Interactive SVG</text>
+
+  <!-- Web Audio -->
+  <rect x="375" y="200" width="145" height="52" rx="8" fill="white" stroke="#4285F4" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="447" y="222" text-anchor="middle" font-size="11" font-weight="600" fill="#1A73E8">Web Audio API</text>
+  <text x="447" y="238" text-anchor="middle" font-size="10" fill="#5F6368">AudioWorklet (PCM)</text>
+
+  <!-- Firebase Auth -->
+  <rect x="220" y="264" width="145" height="48" rx="8" fill="white" stroke="#4285F4" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="292" y="284" text-anchor="middle" font-size="11" font-weight="600" fill="#1A73E8">Firebase Auth</text>
+  <text x="292" y="300" text-anchor="middle" font-size="10" fill="#5F6368">Google Sign-In</text>
+
+  <!-- Cloud Firestore -->
+  <rect x="375" y="264" width="145" height="48" rx="8" fill="white" stroke="#4285F4" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="447" y="284" text-anchor="middle" font-size="11" font-weight="600" fill="#1A73E8">Cloud Firestore</text>
+  <text x="447" y="300" text-anchor="middle" font-size="10" fill="#5F6368">Saved Graphics</text>
+
+  <!-- ============ BACKEND GROUP ============ -->
+  <rect x="620" y="90" width="280" height="280" rx="12" fill="#E6F4EA" stroke="#34A853" stroke-width="1.5" stroke-dasharray="6,3" filter="url(#shadow)"/>
+  <rect x="620" y="90" width="280" height="32" rx="12" fill="url(#backendGrad)"/>
+  <rect x="620" y="110" width="280" height="12" fill="url(#backendGrad)"/>
+  <text x="760" y="112" text-anchor="middle" font-size="13" font-weight="600" fill="white">Backend — GCP e2-micro VM</text>
+
+  <!-- FastAPI -->
+  <rect x="640" y="138" width="240" height="52" rx="8" fill="white" stroke="#34A853" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="760" y="160" text-anchor="middle" font-size="13" font-weight="600" fill="#1E8E3E">FastAPI Server</text>
+  <text x="760" y="178" text-anchor="middle" font-size="10" fill="#5F6368">Python + google-genai SDK</text>
+
+  <!-- Source Aggregation -->
+  <rect x="640" y="200" width="115" height="52" rx="8" fill="white" stroke="#34A853" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="697" y="219" text-anchor="middle" font-size="11" font-weight="600" fill="#1E8E3E">Source</text>
+  <text x="697" y="234" text-anchor="middle" font-size="11" font-weight="600" fill="#1E8E3E">Aggregation</text>
+  <text x="697" y="247" text-anchor="middle" font-size="9" fill="#5F6368">Scrape + Parse</text>
+
+  <!-- Live Session -->
+  <rect x="765" y="200" width="115" height="52" rx="8" fill="white" stroke="#34A853" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="822" y="219" text-anchor="middle" font-size="11" font-weight="600" fill="#1E8E3E">Live Session</text>
+  <text x="822" y="234" text-anchor="middle" font-size="11" font-weight="600" fill="#1E8E3E">Manager</text>
+  <text x="822" y="247" text-anchor="middle" font-size="9" fill="#5F6368">Audio + Tools</text>
+
+  <!-- Docker + Caddy -->
+  <rect x="640" y="264" width="240" height="48" rx="8" fill="white" stroke="#34A853" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="760" y="284" text-anchor="middle" font-size="11" font-weight="600" fill="#1E8E3E">Docker + Caddy</text>
+  <text x="760" y="300" text-anchor="middle" font-size="10" fill="#5F6368">Auto-SSL via Let's Encrypt</text>
+
+  <!-- ============ GEMINI API GROUP ============ -->
+  <rect x="200" y="440" width="700" height="160" rx="12" fill="#FEF7E0" stroke="#F9AB00" stroke-width="1.5" stroke-dasharray="6,3" filter="url(#shadow)"/>
+  <rect x="200" y="440" width="700" height="32" rx="12" fill="url(#geminiGrad)"/>
+  <rect x="200" y="460" width="700" height="12" fill="url(#geminiGrad)"/>
+  <text x="550" y="462" text-anchor="middle" font-size="13" font-weight="600" fill="white">Google AI &amp; Cloud Services</text>
+
+  <!-- Gemini 3.1 Pro -->
+  <rect x="220" y="488" width="200" height="56" rx="8" fill="white" stroke="#F9AB00" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="320" y="510" text-anchor="middle" font-size="12" font-weight="600" fill="#E37400">Gemini 3.1 Pro Preview</text>
+  <text x="320" y="528" text-anchor="middle" font-size="10" fill="#5F6368">Interactive SVG Generation</text>
+
+  <!-- Gemini 2.5 Flash -->
+  <rect x="440" y="488" width="220" height="56" rx="8" fill="white" stroke="#F9AB00" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="550" y="510" text-anchor="middle" font-size="12" font-weight="600" fill="#E37400">Gemini 2.5 Flash Audio</text>
+  <text x="550" y="528" text-anchor="middle" font-size="10" fill="#5F6368">Live Voice + Agentic Tool Use</text>
+
+  <!-- Google Search -->
+  <rect x="680" y="488" width="200" height="56" rx="8" fill="white" stroke="#EA4335" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="780" y="510" text-anchor="middle" font-size="12" font-weight="600" fill="#D93025">Google Search</text>
+  <text x="780" y="528" text-anchor="middle" font-size="10" fill="#5F6368">Grounding &amp; Fact-Checking</text>
+
+  <!-- Supadata -->
+  <rect x="440" y="556" width="220" height="34" rx="8" fill="white" stroke="#5F6368" stroke-width="1" filter="url(#shadow)"/>
+  <text x="550" y="578" text-anchor="middle" font-size="11" fill="#5F6368">Supadata API (YouTube Transcripts)</text>
+
+  <!-- ============ TOOL ACTIONS BOX ============ -->
+  <rect x="200" y="660" width="700" height="130" rx="12" fill="#F3E8FD" stroke="#A142F4" stroke-width="1.5" stroke-dasharray="6,3" filter="url(#shadow)"/>
+  <rect x="200" y="660" width="700" height="32" rx="12" fill="#A142F4"/>
+  <rect x="200" y="680" width="700" height="12" fill="#A142F4"/>
+  <text x="550" y="682" text-anchor="middle" font-size="13" font-weight="600" fill="white">Agentic Tool Actions (Real-Time During Voice Conversation)</text>
+
+  <!-- Tool boxes -->
+  <rect x="220" y="706" width="105" height="38" rx="6" fill="white" stroke="#A142F4" stroke-width="1" filter="url(#shadow)"/>
+  <text x="272" y="729" text-anchor="middle" font-size="10" font-weight="600" fill="#7627BB">highlight</text>
+
+  <rect x="335" y="706" width="105" height="38" rx="6" fill="white" stroke="#A142F4" stroke-width="1" filter="url(#shadow)"/>
+  <text x="387" y="729" text-anchor="middle" font-size="10" font-weight="600" fill="#7627BB">click</text>
+
+  <rect x="450" y="706" width="105" height="38" rx="6" fill="white" stroke="#A142F4" stroke-width="1" filter="url(#shadow)"/>
+  <text x="502" y="729" text-anchor="middle" font-size="10" font-weight="600" fill="#7627BB">modify</text>
+
+  <rect x="565" y="706" width="105" height="38" rx="6" fill="white" stroke="#A142F4" stroke-width="1" filter="url(#shadow)"/>
+  <text x="617" y="729" text-anchor="middle" font-size="10" font-weight="600" fill="#7627BB">navigate</text>
+
+  <rect x="680" y="706" width="105" height="38" rx="6" fill="white" stroke="#A142F4" stroke-width="1" filter="url(#shadow)"/>
+  <text x="732" y="729" text-anchor="middle" font-size="10" font-weight="600" fill="#7627BB">zoom</text>
+
+  <rect x="795" y="706" width="85" height="38" rx="6" fill="white" stroke="#A142F4" stroke-width="1" filter="url(#shadow)"/>
+  <text x="837" y="729" text-anchor="middle" font-size="10" font-weight="600" fill="#7627BB">fetch</text>
+
+  <text x="550" y="770" text-anchor="middle" font-size="10" fill="#5F6368">AI autonomously highlights elements, clicks controls, modifies styles, navigates, zooms, and queries Google Search while speaking</text>
+
+  <!-- ============ CONNECTIONS ============ -->
+
+  <!-- User → Frontend (voice + interaction) -->
+  <line x1="140" y1="150" x2="200" y2="162" stroke="#5F6368" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <text x="165" y="142" text-anchor="middle" font-size="9" fill="#5F6368" transform="rotate(-5, 165, 142)">Voice +</text>
+  <text x="165" y="153" text-anchor="middle" font-size="9" fill="#5F6368" transform="rotate(-5, 165, 153)">Interaction</text>
+
+  <!-- Frontend ↔ Backend (WebSocket) -->
+  <line x1="540" y1="164" x2="640" y2="164" stroke="#4285F4" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+  <line x1="640" y1="174" x2="540" y2="174" stroke="#34A853" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <rect x="554" y="148" width="72" height="16" rx="4" fill="white" stroke="#5F6368" stroke-width="0.5"/>
+  <text x="590" y="160" text-anchor="middle" font-size="9" font-weight="600" fill="#5F6368">WebSocket</text>
+  <text x="590" y="190" text-anchor="middle" font-size="9" fill="#5F6368">Bidirectional Audio</text>
+
+  <!-- Backend → Gemini Pro -->
+  <line x1="697" y1="320" x2="340" y2="488" stroke="#F9AB00" stroke-width="2" marker-end="url(#arrowOrange)" stroke-dasharray="5,3"/>
+  <text x="490" y="395" text-anchor="middle" font-size="9" fill="#E37400" transform="rotate(-22, 490, 395)">Sources → SVG Generation</text>
+
+  <!-- Backend → Gemini Flash -->
+  <line x1="760" y1="320" x2="560" y2="488" stroke="#F9AB00" stroke-width="2" marker-end="url(#arrowOrange)" stroke-dasharray="5,3"/>
+  <text x="690" y="400" text-anchor="middle" font-size="9" fill="#E37400" transform="rotate(-27, 690, 400)">Audio Stream ↕</text>
+
+  <!-- Backend → Google Search -->
+  <line x1="822" y1="320" x2="780" y2="488" stroke="#EA4335" stroke-width="1.5" marker-end="url(#arrowRed)" stroke-dasharray="5,3"/>
+  <text x="820" y="410" text-anchor="middle" font-size="9" fill="#D93025">Grounding</text>
+
+  <!-- Gemini Flash → Tools -->
+  <line x1="550" y1="544" x2="550" y2="660" stroke="#A142F4" stroke-width="2" marker-end="url(#arrowGray)" stroke-dasharray="4,3"/>
+  <text x="565" y="610" font-size="9" fill="#7627BB">Tool Calls</text>
+
+  <!-- Legend -->
+  <rect x="960" y="90" width="220" height="280" rx="10" fill="white" stroke="#DADCE0" stroke-width="1" filter="url(#shadow)"/>
+  <text x="1070" y="115" text-anchor="middle" font-size="12" font-weight="600" fill="#202124">Legend</text>
+
+  <rect x="980" y="132" width="12" height="12" rx="3" fill="#4285F4"/>
+  <text x="1000" y="143" font-size="10" fill="#5F6368">Firebase / Frontend</text>
+
+  <rect x="980" y="156" width="12" height="12" rx="3" fill="#34A853"/>
+  <text x="1000" y="167" font-size="10" fill="#5F6368">GCP Backend</text>
+
+  <rect x="980" y="180" width="12" height="12" rx="3" fill="#FBBC04"/>
+  <text x="1000" y="191" font-size="10" fill="#5F6368">Gemini AI Models</text>
+
+  <rect x="980" y="204" width="12" height="12" rx="3" fill="#EA4335"/>
+  <text x="1000" y="215" font-size="10" fill="#5F6368">Google Search</text>
+
+  <rect x="980" y="228" width="12" height="12" rx="3" fill="#A142F4"/>
+  <text x="1000" y="239" font-size="10" fill="#5F6368">Agentic Tools</text>
+
+  <line x1="980" y1="260" x2="1160" y2="260" stroke="#DADCE0" stroke-width="0.5"/>
+
+  <text x="1070" y="280" text-anchor="middle" font-size="11" font-weight="600" fill="#202124">Google Cloud Services</text>
+  <text x="980" y="300" font-size="10" fill="#5F6368">- Compute Engine (e2-micro)</text>
+  <text x="980" y="316" font-size="10" fill="#5F6368">- Firebase Hosting</text>
+  <text x="980" y="332" font-size="10" fill="#5F6368">- Cloud Firestore</text>
+  <text x="980" y="348" font-size="10" fill="#5F6368">- Firebase Authentication</text>
+  <text x="980" y="364" font-size="10" fill="#5F6368">- Gemini API (GenAI SDK)</text>
+
+  <!-- Cost badge -->
+  <rect x="960" y="380" width="220" height="30" rx="6" fill="#E6F4EA" stroke="#34A853" stroke-width="1"/>
+  <text x="1070" y="400" text-anchor="middle" font-size="11" font-weight="600" fill="#1E8E3E">Cost: $0 (Always-Free Tier)</text>
+</svg>
