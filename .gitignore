@@ -30,6 +30,10 @@ blog-post.md
 
 # Generated images (for Devpost upload, not repo)
 architecture-diagram.png
+thumbnail.png
+
+# Firebase hosting cache
+.firebase/
 
 # Security docs (internal only)
 SECURITY.md
