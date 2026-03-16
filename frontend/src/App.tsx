@@ -3066,6 +3066,12 @@ function App() {
                         </div>
                       </div>
 
+                      {error && (
+                        <div className="w-full mb-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm text-center font-medium">
+                          {error}
+                        </div>
+                      )}
+
                       <button
                         onClick={startPresentation}
                         onPointerEnter={prepareLive}
