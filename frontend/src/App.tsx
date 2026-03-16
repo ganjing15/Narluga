@@ -2925,7 +2925,6 @@ function App() {
                         </div>
                       )}
 
-                      {error && <p className="text-red-500 mt-4 text-sm text-center">{error}</p>}
                     </div>
                   )}
 
