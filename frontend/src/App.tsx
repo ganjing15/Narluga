@@ -123,6 +123,7 @@ function App() {
   const [isSearching, setIsSearching] = useState(false)
   const [selectedSearchUrls, setSelectedSearchUrls] = useState<Set<string>>(new Set())
   const [showSearchPanel, setShowSearchPanel] = useState(false)
+  const [searchError, setSearchError] = useState('')
 
   // Session state
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>('idle')
@@ -320,6 +321,7 @@ function App() {
     if (!query.trim()) return
     setIsSearching(true)
     setSearchResults([])
+    setSearchError('')
     setSelectedSearchUrls(new Set())
     setShowSearchPanel(true)
     try {
@@ -335,12 +337,14 @@ function App() {
       if (!res.ok) {
         const errText = await res.text()
         console.error('Search HTTP error', res.status, errText)
+        setSearchError(`Search failed (${res.status}). The server may be experiencing issues.`)
         return
       }
       const data = await res.json()
       setSearchResults(data.results || [])
     } catch (e) {
       console.error('Search failed', e)
+      setSearchError('Could not reach the server. Check your connection.')
     } finally {
       setIsSearching(false)
     }
@@ -2680,6 +2684,8 @@ function App() {
                               <span className="spinner" />
                               <span>Searching with Gemini…</span>
                             </div>
+                          ) : searchError ? (
+                            <div className="search-results-empty" style={{ color: '#dc2626' }}>{searchError}</div>
                           ) : searchResults.length === 0 ? (
                             <div className="search-results-empty">No results found. Try a different query.</div>
                           ) : (

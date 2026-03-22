@@ -254,7 +254,7 @@ async def web_search_sources(query: str, depth: str = "fast") -> list[dict]:
         return results
     except Exception as e:
         print(f"[Search] Error: {e}")
-        return []
+        raise
 
 
 async def gather_source_content(sources: list, send_status, use_deep_digest: bool = False) -> tuple[str, list[str]]:
