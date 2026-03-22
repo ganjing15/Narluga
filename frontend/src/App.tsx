@@ -721,7 +721,9 @@ function App() {
         wsRef.current = null
         return
       }
-      if (event.code === 1000 && event.reason) {
+      if (event.code === 4001) {
+        setError('Sign-in required. Please sign in and try again.')
+      } else if (event.code === 1000 && event.reason) {
         setStatusMessage(event.reason)
       } else if (!event.wasClean && event.code !== 1000 && event.code !== 1005) {
         setError(`Connection lost (${event.code}). Click 'Start Live Conversation' to reconnect.`)
@@ -814,6 +816,17 @@ function App() {
 
   // Start live conversation (mic + audio)
   const startPresentation = async () => {
+    // Auth guard: prompt sign-in if user isn't authenticated
+    if (!user) {
+      try {
+        const signedInUser = await signInWithGoogle()
+        if (!signedInUser) return  // User cancelled the popup
+      } catch {
+        setError('Sign-in is required to start a conversation.')
+        return
+      }
+    }
+
     setIsStartingConversation(true)
     setSessionPhase('conversation')  // Transition UI immediately on ALL paths
     setStatusMessage('Connecting to AI...')
@@ -985,6 +998,17 @@ function App() {
   const startSession = async () => {
     if (sources.length === 0) return
 
+    // Auth guard: prompt sign-in if user isn't authenticated
+    if (!user) {
+      try {
+        const signedInUser = await signInWithGoogle()
+        if (!signedInUser) return  // User cancelled the popup
+      } catch {
+        setError('Sign-in is required to create graphics.')
+        return
+      }
+    }
+
     setIsConnecting(true)
     setError('')
     setSessionPhase('analyzing')
@@ -1146,7 +1170,9 @@ function App() {
       }
 
       ws.onclose = (event) => {
-        if (event.code === 1000 && event.reason) {
+        if (event.code === 4001) {
+          setError('Sign-in required. Please sign in and try again.')
+        } else if (event.code === 1000 && event.reason) {
           setStatusMessage(event.reason)
         } else if (!serverErrorReceived && !event.wasClean && event.code !== 1000 && event.code !== 1005) {
           setError(`Connection lost (${event.code}). Click 'Start Live Conversation' to reconnect.`)
