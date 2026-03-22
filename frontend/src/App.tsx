@@ -107,17 +107,8 @@ function sourceFromLabel(rawLabel: string, index: number): Source {
 let _preConnectInFlight = false
 
 function App() {
-  // Source management — restore from localStorage after sign-in redirect
-  const [sources, setSources] = useState<Source[]>(() => {
-    try {
-      const saved = localStorage.getItem('pending_sources')
-      if (saved) {
-        localStorage.removeItem('pending_sources')
-        return JSON.parse(saved)
-      }
-    } catch { /* ignore */ }
-    return []
-  })
+  // Source management
+  const [sources, setSources] = useState<Source[]>([])
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
   const [inputValue, setInputValue] = useState('')
@@ -2563,10 +2554,7 @@ function App() {
               ) : (
                 <button
                   onClick={async () => {
-                    try {
-                      if (sources.length > 0) localStorage.setItem('pending_sources', JSON.stringify(sources))
-                      await signInWithGoogle()
-                    } catch (e: any) { setError(e.message) }
+                    try { await signInWithGoogle() } catch (e: any) { setError(e.message) }
                   }}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all text-sm font-medium text-slate-700"
                 >
@@ -3237,8 +3225,8 @@ function App() {
             <button
               onClick={async () => {
                 try {
-                  if (sources.length > 0) localStorage.setItem('pending_sources', JSON.stringify(sources))
                   await signInWithGoogle()
+                  setShowSignInModal(false)
                 } catch (e: any) {
                   setError(e.message)
                   setShowSignInModal(false)
