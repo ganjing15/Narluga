@@ -7,7 +7,7 @@ import { initializeApp, type FirebaseApp } from 'firebase/app'
 import {
     getAuth,
     GoogleAuthProvider,
-    signInWithPopup,
+    signInWithRedirect,
     signOut,
     onAuthStateChanged,
     type Auth,
@@ -60,10 +60,9 @@ if (isFirebaseConfigured) {
 
 const googleProvider = new GoogleAuthProvider()
 
-export async function signInWithGoogle(): Promise<User | null> {
-    if (!auth) return null
-    const result = await signInWithPopup(auth, googleProvider)
-    return result.user
+export async function signInWithGoogle(): Promise<void> {
+    if (!auth) return
+    await signInWithRedirect(auth, googleProvider)
 }
 
 export async function firebaseSignOut(): Promise<void> {
