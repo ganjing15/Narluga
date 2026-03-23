@@ -3,7 +3,7 @@
         "rules": "firestore.rules"
     },
     "hosting": {
-        "site": "narluga",
+        "site": "narluga-app",
         "public": "frontend/dist",
         "ignore": [
             "firebase.json",
