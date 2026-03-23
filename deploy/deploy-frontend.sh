@@ -22,6 +22,6 @@ echo "☁️  Deploying to Firebase Hosting..."
 cd "${REPO_ROOT}"
 npx firebase-tools deploy --only hosting --project "${PROJECT}"
 
-HOSTING_URL="https://narluga.web.app"
+HOSTING_URL="https://narluga-app.web.app"
 echo ""
 echo "✅ Frontend deployed to ${HOSTING_URL}"

@@ -5,8 +5,8 @@
   "targets": {
     "gen-lang-client-0129909190": {
       "hosting": {
-        "narluga": [
-          "narluga"
+        "narluga-app": [
+          "narluga-app"
         ]
       }
     }
