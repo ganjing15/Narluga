@@ -8,13 +8,13 @@ Built for the **Live Agents** category of the [Gemini Live Agent Challenge](http
 
 ## Demo
 
-> **Live app**: [https://narluga.web.app](https://narluga.web.app)
+> **Live app**: [https://narluga-app.web.app](https://narluga-app.web.app)
 
 ## Try It (Testing Instructions for Judges)
 
 **Option A — Use the live app (recommended):**
 
-1. Go to [narluga.web.app](https://narluga.web.app)
+1. Go to [narluga-app.web.app](https://narluga-app.web.app)
 2. Browse the **Examples** gallery to see pre-built interactive diagrams instantly
 3. To generate your own:
    - Paste a URL (e.g. a Wikipedia article) or type a short note in the sidebar
